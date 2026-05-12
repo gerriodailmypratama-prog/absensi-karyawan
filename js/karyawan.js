@@ -1,6 +1,7 @@
 import { auth, db, storage, OWNER_EMAILS, OFFICE_LOCATION } from './firebase-config.js';
 
 
+
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { collection, addDoc, query, where, orderBy, getDocs, getDoc, setDoc, doc, Timestamp, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -60,8 +61,14 @@ onAuthStateChanged(auth, async user=>{
                 $('avatarImg').style.display = 'block';
                 $('avatarPlaceholder').style.display = 'none';
             }
+            const backfill = {};
+            if (!d.idKaryawan && !d.nik) backfill.idKaryawan = 'EMP-' + user.uid.slice(0,4).toUpperCase();
+            if (!d.jamKerja) backfill.jamKerja = 8;
+            if (Object.keys(backfill).length > 0) {
+                await setDoc(doc(db,'karyawan',user.uid), backfill, {merge:true});
+            }
         } else {
-            await setDoc(doc(db,'karyawan',user.uid),{uid:user.uid,email:user.email,nama:displayName,createdAt:serverTimestamp()},{merge:true});
+            await setDoc(doc(db,'karyawan',user.uid),{uid:user.uid,email:user.email,nama:displayName,idKaryawan:'EMP-' + user.uid.slice(0,4).toUpperCase(),jamKerja:8,createdAt:serverTimestamp()},{merge:true});
         }
     } catch(e){ console.warn('load profile:', e.message); }
 
