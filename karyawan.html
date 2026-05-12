@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0ea5e9">
+<title>Dashboard Karyawan</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div>
+    <strong id="userName">-</strong>
+    <small id="userEmail" class="muted"></small>
+  </div>
+  <button id="btnLogout" class="btn-icon">Keluar</button>
+</header>
+
+<main class="container">
+  <div class="card center">
+    <div class="clock" id="liveClock">--:--:--</div>
+    <div class="date" id="liveDate">-</div>
+  </div>
+
+  <div class="status-card" id="statusCard">
+    <p class="muted">Status hari ini</p>
+    <div id="statusList">
+      <div class="status-row"><span>Clock In</span><b id="sClockIn">-</b></div>
+      <div class="status-row"><span>Clock Out</span><b id="sClockOut">-</b></div>
+      <div class="status-row"><span>Overtime In</span><b id="sOtIn">-</b></div>
+      <div class="status-row"><span>Overtime Out</span><b id="sOtOut">-</b></div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <button class="btn btn-success" data-type="clock_in">Clock In</button>
+    <button class="btn btn-danger" data-type="clock_out">Clock Out</button>
+    <button class="btn btn-warning" data-type="overtime_in">OT In</button>
+    <button class="btn btn-purple" data-type="overtime_out">OT Out</button>
+  </div>
+
+  <h3>Riwayat 7 Hari Terakhir</h3>
+  <div id="historyList" class="history"></div>
+</main>
+
+<div id="selfieModal" class="modal hidden">
+  <div class="modal-content">
+    <h3 id="modalTitle">Ambil Foto Selfie</h3>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas" class="hidden"></canvas>
+    <p id="locInfo" class="muted">Mendapatkan lokasi...</p>
+    <div class="grid-2">
+      <button id="btnCapture" class="btn btn-primary">Ambil Foto</button>
+      <button id="btnCancel" class="btn btn-secondary">Batal</button>
+    </div>
+    <p id="uploadMsg" class="msg"></p>
+  </div>
+</div>
+
+<script type="module" src="js/karyawan.js"></script>
+</body>
+</html>
