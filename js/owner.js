@@ -1,6 +1,7 @@
 import { auth, db, OWNER_EMAILS, firebaseConfig } from './firebase-config.js';
 
 
+
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { collection, query, where, orderBy, getDocs, onSnapshot, Timestamp, setDoc, doc, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -161,6 +162,7 @@ async function renderBeranda(rows){
         tr.innerHTML = '<td>'+jam+'</td><td>'+nama+'</td><td>'+(TIPE[r.tipe]||r.tipe)+'</td><td>'+badge+'</td>';
         tb.appendChild(tr);
     });
+    renderWorkingNowWithFetch(rows);
 }
 
 async function loadData() {
@@ -274,7 +276,7 @@ function exportCSV() {
 
 async function loadKaryawanList(){
     try {
-        const snap = await getDocs(collection(db, 'karyawan'));
+        const snap = await getDocs(collection(db,'karyawan'));
         const tb = document.querySelector('#tblKaryawan tbody');
         tb.innerHTML = '';
         if (snap.empty) {
@@ -282,14 +284,21 @@ async function loadKaryawanList(){
             return;
         }
         $('emptyKaryawan').textContent = '';
-        snap.forEach(d => {
-            const x = d.data();
+        const rows = [];
+        snap.forEach(d => rows.push({id:d.id, ...d.data()}));
+        rows.sort((a,b)=>(a.nama||'').localeCompare(b.nama||''));
+        rows.forEach(x => {
             const img = x.photoURL
                 ? '<img src="'+x.photoURL+'" alt="foto" style="width:40px;height:40px;border-radius:50%;object-fit:cover">'
                 : '<span class="muted">-</span>';
+            const idDisplay = x.idKaryawan || x.nik || '-';
+            const jamKerja = x.jamKerja || 8;
             const tr = document.createElement('tr');
-            tr.innerHTML = '<td>'+(x.nama||'-')+'</td><td>'+(x.email||'-')+'</td><td>'+(x.phone||'-')+'</td><td>'+(x.nik||'-')+'</td><td>'+img+'</td>';
+            tr.innerHTML = '<td>'+(x.nama||'-')+'</td><td>'+(x.email||'-')+'</td><td>'+(x.phone||'-')+'</td><td>'+idDisplay+'</td><td>'+jamKerja+' jam</td><td>'+img+'</td><td><button class="btn-link btn-edit-kar" data-uid="'+x.id+'">Edit</button></td>';
             tb.appendChild(tr);
+        });
+        document.querySelectorAll('.btn-edit-kar').forEach(b => {
+            b.onclick = () => openEditKaryawan(b.dataset.uid);
         });
     } catch(e){ console.error('loadKaryawanList:', e); }
 }
@@ -300,7 +309,8 @@ $('formAddUser').onsubmit = async (e) => {
     const nama = $('newNama').value.trim();
     const email = $('newEmail').value.trim();
     const phone = $('newPhone').value.trim();
-    const nik = $('newNik').value.trim();
+    const idKaryawanRaw = $('newIdKaryawan').value.trim();
+    const jamKerja = parseInt($('newJamKerja').value, 10) || 8;
     const password = $('newPassword').value;
     if (!nama || !email || !password) { alert('Nama, Email, Password wajib diisi.'); return; }
     if (password.length < 6) { alert('Password minimal 6 karakter.'); return; }
@@ -317,7 +327,8 @@ $('formAddUser').onsubmit = async (e) => {
         await setDoc(doc(db,'karyawan',uid), {
             uid, email, nama,
             phone: phone || '',
-            nik: nik || '',
+            idKaryawan: idKaryawanRaw || ('EMP-' + Math.random().toString(36).slice(2,6).toUpperCase()),
+            jamKerja: jamKerja,
             createdAt: serverTimestamp()
         }, {merge:true});
         await authSignOut(secondaryAuth);
@@ -326,6 +337,7 @@ $('formAddUser').onsubmit = async (e) => {
         alert('Karyawan ' + nama + ' berhasil ditambahkan.');
         $('formAddUser').reset();
         $('newPassword').value = 'Goodgems2026';
+        $('newJamKerja').value = 8;
         loadKaryawanList();
     } catch (err) {
         console.error('Add user error:', err);
@@ -340,3 +352,74 @@ $('formAddUser').onsubmit = async (e) => {
         btn.textContent = 'Tambah Karyawan';
     }
 };
+
+
+// ============== EDIT KARYAWAN ==============
+async function openEditKaryawan(uid){
+    try {
+        const snap = await getDoc(doc(db,'karyawan',uid));
+        if (!snap.exists()) { alert('Data karyawan tidak ditemukan.'); return; }
+        const d = snap.data();
+        $('editUid').value = uid;
+        $('editNama').value = d.nama || '';
+        $('editPhone').value = d.phone || '';
+        $('editIdKaryawan').value = d.idKaryawan || d.nik || '';
+        $('editJamKerja').value = d.jamKerja || 8;
+        $('editKaryawanModal').classList.remove('hidden');
+    } catch(e){ alert('Gagal load data: ' + e.message); }
+}
+$('btnEditCancel').onclick = () => $('editKaryawanModal').classList.add('hidden');
+$('formEditKaryawan').onsubmit = async (e) => {
+    e.preventDefault();
+    const uid = $('editUid').value;
+    const nama = $('editNama').value.trim();
+    const phone = $('editPhone').value.trim();
+    const idKaryawan = $('editIdKaryawan').value.trim();
+    const jamKerja = parseInt($('editJamKerja').value, 10) || 8;
+    if (!nama) { alert('Nama wajib diisi.'); return; }
+    try {
+        await setDoc(doc(db,'karyawan',uid), { nama, phone, idKaryawan, jamKerja }, {merge:true});
+        $('editKaryawanModal').classList.add('hidden');
+        loadKaryawanList();
+    } catch(err){ alert('Gagal simpan: ' + err.message); }
+};
+
+// ============== KARYAWAN SEDANG BEKERJA ==============
+function renderWorkingNow(rows, karyawanMap){
+    const list = $('workingNowList');
+    const empty = $('emptyWorking');
+    if (!list || !empty) return;
+    const latestByUid = {};
+    rows.forEach(r => {
+        if (!latestByUid[r.uid] || r.ts.seconds > latestByUid[r.uid].ts.seconds) {
+            latestByUid[r.uid] = r;
+        }
+    });
+    const working = Object.values(latestByUid).filter(r => r.tipe === 'clock_in' || r.tipe === 'overtime_in');
+    if (working.length === 0) {
+        list.innerHTML = '';
+        empty.textContent = 'Tidak ada karyawan yang sedang bekerja.';
+        return;
+    }
+    empty.textContent = '';
+    list.innerHTML = working.map(r => {
+        const k = karyawanMap[r.uid] || {};
+        const photo = k.photoURL || '';
+        const nama = k.nama || r.nama || r.uid.slice(0,6);
+        const tipeLabel = r.tipe === 'clock_in' ? 'Clock In' : 'OT In';
+        const tipeColor = r.tipe === 'clock_in' ? 'badge-green' : 'badge-orange';
+        const avatar = photo
+            ? '<img src="'+photo+'" alt="'+nama+'">'
+            : '<div class="avatar-init">'+(nama[0]||'?').toUpperCase()+'</div>';
+        const jam = r.ts.toDate().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+        return '<div class="working-item">' + avatar + '<div class="working-info"><b>'+nama+'</b><small>'+tipeLabel+' · '+jam+'</small></div><span class="badge '+tipeColor+'">'+tipeLabel+'</span></div>';
+    }).join('');
+}
+async function renderWorkingNowWithFetch(rows){
+    try {
+        const ksnap = await getDocs(collection(db,'karyawan'));
+        const map = {};
+        ksnap.forEach(d => map[d.id] = d.data());
+        renderWorkingNow(rows, map);
+    } catch(e){ console.warn('renderWorkingNowWithFetch:', e.message); }
+}
