@@ -63,3 +63,46 @@ td img{width:48px;height:48px;object-fit:cover;border-radius:6px;cursor:pointer}
 .hidden{display:none}
 .center{text-align:center}
 h3{margin:14px 0 8px;font-size:16px;color:#334155}
+/* ===== Karyawan: Welcome + Avatar ===== */
+.topbar.topbar-greet{align-items:center}
+.greet-wrap{display:flex;flex-direction:column;line-height:1.25}
+.greet-text strong{font-size:16px}
+.greet-text small{color:#e0f2fe;font-size:12px}
+.greet-right{display:flex;align-items:center;gap:10px}
+.avatar-wrap{position:relative;width:38px;height:38px;border-radius:50%;background:#e0f2fe;border:2px solid #fff;cursor:pointer;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.avatar-wrap img{width:100%;height:100%;object-fit:cover;display:none}
+.avatar-ph{color:#0ea5e9;font-weight:700;font-size:18px}
+
+/* ===== Owner: Layout & Sidebar ===== */
+.owner-body{background:#f1f5f9}
+.layout{display:flex;min-height:calc(100vh - 56px)}
+.sidebar{width:220px;background:#fff;border-right:1px solid #e2e8f0;padding:16px 0;flex-shrink:0;position:sticky;top:56px;height:calc(100vh - 56px);overflow-y:auto}
+.sidebar nav{display:flex;flex-direction:column}
+.sidebar .nav-link{display:block;padding:12px 20px;color:#475569;text-decoration:none;font-size:14px;font-weight:500;border-left:3px solid transparent;transition:.15s}
+.sidebar .nav-link:hover{background:#f8fafc;color:#0ea5e9}
+.sidebar .nav-link.active{background:#e0f2fe;color:#0284c7;border-left-color:#0ea5e9;font-weight:600}
+.content{flex:1;padding:20px;max-width:1100px;width:100%}
+.page{display:none}
+.page.active{display:block}
+.page-title{font-size:22px;color:#0f172a;margin:0 0 4px;font-weight:700}
+
+@media (max-width:768px){
+  .sidebar{position:fixed;left:-220px;top:56px;z-index:50;transition:left .2s;box-shadow:2px 0 8px rgba(0,0,0,.1)}
+  body.sidebar-open .sidebar{left:0}
+  .content{padding:14px}
+}
+
+/* ===== Beranda charts ===== */
+.grid-2-chart{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
+@media (min-width:900px){ .grid-2-chart{grid-template-columns:1fr 1fr} }
+.chart-wrap{position:relative;height:240px}
+.chart-caption{text-align:center;color:#475569;font-size:13px;margin-top:6px}
+
+/* ===== Badge lokasi ===== */
+.badge-loc{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.badge-in{background:#dcfce7;color:#166534}
+.badge-out{background:#fee2e2;color:#991b1b}
+
+/* ===== Karyawan form ===== */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.form-grid .form-actions{grid-column:1/-1;display:flex;justify-content:flex-end}
