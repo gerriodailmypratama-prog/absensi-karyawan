@@ -32,6 +32,13 @@
           <option value="overtime_out">Overtime Out</option>
         </select>
       </div>
+      <div><label>Status Lokasi</label>
+        <select id="selLocation">
+          <option value="">Semua</option>
+          <option value="in">Di Ruko</option>
+          <option value="out">Luar Lokasi</option>
+        </select>
+      </div>
       <div class="filter-actions">
         <button id="btnFilter" class="btn btn-primary">Cari</button>
         <button id="btnExport" class="btn btn-success">Export CSV</button>
@@ -46,7 +53,7 @@
     <div class="table-wrap">
       <table id="tblAbsen">
         <thead>
-          <tr><th>Tanggal</th><th>Jam</th><th>Nama</th><th>Tipe</th><th>Lokasi</th><th>Foto</th></tr>
+          <tr><th>Tanggal</th><th>Jam</th><th>Nama</th><th>Tipe</th><th>Status</th><th>Lokasi</th><th>Foto</th></tr>
         </thead>
         <tbody></tbody>
       </table>
@@ -55,8 +62,8 @@
   </div>
 </main>
 
-<div id="photoModal" class="modal hidden" onclick="this.classList.add('hidden')">
-  <div class="modal-content"><img id="modalImg" style="max-width:100%;border-radius:8px"></div>
+<div id="photoModal" class="modal hidden" onclick="this.classList.remove('show')">
+  <img id="modalImg" alt="Foto absen">
 </div>
 
 <script type="module" src="js/owner.js"></script>
