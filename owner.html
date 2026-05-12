@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 
+
 <html lang="id">
 <head>
 <meta charset="UTF-8">
@@ -118,7 +119,7 @@
       <h2 class="page-title">Karyawan</h2>
       <div class="card">
         <h3>Tambah Karyawan Baru</h3>
-        <p class="muted" id="addUserNote">Fitur add user akan aktif setelah Lo konfirmasi cara deploy (Cara 1: Cloud Function, atau Cara 2: secondary Auth instance).</p>
+        <p class="muted" id="addUserNote">Owner tetap login. User baru dibuat via secondary Auth instance (session owner tidak terganggu).</p>
         <form id="formAddUser" class="form-grid" autocomplete="off">
           <div><label>Nama</label><input type="text" id="newNama" required></div>
           <div><label>Email</label><input type="email" id="newEmail" required></div>
@@ -126,7 +127,7 @@
           <div><label>NIK</label><input type="text" id="newNik"></div>
           <div><label>Password</label><input type="text" id="newPassword" value="Goodgems2026"></div>
           <div class="form-actions">
-            <button type="submit" class="btn btn-primary" id="btnAddUser" disabled>Tambah Karyawan</button>
+            <button type="submit" class="btn btn-primary" id="btnAddUser">Tambah Karyawan</button>
           </div>
         </form>
         <p id="addUserMsg" class="msg"></p>
