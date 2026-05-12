@@ -1,5 +1,6 @@
 import { auth, db, storage, OWNER_EMAILS, OFFICE_LOCATION } from './firebase-config.js';
 
+
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { collection, addDoc, query, where, orderBy, getDocs, getDoc, setDoc, doc, Timestamp, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -146,6 +147,38 @@ async function openSelfie(type){
             return;
         }
     } catch(e){ console.warn('Validasi urutan skip:', e.message); }
+
+    // Cek early checkout: kalau Clock Out sebelum jam kerja selesai, minta alasan
+    window._earlyReason = null;
+    if (type === 'clock_out') {
+        try {
+            const kSnap = await getDoc(doc(db,'karyawan',currentUser.uid));
+            const jamKerja = (kSnap.exists() ? (kSnap.data().jamKerja || 8) : 8);
+            const tdyStart = new Date(); tdyStart.setHours(0,0,0,0);
+            const qIn = query(collection(db,'absensi'),
+                where('uid','==',currentUser.uid),
+                where('tipe','==','clock_in'),
+                where('ts','>=',Timestamp.fromDate(tdyStart)));
+            const inSnap = await getDocs(qIn);
+            if (!inSnap.empty) {
+                const clockInTs = inSnap.docs[0].data().ts.toDate();
+                const deadline = new Date(clockInTs.getTime() + jamKerja * 3600 * 1000);
+                const now = new Date();
+                if (now < deadline) {
+                    const remainMs = deadline - now;
+                    const remainH = Math.floor(remainMs / 3600000);
+                    const remainM = Math.floor((remainMs % 3600000) / 60000);
+                    const reason = prompt('Kamu Clock Out sebelum jam kerja selesai (sisa ' + remainH + 'j ' + remainM + 'm). Wajib isi alasan:');
+                    if (!reason || !reason.trim()) {
+                        alert('Alasan wajib diisi untuk Clock Out lebih awal.');
+                        return;
+                    }
+                    window._earlyReason = reason.trim();
+                }
+            }
+        } catch(e){ console.warn('Early checkout check skip:', e.message); }
+    }
+
     try {
         const today = new Date(); today.setHours(0,0,0,0);
         const q = query(collection(db,'absensi'),
@@ -253,7 +286,8 @@ $('btnCapture').onclick=async()=>{
             jarak: coords.jarak,
             inRadius: coords.inRadius,
             foto: url,
-            sizeKB: Math.round(blob.size/1024)
+            sizeKB: Math.round(blob.size/1024),
+            alasanEarly: window._earlyReason || null
         });
 
         $('uploadMsg').textContent='✅ Absen tercatat!';
@@ -288,6 +322,7 @@ async function loadTodayStatus(){
             if (el) el.textContent=fmt(x.ts.toDate());
         });
     } catch(e){ console.error('loadTodayStatus:', e); }
+    startWorkTimer();
 }
 function fmt(d){return d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});}
 
@@ -317,4 +352,49 @@ async function loadHistory(){
             list.appendChild(div);
         });
     } catch(e){ console.error('loadHistory:', e); }
+}
+
+
+// ============== TIMER MUNDUR JAM KERJA ==============
+let _timerInterval = null;
+async function startWorkTimer(){
+    if (!currentUser) return;
+    if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
+    const tdy = new Date(); tdy.setHours(0,0,0,0);
+    try {
+        const qIn = query(collection(db,'absensi'),
+            where('uid','==',currentUser.uid),
+            where('tipe','==','clock_in'),
+            where('ts','>=',Timestamp.fromDate(tdy)));
+        const qOut = query(collection(db,'absensi'),
+            where('uid','==',currentUser.uid),
+            where('tipe','==','clock_out'),
+            where('ts','>=',Timestamp.fromDate(tdy)));
+        const [inSnap, outSnap] = await Promise.all([getDocs(qIn), getDocs(qOut)]);
+        const timerEl = $('workTimer');
+        if (!timerEl) return;
+        if (inSnap.empty || !outSnap.empty) {
+            timerEl.style.display = 'none';
+            return;
+        }
+        const kSnap = await getDoc(doc(db,'karyawan',currentUser.uid));
+        const jamKerja = (kSnap.exists() ? (kSnap.data().jamKerja || 8) : 8);
+        const clockInTs = inSnap.docs[0].data().ts.toDate();
+        const deadline = new Date(clockInTs.getTime() + jamKerja * 3600 * 1000);
+        timerEl.style.display = 'block';
+        const tick = () => {
+            const now = new Date();
+            const ms = deadline - now;
+            if (ms <= 0) {
+                timerEl.innerHTML = '<b style="color:#16a34a">✓ Jam kerja selesai</b><br><small>Silakan Clock Out</small>';
+                return;
+            }
+            const h = Math.floor(ms/3600000);
+            const m = Math.floor((ms%3600000)/60000);
+            const s = Math.floor((ms%60000)/1000);
+            timerEl.innerHTML = '<small>Sisa jam kerja</small><br><b style="font-size:24px">'+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+'</b>';
+        };
+        tick();
+        _timerInterval = setInterval(tick, 1000);
+    } catch(e){ console.warn('startWorkTimer:', e.message); }
 }
