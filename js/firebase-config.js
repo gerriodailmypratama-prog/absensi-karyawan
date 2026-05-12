@@ -1,9 +1,10 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
-const firebaseConfig = {
+export const firebaseConfig = {
     apiKey: "AIzaSyAtbQWVdMYzIhp0hdtioPaDmULEYQBYvmg",
     authDomain: "absensi-karyawan-207d9.firebaseapp.com",
     projectId: "absensi-karyawan-207d9",
