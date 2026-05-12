@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="id">
 <head>
 <meta charset="UTF-8">
@@ -7,60 +8,143 @@
 <title>Dashboard Owner</title>
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
-<body>
+<body class="owner-body">
 <header class="topbar">
-  <div><strong>Dashboard Owner</strong> <small id="ownerEmail" class="muted"></small></div>
+  <div>
+    <button id="btnSidebar" class="btn-icon" style="background:transparent;padding:4px 10px;font-size:20px">☰</button>
+    <strong>Dashboard Owner</strong> <small id="ownerEmail" class="muted"></small>
+  </div>
   <button id="btnLogout" class="btn-icon">Keluar</button>
 </header>
 
-<main class="container wide">
-  <div class="card">
-    <h3>Filter</h3>
-    <div class="filter-row">
-      <div><label>Dari</label><input type="date" id="dateFrom"></div>
-      <div><label>Sampai</label><input type="date" id="dateTo"></div>
-      <div><label>Karyawan</label>
-        <select id="selKaryawan"><option value="">Semua</option></select>
-      </div>
-      <div><label>Tipe</label>
-        <select id="selType">
-          <option value="">Semua</option>
-          <option value="clock_in">Clock In</option>
-          <option value="clock_out">Clock Out</option>
-          <option value="overtime_in">Overtime In</option>
-          <option value="overtime_out">Overtime Out</option>
-        </select>
-      </div>
-      <div><label>Status Lokasi</label>
-        <select id="selLocation">
-          <option value="">Semua</option>
-          <option value="in">Di Ruko</option>
-          <option value="out">Luar Lokasi</option>
-        </select>
-      </div>
-      <div class="filter-actions">
-        <button id="btnFilter" class="btn btn-primary">Cari</button>
-        <button id="btnExport" class="btn btn-success">Export CSV</button>
-      </div>
-    </div>
-  </div>
+<div class="layout">
+  <aside id="sidebar" class="sidebar">
+    <nav>
+      <a href="#beranda" class="nav-link active" data-page="beranda">📊 Beranda</a>
+      <a href="#kehadiran" class="nav-link" data-page="kehadiran">🗓️ Kehadiran Harian</a>
+      <a href="#karyawan" class="nav-link" data-page="karyawan">👥 Karyawan</a>
+    </nav>
+  </aside>
 
-  <div class="stats" id="stats"></div>
+  <main class="content">
+    <!-- BERANDA -->
+    <section id="page-beranda" class="page active">
+      <h2 class="page-title">Beranda</h2>
+      <p class="muted" id="berandaDate">-</p>
 
-  <div class="card">
-    <h3>Data Absensi</h3>
-    <div class="table-wrap">
-      <table id="tblAbsen">
-        <thead>
-          <tr><th>Tanggal</th><th>Jam</th><th>Nama</th><th>Tipe</th><th>Status</th><th>Lokasi</th><th>Foto</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <p id="emptyMsg" class="muted center"></p>
-  </div>
-</main>
+      <div class="stats" id="berandaStats"></div>
+
+      <div class="grid-2-chart">
+        <div class="card">
+          <h3>Kehadiran Hari Ini</h3>
+          <p class="muted" style="margin-bottom:8px">Total karyawan yang sudah Clock In hari ini</p>
+          <div class="chart-wrap"><canvas id="chartHadir"></canvas></div>
+          <p class="chart-caption" id="capHadir">-</p>
+        </div>
+        <div class="card">
+          <h3>Lokasi Clock In</h3>
+          <p class="muted" style="margin-bottom:8px">Berapa absen masuk hari ini di dalam radius vs luar lokasi</p>
+          <div class="chart-wrap"><canvas id="chartLokasi"></canvas></div>
+          <p class="chart-caption" id="capLokasi">-</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Aktivitas Terbaru Hari Ini</h3>
+        <div class="table-wrap">
+          <table id="tblToday">
+            <thead><tr><th>Jam</th><th>Nama</th><th>Tipe</th><th>Status</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="emptyToday" class="muted center"></p>
+      </div>
+    </section>
+
+    <!-- KEHADIRAN HARIAN -->
+    <section id="page-kehadiran" class="page">
+      <h2 class="page-title">Kehadiran Harian</h2>
+      <div class="card">
+        <h3>Filter</h3>
+        <div class="filter-row">
+          <div><label>Dari</label><input type="date" id="dateFrom"></div>
+          <div><label>Sampai</label><input type="date" id="dateTo"></div>
+          <div><label>Karyawan</label>
+            <select id="selKaryawan"><option value="">Semua</option></select>
+          </div>
+          <div><label>Tipe</label>
+            <select id="selType">
+              <option value="">Semua</option>
+              <option value="clock_in">Clock In</option>
+              <option value="clock_out">Clock Out</option>
+              <option value="overtime_in">Overtime In</option>
+              <option value="overtime_out">Overtime Out</option>
+            </select>
+          </div>
+          <div><label>Status Lokasi</label>
+            <select id="selLocation">
+              <option value="">Semua</option>
+              <option value="in">Di Ruko</option>
+              <option value="out">Luar Lokasi</option>
+            </select>
+          </div>
+          <div class="filter-actions">
+            <button id="btnFilter" class="btn btn-primary">Cari</button>
+            <button id="btnExport" class="btn btn-success">Export CSV</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats" id="stats"></div>
+
+      <div class="card">
+        <h3>Data Absensi</h3>
+        <div class="table-wrap">
+          <table id="tblAbsen">
+            <thead>
+              <tr><th>Tanggal</th><th>Jam</th><th>Nama</th><th>Tipe</th><th>Status</th><th>Lokasi</th><th>Foto</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="emptyMsg" class="muted center"></p>
+      </div>
+    </section>
+
+    <!-- KARYAWAN -->
+    <section id="page-karyawan" class="page">
+      <h2 class="page-title">Karyawan</h2>
+      <div class="card">
+        <h3>Tambah Karyawan Baru</h3>
+        <p class="muted" id="addUserNote">Fitur add user akan aktif setelah Lo konfirmasi cara deploy (Cara 1: Cloud Function, atau Cara 2: secondary Auth instance).</p>
+        <form id="formAddUser" class="form-grid" autocomplete="off">
+          <div><label>Nama</label><input type="text" id="newNama" required></div>
+          <div><label>Email</label><input type="email" id="newEmail" required></div>
+          <div><label>No. HP</label><input type="text" id="newPhone" placeholder="+62..."></div>
+          <div><label>NIK</label><input type="text" id="newNik"></div>
+          <div><label>Password</label><input type="text" id="newPassword" value="Goodgems2026"></div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="btnAddUser" disabled>Tambah Karyawan</button>
+          </div>
+        </form>
+        <p id="addUserMsg" class="msg"></p>
+      </div>
+
+      <div class="card">
+        <h3>Daftar Karyawan</h3>
+        <div class="table-wrap">
+          <table id="tblKaryawan">
+            <thead><tr><th>Nama</th><th>Email</th><th>No. HP</th><th>NIK</th><th>Foto</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="emptyKaryawan" class="muted center"></p>
+      </div>
+    </section>
+  </main>
+</div>
 
 <div id="photoModal" class="modal hidden" onclick="this.classList.remove('show')">
   <img id="modalImg" alt="Foto absen">
