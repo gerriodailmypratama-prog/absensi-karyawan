@@ -1,4 +1,5 @@
 *{box-sizing:border-box;margin:0;padding:0}
+
 body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f1f5f9;color:#0f172a;line-height:1.5}
 .container{max-width:480px;margin:0 auto;padding:16px}
 .container.wide{max-width:1100px}
@@ -106,3 +107,23 @@ h3{margin:14px 0 8px;font-size:16px;color:#334155}
 /* ===== Karyawan form ===== */
 .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .form-grid .form-actions{grid-column:1/-1;display:flex;justify-content:flex-end}
+
+
+/* ===== Karyawan Sedang Bekerja list ===== */
+.working-list { display:flex; flex-direction:column; gap:10px; }
+.working-item { display:flex; align-items:center; gap:12px; padding:10px; border-radius:10px; background:#f8fafc; border:1px solid #e5e7eb; }
+.working-item img, .working-item .avatar-init { width:44px; height:44px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+.working-item .avatar-init { background:#e0e7ff; color:#4338ca; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:18px; }
+.working-item .working-info { flex:1; display:flex; flex-direction:column; }
+.working-item .working-info b { font-size:14px; }
+.working-item .working-info small { color:#6b7280; font-size:12px; }
+.working-item .badge { padding:4px 10px; border-radius:999px; font-size:11px; font-weight:600; }
+.badge-green { background:#dcfce7; color:#166534; }
+.badge-orange { background:#ffedd5; color:#9a3412; }
+
+/* ===== Edit Karyawan Modal ===== */
+.modal { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000; padding:16px; }
+.modal.hidden { display:none; }
+.modal-content { background:#fff; max-width:480px; width:100%; max-height:90vh; overflow:auto; }
+.btn-link { background:none; border:none; color:#2563eb; cursor:pointer; padding:4px 8px; text-decoration:underline; font-size:13px; }
+.btn-secondary { background:#e5e7eb; color:#111827; border:none; padding:10px 16px; border-radius:8px; cursor:pointer; }
