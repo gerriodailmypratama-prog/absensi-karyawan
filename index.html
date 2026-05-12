@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0ea5e9">
+<title>Absensi Karyawan</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="container login-page">
+  <div class="card">
+    <div class="logo">
+      <h1>Absensi Karyawan</h1>
+      <p class="muted">Silakan login untuk melanjutkan</p>
+    </div>
+    <div id="loginForm">
+      <label>Email</label>
+      <input type="email" id="email" placeholder="nama@perusahaan.com" autocomplete="email">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="********" autocomplete="current-password">
+      <button id="btnLoginEmail" class="btn btn-primary">Login</button>
+      <div class="divider"><span>atau</span></div>
+      <button id="btnLoginGoogle" class="btn btn-google">Login dengan Google</button>
+      <p id="loginMsg" class="msg"></p>
+    </div>
+  </div>
+  <p class="footer">&copy; 2026 Absensi Karyawan PWA</p>
+</div>
+<script type="module" src="js/auth.js"></script>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('service-worker.js').catch(console.error));
+}
+</script>
+</body>
+</html>
