@@ -7,13 +7,23 @@ const $ = id => document.getElementById(id);
 const TIPE = { clock_in:'Clock In', clock_out:'Clock Out', overtime_in:'Overtime In', overtime_out:'Overtime Out' };
 let cachedRows = [];
 
+// Get local date in YYYY-MM-DD format (avoid UTC drift)
+function localDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
+}
+
 onAuthStateChanged(auth, user => {
   if (!user) return location.href = 'index.html';
   if (!OWNER_EMAILS.includes(user.email)) { alert('Akses ditolak'); return location.href = 'karyawan.html'; }
   $('ownerEmail').textContent = user.email;
-  const today = new Date().toISOString().slice(0, 10);
-  $('dateFrom').value = today;
-  $('dateTo').value = today;
+  // Default range: 7 hari terakhir s/d hari ini (local time)
+  const today = new Date();
+  const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 6);
+  $('dateFrom').value = localDateStr(weekAgo);
+  $('dateTo').value = localDateStr(today);
   loadData();
 });
 
@@ -23,8 +33,8 @@ $('btnExport').onclick = exportCSV;
 
 async function loadData() {
   try {
-    const from = new Date($('dateFrom').value); from.setHours(0, 0, 0, 0);
-    const to = new Date($('dateTo').value); to.setHours(23, 59, 59, 999);
+    const from = new Date($('dateFrom').value + 'T00:00:00');
+    const to = new Date($('dateTo').value + 'T23:59:59.999');
 
     const q = query(collection(db, 'absensi'),
       where('ts', '>=', Timestamp.fromDate(from)),
