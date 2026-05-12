@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0ea5e9">
+<title>Dashboard Owner</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div><strong>Dashboard Owner</strong> <small id="ownerEmail" class="muted"></small></div>
+  <button id="btnLogout" class="btn-icon">Keluar</button>
+</header>
+
+<main class="container wide">
+  <div class="card">
+    <h3>Filter</h3>
+    <div class="filter-row">
+      <div><label>Dari</label><input type="date" id="dateFrom"></div>
+      <div><label>Sampai</label><input type="date" id="dateTo"></div>
+      <div><label>Karyawan</label>
+        <select id="selKaryawan"><option value="">Semua</option></select>
+      </div>
+      <div><label>Tipe</label>
+        <select id="selType">
+          <option value="">Semua</option>
+          <option value="clock_in">Clock In</option>
+          <option value="clock_out">Clock Out</option>
+          <option value="overtime_in">Overtime In</option>
+          <option value="overtime_out">Overtime Out</option>
+        </select>
+      </div>
+      <div class="filter-actions">
+        <button id="btnFilter" class="btn btn-primary">Cari</button>
+        <button id="btnExport" class="btn btn-success">Export CSV</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="card">
+    <h3>Data Absensi</h3>
+    <div class="table-wrap">
+      <table id="tblAbsen">
+        <thead>
+          <tr><th>Tanggal</th><th>Jam</th><th>Nama</th><th>Tipe</th><th>Lokasi</th><th>Foto</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p id="emptyMsg" class="muted center"></p>
+  </div>
+</main>
+
+<div id="photoModal" class="modal hidden" onclick="this.classList.add('hidden')">
+  <div class="modal-content"><img id="modalImg" style="max-width:100%;border-radius:8px"></div>
+</div>
+
+<script type="module" src="js/owner.js"></script>
+</body>
+</html>
