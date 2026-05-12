@@ -1,0 +1,65 @@
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f1f5f9;color:#0f172a;line-height:1.5}
+.container{max-width:480px;margin:0 auto;padding:16px}
+.container.wide{max-width:1100px}
+.login-page{min-height:100vh;display:flex;flex-direction:column;justify-content:center}
+.card{background:#fff;border-radius:16px;padding:20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.card.center{text-align:center}
+.logo{text-align:center;margin-bottom:20px}
+.logo h1{font-size:22px;margin-bottom:4px;color:#0ea5e9}
+.muted{color:#64748b;font-size:13px}
+label{display:block;font-size:13px;font-weight:600;margin:10px 0 6px;color:#334155}
+input,select{width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;font-size:15px;background:#fff;color:#0f172a}
+input:focus,select:focus{outline:none;border-color:#0ea5e9;box-shadow:0 0 0 3px rgba(14,165,233,.15)}
+.btn{display:block;width:100%;padding:13px;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;margin-top:10px;transition:.15s;color:#fff}
+.btn-primary{background:#0ea5e9}.btn-primary:hover{background:#0284c7}
+.btn-success{background:#10b981}.btn-success:hover{background:#059669}
+.btn-danger{background:#ef4444}.btn-danger:hover{background:#dc2626}
+.btn-warning{background:#f59e0b}
+.btn-purple{background:#8b5cf6}
+.btn-google{background:#fff;color:#0f172a;border:1px solid #cbd5e1}
+.btn-secondary{background:#64748b}
+.btn:active{transform:scale(.98)}
+.btn-icon{background:#ef4444;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer}
+.divider{text-align:center;margin:16px 0;position:relative;color:#94a3b8;font-size:12px}
+.divider:before,.divider:after{content:"";position:absolute;top:50%;width:40%;height:1px;background:#e2e8f0}
+.divider:before{left:0}.divider:after{right:0}
+.msg{margin-top:10px;font-size:13px;text-align:center;color:#ef4444}
+.msg.ok{color:#10b981}
+.footer{text-align:center;color:#94a3b8;font-size:12px;margin-top:20px}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;background:#0ea5e9;color:#fff;position:sticky;top:0;z-index:10}
+.topbar strong{display:block;font-size:15px}.topbar small{color:#e0f2fe}
+.clock{font-size:42px;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums}
+.date{color:#64748b;font-size:14px;margin-top:4px}
+.status-card{background:#fff;border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.status-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px}
+.status-row:last-child{border-bottom:none}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+.history{display:flex;flex-direction:column;gap:8px}
+.history-item{background:#fff;padding:12px 14px;border-radius:10px;font-size:13px;border-left:4px solid #0ea5e9}
+.history-item.clock_out{border-color:#ef4444}
+.history-item.overtime_in{border-color:#f59e0b}
+.history-item.overtime_out{border-color:#8b5cf6}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;justify-content:center;align-items:center;z-index:100;padding:16px}
+.modal.hidden{display:none}
+.modal-content{background:#fff;border-radius:16px;padding:18px;width:100%;max-width:420px}
+.modal video{width:100%;border-radius:12px;background:#000;margin:10px 0}
+.filter-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;align-items:end}
+.filter-actions{display:flex;gap:8px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+.stat{background:#fff;padding:14px;border-radius:12px;text-align:center}
+.stat b{font-size:24px;display:block;color:#0ea5e9}
+.stat small{color:#64748b;font-size:12px}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:10px 8px;text-align:left;border-bottom:1px solid #f1f5f9}
+th{background:#f8fafc;font-weight:600;position:sticky;top:0}
+td img{width:48px;height:48px;object-fit:cover;border-radius:6px;cursor:pointer}
+.badge{display:inline-block;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600}
+.badge.clock_in{background:#dcfce7;color:#15803d}
+.badge.clock_out{background:#fee2e2;color:#b91c1c}
+.badge.overtime_in{background:#fef3c7;color:#a16207}
+.badge.overtime_out{background:#ede9fe;color:#6d28d9}
+.hidden{display:none}
+.center{text-align:center}
+h3{margin:14px 0 8px;font-size:16px;color:#334155}
