@@ -1,0 +1,14 @@
+{
+  "name": "Absensi Karyawan",
+  "short_name": "Absensi",
+  "description": "PWA Absensi Karyawan dengan Clock In/Out, Overtime, GPS, dan Selfie",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0ea5e9",
+  "background_color": "#f8fafc",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
