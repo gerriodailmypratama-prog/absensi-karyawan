@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 
 
+
 <html lang="id">
 <head>
 <meta charset="UTF-8">
@@ -61,6 +62,13 @@
           </table>
         </div>
         <p id="emptyToday" class="muted center"></p>
+      </div>
+
+      <div class="card" id="workingNowCard">
+        <h3>Karyawan Sedang Bekerja</h3>
+        <p class="muted" id="workingNowSubtitle">Status terakhir: Clock In atau OT In (belum Clock Out)</p>
+        <div id="workingNowList" class="working-list"></div>
+        <p id="emptyWorking" class="muted center"></p>
       </div>
     </section>
 
@@ -124,7 +132,8 @@
           <div><label>Nama</label><input type="text" id="newNama" required></div>
           <div><label>Email</label><input type="email" id="newEmail" required></div>
           <div><label>No. HP</label><input type="text" id="newPhone" placeholder="+62..."></div>
-          <div><label>NIK</label><input type="text" id="newNik"></div>
+          <div><label>ID Karyawan</label><input type="text" id="newIdKaryawan" placeholder="auto (EMP-XXX) jika kosong"></div>
+          <div><label>Jam Kerja (jam)</label><input type="number" id="newJamKerja" min="1" max="24" value="8"></div>
           <div><label>Password</label><input type="text" id="newPassword" value="Goodgems2026"></div>
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" id="btnAddUser">Tambah Karyawan</button>
@@ -137,7 +146,7 @@
         <h3>Daftar Karyawan</h3>
         <div class="table-wrap">
           <table id="tblKaryawan">
-            <thead><tr><th>Nama</th><th>Email</th><th>No. HP</th><th>NIK</th><th>Foto</th></tr></thead>
+            <thead><tr><th>Nama</th><th>Email</th><th>No. HP</th><th>ID</th><th>Jam Kerja</th><th>Foto</th><th>Aksi</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -145,6 +154,23 @@
       </div>
     </section>
   </main>
+</div>
+
+<div id="editKaryawanModal" class="modal hidden">
+  <div class="modal-content card" style="max-width:480px">
+    <h3>Edit Karyawan</h3>
+    <form id="formEditKaryawan" class="form-grid">
+      <input type="hidden" id="editUid">
+      <div><label>Nama</label><input type="text" id="editNama" required></div>
+      <div><label>No. HP</label><input type="text" id="editPhone"></div>
+      <div><label>ID Karyawan</label><input type="text" id="editIdKaryawan"></div>
+      <div><label>Jam Kerja (jam)</label><input type="number" id="editJamKerja" min="1" max="24"></div>
+      <div class="form-actions" style="display:flex;gap:8px">
+        <button type="submit" class="btn btn-primary">Simpan</button>
+        <button type="button" class="btn btn-secondary" id="btnEditCancel">Batal</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <div id="photoModal" class="modal hidden" onclick="this.classList.remove('show')">
