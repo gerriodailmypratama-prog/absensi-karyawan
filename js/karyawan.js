@@ -1,6 +1,7 @@
 import { auth, db, storage, OWNER_EMAILS, OFFICE_LOCATION } from './firebase-config.js';
+
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, addDoc, query, where, orderBy, getDocs, getDoc, setDoc, doc, Timestamp }
+import { collection, addDoc, query, where, orderBy, getDocs, getDoc, setDoc, doc, Timestamp, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { ref, uploadBytes, getDownloadURL }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
@@ -58,6 +59,8 @@ onAuthStateChanged(auth, async user=>{
                 $('avatarImg').style.display = 'block';
                 $('avatarPlaceholder').style.display = 'none';
             }
+        } else {
+            await setDoc(doc(db,'karyawan',user.uid),{uid:user.uid,email:user.email,nama:displayName,createdAt:serverTimestamp()},{merge:true});
         }
     } catch(e){ console.warn('load profile:', e.message); }
 
@@ -111,7 +114,8 @@ $('avatarInput').onchange = async (ev) => {
         $('avatarPlaceholder').style.display = 'none';
     } catch (e){
         console.error('avatar upload error:', e);
-        alert('Gagal upload foto: ' + (e.message || e));
+        var msg = (e && e.code === 'storage/unauthorized') ? 'Storage permission denied. Admin perlu update Storage rules untuk path profiles/{uid}.jpg' : ('Gagal upload foto: ' + (e.message || e));
+        alert(msg);
     } finally {
         ev.target.value = '';
     }
@@ -123,6 +127,25 @@ document.querySelectorAll('button[data-type]').forEach(b=>{
 
 async function openSelfie(type){
     if (!currentUser) { alert('Silakan login dulu.'); return; }
+    // Sequence validation: cek urutan absen hari ini
+    try {
+        const tdy = new Date(); tdy.setHours(0,0,0,0);
+        const qAll = query(collection(db,'absensi'),
+            where('uid','==',currentUser.uid),
+            where('ts','>=',Timestamp.fromDate(tdy)));
+        const allSnap = await getDocs(qAll);
+        const done = new Set();
+        allSnap.forEach(d => done.add(d.data().tipe));
+        const need = {
+            clock_out: 'clock_in',
+            overtime_in: 'clock_out',
+            overtime_out: 'overtime_in'
+        };
+        if (need[type] && !done.has(need[type])) {
+            alert('Tidak bisa ' + TIPE[type] + '. Kamu harus ' + TIPE[need[type]] + ' dulu hari ini.');
+            return;
+        }
+    } catch(e){ console.warn('Validasi urutan skip:', e.message); }
     try {
         const today = new Date(); today.setHours(0,0,0,0);
         const q = query(collection(db,'absensi'),
