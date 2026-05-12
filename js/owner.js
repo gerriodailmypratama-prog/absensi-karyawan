@@ -1,8 +1,11 @@
-import { auth, db, OWNER_EMAILS } from './firebase-config.js';
+import { auth, db, OWNER_EMAILS, firebaseConfig } from './firebase-config.js';
+
 
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, query, where, orderBy, getDocs, onSnapshot, Timestamp }
+import { collection, query, where, orderBy, getDocs, onSnapshot, Timestamp, setDoc, doc, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signOut as authSignOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const $ = id => document.getElementById(id);
 const TIPE = { clock_in:'Clock In', clock_out:'Clock Out', overtime_in:'Overtime In', overtime_out:'Overtime Out' };
@@ -291,7 +294,49 @@ async function loadKaryawanList(){
     } catch(e){ console.error('loadKaryawanList:', e); }
 }
 
-$('formAddUser').onsubmit = (e) => {
+$('formAddUser').onsubmit = async (e) => {
     e.preventDefault();
-    alert('Fitur Add User belum aktif. Konfirmasi dulu Cara 1 (Cloud Function) atau Cara 2 (secondary Auth instance).');
+    const btn = $('btnAddUser');
+    const nama = $('newNama').value.trim();
+    const email = $('newEmail').value.trim();
+    const phone = $('newPhone').value.trim();
+    const nik = $('newNik').value.trim();
+    const password = $('newPassword').value;
+    if (!nama || !email || !password) { alert('Nama, Email, Password wajib diisi.'); return; }
+    if (password.length < 6) { alert('Password minimal 6 karakter.'); return; }
+    btn.disabled = true;
+    btn.textContent = 'Menambah...';
+    let secondaryApp = null;
+    try {
+        // Init secondary app supaya session owner tidak terganggu
+        secondaryApp = initializeApp(firebaseConfig, 'Secondary_' + Date.now());
+        const secondaryAuth = getAuth(secondaryApp);
+        const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+        const uid = cred.user.uid;
+        // Tulis ke Firestore koleksi 'karyawan'
+        await setDoc(doc(db,'karyawan',uid), {
+            uid, email, nama,
+            phone: phone || '',
+            nik: nik || '',
+            createdAt: serverTimestamp()
+        }, {merge:true});
+        await authSignOut(secondaryAuth);
+        await deleteApp(secondaryApp);
+        secondaryApp = null;
+        alert('Karyawan ' + nama + ' berhasil ditambahkan.');
+        $('formAddUser').reset();
+        $('newPassword').value = 'Goodgems2026';
+        loadKaryawanList();
+    } catch (err) {
+        console.error('Add user error:', err);
+        let msg = err.message || String(err);
+        if (err.code === 'auth/email-already-in-use') msg = 'Email sudah terdaftar.';
+        else if (err.code === 'auth/invalid-email') msg = 'Format email tidak valid.';
+        else if (err.code === 'auth/weak-password') msg = 'Password terlalu lemah.';
+        alert('Gagal tambah karyawan: ' + msg);
+        if (secondaryApp) { try { await deleteApp(secondaryApp); } catch(e){} }
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Tambah Karyawan';
+    }
 };
