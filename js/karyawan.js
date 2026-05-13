@@ -1,19 +1,17 @@
 import { auth, db, storage, OWNER_EMAILS, OFFICE_LOCATION } from './firebase-config.js';
-
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { collection, addDoc, query, where, orderBy, getDocs, getDoc, setDoc, doc, Timestamp, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { ref, uploadBytes, getDownloadURL }
-    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+import { ref, uploadBytes, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
 const $ = id => document.getElementById(id);
 const TIPE = {
   clock_in:'Clock In',
   clock_out:'Clock Out',
-  break_in:'Break',
-  break_out:'After Break',
-  overtime_in:'Overtime In',
-  overtime_out:'Overtime Out'
+  break_in:'Istirahat',
+  break_out:'Selesai Istirahat',
+  overtime_in:'Mulai Lembur',
+  overtime_out:'Selesai Lembur'
 };
 const ST_ID = {
   clock_in:'sClockIn',
@@ -24,397 +22,295 @@ const ST_ID = {
   overtime_out:'sOtOut'
 };
 const NO_SELFIE_TYPES = new Set(['break_in','break_out','overtime_in']);
-const BREAK_MAX_MS = 60 * 60 * 1000; // 1 hour cap
+const BREAK_MAX_MS = 60 * 60 * 1000; // 1 jam
 
 let currentUser=null, currentType=null, stream=null, coords=null, cameraReady=false;
-let todayCache = []; // cache of today's records for the current user
+let todayCache = [];
+let workEndTime = '17:00'; // default jam pulang
 
-// Haversine distance (meters) between two lat/lng points
 function distanceMeters(lat1, lng1, lat2, lng2){
-    const R = 6371000;
-    const toRad = d => d * Math.PI / 180;
-    const dLat = toRad(lat2 - lat1);
-    const dLng = toRad(lng2 - lng1);
-    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
-    return Math.round(2 * R * Math.asin(Math.sqrt(a)));
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(a)));
 }
 
 function greetingByHour(h){
-    if (h < 11) return { msg:'Good Morning', emoji:'' };
-    if (h < 15) return { msg:'Good Afternoon', emoji:'' };
-    if (h < 18) return { msg:'Good Evening', emoji:'' };
-    return { msg:'Good Night', emoji:'' };
+  if (h < 11) return { msg:'Selamat Pagi', emoji:'' };
+  if (h < 15) return { msg:'Selamat Siang', emoji:'' };
+  if (h < 18) return { msg:'Selamat Sore', emoji:'' };
+  return { msg:'Selamat Malam', emoji:'' };
 }
 
 function updateGreeting(displayName){
-    const h = new Date().getHours();
-    const g = greetingByHour(h);
-    const nama = displayName || (currentUser && currentUser.email && currentUser.email.split('@')[0]) || '';
-    $('greetMsg').textContent = g.msg + (nama ? ', ' + nama : '');
-    $('greetSub').textContent = 'have a nice day';
+  const h = new Date().getHours();
+  const g = greetingByHour(h);
+  const nama = displayName || (currentUser && currentUser.email && currentUser.email.split('@')[0]) || '';
+  $('greetMsg').textContent = g.msg + (nama ? ', ' + nama : '');
+  $('greetSub').textContent = 'selamat beraktivitas';
 }
 
 function tickClock(){
-    const d = new Date();
-    const hh = String(d.getHours()).padStart(2,'0');
-    const mm = String(d.getMinutes()).padStart(2,'0');
-    const ss = String(d.getSeconds()).padStart(2,'0');
-    $('liveClock').textContent = hh + ':' + mm + ':' + ss;
-    const opt = { weekday:'long', day:'2-digit', month:'long', year:'numeric' };
-    $('liveDate').textContent = d.toLocaleDateString('en-US', opt);
+  const d = new Date();
+  $('liveClock').textContent = d.toLocaleTimeString('id-ID',{hour12:false});
+  $('liveDate').textContent = d.toLocaleDateString('id-ID',{weekday:'long', day:'2-digit', month:'long', year:'numeric'});
 }
 setInterval(tickClock, 1000); tickClock();
 
-function startOfDay(d=new Date()){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
-function endOfDay(d=new Date()){ const x=new Date(d); x.setHours(23,59,59,999); return x; }
-function fmtTime(d){ return d.toLocaleTimeString('en-US',{hour12:false}); }
+// ===== Countdown jam kerja =====
+function parseHM(s){
+  const m = /^(\d{1,2}):(\d{2})$/.exec((s||'').trim());
+  if(!m) return null;
+  return { h: parseInt(m[1],10), m: parseInt(m[2],10) };
+}
+
+function updateWorkCountdown(){
+  const wc = $('workCountdown');
+  if(!wc) return;
+  // Hanya tampilkan jika sudah Clock In dan belum Clock Out
+  if (!hasToday('clock_in') || hasToday('clock_out')) {
+    wc.classList.add('hidden');
+    return;
+  }
+  const hm = parseHM(workEndTime) || {h:17, m:0};
+  const now = new Date();
+  const end = new Date(); end.setHours(hm.h, hm.m, 0, 0);
+  const diff = end - now;
+  wc.classList.remove('hidden');
+  $('wcSub').textContent = 'Jam pulang: ' + String(hm.h).padStart(2,'0') + ':' + String(hm.m).padStart(2,'0');
+  if (diff <= 0) {
+    $('wcTime').textContent = 'Waktunya pulang!';
+    wc.classList.add('done');
+    return;
+  }
+  wc.classList.remove('done');
+  const totalSec = Math.floor(diff/1000);
+  const h = Math.floor(totalSec/3600);
+  const m = Math.floor((totalSec%3600)/60);
+  const s = totalSec%60;
+  $('wcTime').textContent =
+    String(h).padStart(2,'0') + ':' +
+    String(m).padStart(2,'0') + ':' +
+    String(s).padStart(2,'0');
+}
+setInterval(updateWorkCountdown, 1000);
+
+function fmtTime(d){ return d.toLocaleTimeString('id-ID',{hour12:false}); }
 
 async function loadProfileAvatar(uid){
-    try{
-        const snap = await getDoc(doc(db, 'profil', uid));
-        if (snap.exists()){
-            const u = snap.data();
-            if (u.foto){
-                $('avatarImg').src = u.foto;
-                $('avatarImg').style.display = 'block';
-                $('avatarPlaceholder').style.display = 'none';
-            }
-            updateGreeting(u.nama || '');
-        }
-    }catch(e){ console.warn('profile load err', e); }
+  try{
+    const snap = await getDoc(doc(db, 'profil', uid));
+    if (snap.exists()){
+      const u = snap.data();
+      if (u.foto){
+        $('avatarImg').src = u.foto;
+        $('avatarImg').style.display = 'block';
+        $('avatarPlaceholder').style.display = 'none';
+      }
+      if (u.jamPulang) workEndTime = u.jamPulang;
+      updateGreeting(u.nama || '');
+    }
+  }catch(e){ console.warn('profile load err', e); }
+}
+
+function startOfDay(){ const d=new Date(); d.setHours(0,0,0,0); return d; }
+function endOfDay(){ const d=new Date(); d.setHours(23,59,59,999); return d; }
+function timeToTodayDate(hhmm){
+  const [h,m] = hhmm.split(':').map(Number);
+  const d = new Date(); d.setHours(h, m||0, 0, 0); return d;
 }
 
 async function loadToday(uid){
-    todayCache = [];
-    const q = query(collection(db,'absensi'),
-        where('uid','==', uid),
-        where('ts','>=', Timestamp.fromDate(startOfDay())),
-        where('ts','<=', Timestamp.fromDate(endOfDay())),
-        orderBy('ts','asc'));
-    const snap = await getDocs(q);
-    const list = $('todayList'); list.innerHTML = '';
-    Object.values(ST_ID).forEach(id => { const el=$(id); if(el) el.textContent='-'; });
-
-    snap.forEach(docSnap=>{
-        const a = docSnap.data();
-        todayCache.push(a);
-        const t = a.ts && a.ts.toDate ? a.ts.toDate() : new Date(a.ts);
-        if (ST_ID[a.tipe]) $(ST_ID[a.tipe]).textContent = fmtTime(t);
-
-        const row = document.createElement('div');
-        row.className = 'list-item';
-        const inRad = (a.inRadius === true);
-        const dist = (typeof a.jarak === 'number') ? (a.jarak + ' m') : '-';
-        const note = a.breakFilledAtCheckout ? ' <span class="tag warn">filled at checkout</span>' : '';
-        const auto = a.autoCutByCheckout ? ' <span class="tag warn">auto-cut 1h</span>' : '';
-        row.innerHTML = '<div><strong>' + (TIPE[a.tipe]||a.tipe) + '</strong>' + note + auto +
-            '<div class="muted small">' + fmtTime(t) + ' &middot; ' + dist + ' &middot; ' + (inRad?'<span class="ok">In radius</span>':'<span class="warn">Out of radius</span>') + '</div></div>';
-        list.appendChild(row);
-    });
+  todayCache = [];
+  const q = query(collection(db,'absensi'),
+    where('uid','==', uid),
+    where('ts','>=', Timestamp.fromDate(startOfDay())),
+    where('ts','<=', Timestamp.fromDate(endOfDay())),
+    orderBy('ts','asc'));
+  const snap = await getDocs(q);
+  const list = $('todayList'); list.innerHTML = '';
+  // Reset status indicators
+  Object.values(ST_ID).forEach(id => { const el=$(id); if(el) el.textContent='-'; });
+  snap.forEach(s=>{
+    const a = s.data(); todayCache.push(a);
+    const t = a.ts && a.ts.toDate ? a.ts.toDate() : new Date();
+    const dist = (a.jarak!=null)? a.jarak + ' m' : '-';
+    const inRad = !!a.inRadius;
+    const label = TIPE[a.tipe] || a.tipe;
+    // Update status
+    const sid = ST_ID[a.tipe];
+    if (sid) $(sid).textContent = fmtTime(t);
+    // Riwayat row
+    const row = document.createElement('div');
+    row.className = 'list-row';
+    const note = a.flag === 'breakFilledAtCheckout' ? ' <span class="muted small">(diisi saat Clock Out)</span>' : '';
+    const auto = a.autoCap ? ' <span class="muted small">(auto 1 jam)</span>' : '';
+    row.innerHTML = '<div><strong>' + label + '</strong>' + note + auto +
+      '<div class="muted small">' + fmtTime(t) + ' &middot; ' + dist + ' &middot; ' + (inRad?'<span class="ok">dalam radius</span>':'<span class="warn">luar radius</span>') + '</div></div>';
+    list.appendChild(row);
+  });
+  updateWorkCountdown();
 }
 
-function hasToday(type){
-    return todayCache.some(a => a.tipe === type);
-}
-
-function getTodayEntry(type){
-    return todayCache.find(a => a.tipe === type);
-}
+function hasToday(type){ return todayCache.some(a => a.tipe === type); }
+function getTodayEntry(type){ return todayCache.find(a => a.tipe === type); }
 
 async function getLocation(){
-    return new Promise((resolve, reject)=>{
-        if (!navigator.geolocation) return reject(new Error('Geolocation not supported'));
-        navigator.geolocation.getCurrentPosition(
-            pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy }),
-            err => reject(err),
-            { enableHighAccuracy:true, timeout:15000, maximumAge:30000 }
-        );
-    });
+  return new Promise((resolve, reject)=>{
+    if (!navigator.geolocation) return reject(new Error('Geolocation tidak didukung'));
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy }),
+      err => reject(err),
+      { enableHighAccuracy:true, timeout:15000, maximumAge:30000 }
+    );
+  });
 }
 
 let __lastLocKey = '';
 async function refreshLocStatus(){
-    try{
-        const c = await getLocation();
-        coords = c;
-        const d = distanceMeters(c.lat, c.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
-        const inRad = d <= OFFICE_LOCATION.radius;
-        const key = (inRad?'in':'out') + ':' + d;
-        if (key === __lastLocKey) return;
-        __lastLocKey = key;
-        const el = $('locStatus');
-        if (el.firstChild && el.children.length === 1){
-            const span = el.children[0];
-            span.className = inRad ? 'ok' : 'warn';
-            span.textContent = inRad ? 'In radius' : 'Out of radius';
-            if (el.childNodes.length >= 2 && el.childNodes[1].nodeType === 3){
-                el.childNodes[1].nodeValue = ' \u00b7 distance ' + d + ' m';
-            } else {
-                el.appendChild(document.createTextNode(' \u00b7 distance ' + d + ' m'));
-            }
-        } else {
-            el.innerHTML = (inRad?'<span class="ok">In radius</span>':'<span class="warn">Out of radius</span>') + ' \u00b7 distance ' + d + ' m';
-        }
-    }catch(e){
-        if (__lastLocKey === 'err') return;
-        __lastLocKey = 'err';
-        $('locStatus').innerHTML = '<span class="warn">Location unavailable</span>';
-    }
+  try{
+    const c = await getLocation();
+    coords = c;
+    const d = distanceMeters(c.lat, c.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
+    const inRad = d <= OFFICE_LOCATION.radius;
+    const key = (inRad?'in':'out') + ':' + d;
+    if (key === __lastLocKey) return;
+    __lastLocKey = key;
+    $('locStatus').innerHTML = inRad
+      ? '<span class="ok">Dalam radius kantor</span> &middot; jarak ' + d + ' m'
+      : '<span class="warn">Di luar radius kantor</span> &middot; jarak ' + d + ' m';
+  }catch(e){
+    if (__lastLocKey === 'err') return;
+    __lastLocKey = 'err';
+    $('locStatus').innerHTML = '<span class="warn">Lokasi belum tersedia</span>';
+  }
 }
-refreshLocStatus(); setInterval(refreshLocStatus, 30000);
+setInterval(refreshLocStatus, 30000);
 
 // ===== Selfie flow =====
 async function openSelfie(type){
-    currentType = type;
-    $('selfieTitle').textContent = 'Selfie - ' + TIPE[type];
-    $('selfieModal').classList.remove('hidden');
-    $('btnSend').classList.add('hidden');
-    $('btnRetake').classList.add('hidden');
-    $('btnCapture').classList.remove('hidden');
-    $('selfieCanvas').hidden = true;
-    $('selfieVideo').style.display = 'block';
-    cameraReady = false;
-    try{
-        stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user' }, audio:false });
-        $('selfieVideo').srcObject = stream;
-        cameraReady = true;
-        $('selfieInfo').textContent = 'Camera ready';
-    }catch(e){
-        $('selfieInfo').textContent = 'Camera error: ' + e.message;
-    }
-}
-
-function closeSelfie(){
-    $('selfieModal').classList.add('hidden');
-    if (stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; }
-}
-
-$('btnCancelSelfie').onclick = closeSelfie;
-
-$('btnCapture').onclick = ()=>{
-    if (!cameraReady) return;
-    const v = $('selfieVideo'); const c = $('selfieCanvas');
-    c.width = v.videoWidth; c.height = v.videoHeight;
-    const ctx = c.getContext('2d');
-    ctx.drawImage(v,0,0,c.width,c.height);
-    c.hidden = false; v.style.display='none';
-    $('btnCapture').classList.add('hidden');
-    $('btnRetake').classList.remove('hidden');
-    $('btnSend').classList.remove('hidden');
-};
-
-$('btnRetake').onclick = ()=>{
-    $('selfieCanvas').hidden = true;
-    $('selfieVideo').style.display = 'block';
-    $('btnSend').classList.add('hidden');
-    $('btnRetake').classList.add('hidden');
-    $('btnCapture').classList.remove('hidden');
-};
-
-$('btnSend').onclick = async ()=>{
-    if (!coords){ try{ await refreshLocStatus(); }catch(e){} }
-    if (!coords){ alert('Location not available yet.'); return; }
-    const d = distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
-    const inRad = d <= OFFICE_LOCATION.radius;
-    const canvas = $('selfieCanvas');
-    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.7));
-    const sizeKB = Math.round(blob.size / 1024);
-    const path = 'absensi/' + currentUser.uid + '/' + currentType + '_' + Date.now() + '.jpg';
-    const r = ref(storage, path);
-    await uploadBytes(r, blob);
-    const url = await getDownloadURL(r);
-    await saveAttendance({ tipe: currentType, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad, foto:url, sizeKB });
+  currentType = type;
+  $('selfieTitle').textContent = 'Ambil Selfie - ' + (TIPE[type]||type);
+  $('selfieModal').classList.remove('hidden');
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user' }, audio:false });
+    const v = $('selfieVideo'); v.srcObject = stream; cameraReady = true;
+  }catch(e){
+    alert('Tidak bisa akses kamera: ' + e.message);
     closeSelfie();
-    await loadToday(currentUser.uid);
+  }
+}
+function closeSelfie(){
+  if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  cameraReady = false;
+  $('selfieModal').classList.add('hidden');
+}
+$('btnSelfieCancel').onclick = closeSelfie;
+$('btnSelfieShoot').onclick = async ()=>{
+  if (!cameraReady) return;
+  const v = $('selfieVideo');
+  const c = $('selfieCanvas');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+  const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.85));
+  closeSelfie();
+  if (!coords) try{ await refreshLocStatus(); }catch(e){}
+  if (!coords){ alert('Lokasi belum tersedia.'); return; }
+  const d = distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
+  const inRad = d <= OFFICE_LOCATION.radius;
+  // Upload selfie
+  const path = 'selfie/' + currentUser.uid + '/' + Date.now() + '.jpg';
+  const r = ref(storage, path);
+  await uploadBytes(r, blob);
+  const url = await getDownloadURL(r);
+  const extra = {};
+  if (currentType === 'clock_out' && window.__earlyReason){
+    extra.earlyReason = window.__earlyReason;
+    window.__earlyReason = null;
+  }
+  await saveAttendance(Object.assign({ tipe: currentType, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad, fotoSelfie:url }, extra));
+  await loadToday(currentUser.uid);
 };
 
-// ===== No-selfie flow (Break / After Break / Overtime In) =====
+// ===== No-selfie flow (Istirahat / Selesai Istirahat / Mulai Lembur) =====
 async function doNoSelfieAction(type, extra={}){
-    if (!coords){ try{ await refreshLocStatus(); }catch(e){} }
-    if (!coords){ alert('Location not available yet.'); return; }
-    const d = distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
-    const inRad = d <= OFFICE_LOCATION.radius;
+  if (!coords) try{ await refreshLocStatus(); }catch(e){}
+  if (!coords){ alert('Lokasi belum tersedia.'); return; }
+  const d = distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
+  const inRad = d <= OFFICE_LOCATION.radius;
 
-    // Geofence rule: After Break MUST be in radius (employee back at office)
-    if (type === 'break_out' && !inRad){
-        alert('You must be at the office to tap After Break. Distance: ' + d + ' m');
-        return;
-    }
+  // Geofence: Selesai Istirahat WAJIB di radius (karyawan kembali ke kantor)
+  if (type === 'break_out' && !inRad){
+    alert('Anda harus di kantor untuk tap Selesai Istirahat. Jarak: ' + d + ' m');
+    return;
+  }
 
-    await saveAttendance(Object.assign({ tipe:type, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad, foto:null, sizeKB:0 }, extra));
-    await loadToday(currentUser.uid);
+  await saveAttendance(Object.assign({ tipe:type, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad }, extra));
+  await loadToday(currentUser.uid);
 }
 
 async function saveAttendance(payload){
-    const data = Object.assign({
-        uid: currentUser.uid,
-        email: currentUser.email,
-        nama: $('greetMsg').textContent.replace(/^[^,]*,\s*/, '') || currentUser.email,
-        ts: serverTimestamp()
-    }, payload);
-    await addDoc(collection(db,'absensi'), data);
+  const data = Object.assign({
+    uid: currentUser.uid,
+    email: currentUser.email,
+    nama: $('greetMsg').textContent.replace(/^[^,]*,\s*/, '') || currentUser.email,
+    ts: serverTimestamp()
+  }, payload);
+  await addDoc(collection(db,'absensi'), data);
 }
 
-// ===== Sequence validation =====
+// ===== Validasi urutan =====
 function validateSequence(type){
-    // Clock In first, only once
-    if (type === 'clock_in'){
-        if (hasToday('clock_in')) return 'You have already Clocked In today.';
-        return null;
-    }
-    if (!hasToday('clock_in')) return 'You must Clock In first.';
-
-    if (type === 'break_in'){
-        if (hasToday('break_in')) return 'You have already started Break.';
-        if (hasToday('clock_out')) return 'You have already Clocked Out.';
-        return null;
-    }
-    if (type === 'break_out'){
-        if (!hasToday('break_in')) return 'You have not started Break yet.';
-        if (hasToday('break_out')) return 'You have already tapped After Break.';
-        if (hasToday('clock_out')) return 'You have already Clocked Out.';
-        return null;
-    }
-    if (type === 'clock_out'){
-        if (hasToday('clock_out')) return 'You have already Clocked Out today.';
-        return null;
-    }
-    if (type === 'overtime_in'){
-        if (!hasToday('clock_out')) return 'Overtime can only start after Clock Out.';
-        if (hasToday('overtime_in')) return 'Overtime In already recorded.';
-        return null;
-    }
-    if (type === 'overtime_out'){
-        if (!hasToday('overtime_in')) return 'You have not started Overtime yet.';
-        if (hasToday('overtime_out')) return 'Overtime Out already recorded.';
-        return null;
-    }
+  if (type === 'clock_in'){
+    if (hasToday('clock_in')) return 'Anda sudah Clock In hari ini.';
     return null;
+  }
+  if (!hasToday('clock_in')) return 'Anda harus Clock In dulu.';
+
+  if (type === 'break_in'){
+    if (hasToday('break_in')) return 'Anda sudah mulai Istirahat.';
+    if (hasToday('clock_out')) return 'Anda sudah Clock Out.';
+    return null;
+  }
+  if (type === 'break_out'){
+    if (!hasToday('break_in')) return 'Anda belum tap Istirahat.';
+    if (hasToday('break_out')) return 'Anda sudah tap Selesai Istirahat.';
+    if (hasToday('clock_out')) return 'Anda sudah Clock Out.';
+    return null;
+  }
+  if (type === 'clock_out'){
+    if (hasToday('clock_out')) return 'Anda sudah Clock Out hari ini.';
+    return null;
+  }
+  if (type === 'overtime_in'){
+    if (!hasToday('clock_out')) return 'Lembur hanya setelah Clock Out.';
+    if (hasToday('overtime_in')) return 'Anda sudah Mulai Lembur.';
+    return null;
+  }
+  if (type === 'overtime_out'){
+    if (!hasToday('overtime_in')) return 'Anda belum Mulai Lembur.';
+    if (hasToday('overtime_out')) return 'Anda sudah Selesai Lembur.';
+    return null;
+  }
+  return null;
 }
 
-// ===== Clock Out interceptor: enforce break, handle forgot Break Out =====
-function timeToTodayDate(hhmm){
-    const [h,m] = hhmm.split(':').map(Number);
-    const d = new Date(); d.setHours(h, m, 0, 0);
-    return d;
-}
-
-async function handleClockOutFlow(){
-    // Case A: user never tapped Break -> mandatory modal to input range
-    if (!hasToday('break_in')){
-        await openBreakRangeModal();
-        return; // The modal will resume the clock-out flow after saving
-    }
-    // Case B: tapped Break but not After Break -> auto-cut + warning
-    if (hasToday('break_in') && !hasToday('break_out')){
-        const brIn = getTodayEntry('break_in');
-        const inTs = brIn.ts && brIn.ts.toDate ? brIn.ts.toDate() : new Date();
-        const autoEnd = new Date(inTs.getTime() + BREAK_MAX_MS);
-        $('autoBreakEndTime').textContent = fmtTime(autoEnd);
-        $('forgotBreakOutModal').classList.remove('hidden');
-        // Save auto-cut break_out record
-        const d = coords ? distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng) : 0;
-        const inRad = coords ? d <= OFFICE_LOCATION.radius : false;
-        await addDoc(collection(db,'absensi'), {
-            uid: currentUser.uid,
-            email: currentUser.email,
-            nama: $('greetMsg').textContent.replace(/^[^,]*,\s*/, '') || currentUser.email,
-            ts: Timestamp.fromDate(autoEnd),
-            tipe: 'break_out',
-            lokasi: coords ? {lat:coords.lat,lng:coords.lng} : null,
-            jarak: d,
-            inRadius: inRad,
-            foto: null,
-            sizeKB: 0,
-            autoCutByCheckout: true
-        });
-        await loadToday(currentUser.uid);
-        return; // resume after user clicks OK
-    }
-    // Case C: break properly recorded -> proceed straight to selfie
-    proceedClockOutSelfie();
-}
-
-function proceedClockOutSelfie(){
-    // Early clock out check (before scheduled end-of-shift, e.g. 17:00)
-    const now = new Date();
-    const endShift = new Date(); endShift.setHours(17,0,0,0);
-    if (now < endShift){
-        $('earlyModal').classList.remove('hidden');
-        return;
-    }
-    openSelfie('clock_out');
-}
-
-$('btnEarlyCancel').onclick = ()=> $('earlyModal').classList.add('hidden');
-$('btnEarlyOk').onclick = ()=>{
-    const reason = ($('earlyReason').value||'').trim();
-    if (!reason){ alert('Please provide a reason.'); return; }
-    $('earlyModal').classList.add('hidden');
-    window.__earlyReason = reason;
-    openSelfie('clock_out');
-};
-
-$('btnForgotBreakOk').onclick = ()=>{
-    $('forgotBreakOutModal').classList.add('hidden');
-    proceedClockOutSelfie();
-};
-
-async function openBreakRangeModal(){
-    $('breakStartInput').value = '12:00';
-    $('breakEndInput').value = '13:00';
-    $('breakRangeModal').classList.remove('hidden');
-}
-
-$('btnBreakRangeOk').onclick = async ()=>{
-    const s = $('breakStartInput').value;
-    const e = $('breakEndInput').value;
-    if (!s || !e){ alert('Please fill in both times.'); return; }
-    const sd = timeToTodayDate(s);
-    let ed = timeToTodayDate(e);
-    if (ed <= sd){ alert('Break End must be after Break Start.'); return; }
-    // Cap at 1 hour
-    if ((ed - sd) > BREAK_MAX_MS){
-        ed = new Date(sd.getTime() + BREAK_MAX_MS);
-        alert('Break duration capped to 1 hour. Adjusted end time: ' + fmtTime(ed));
-    }
-    const d = coords ? distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng) : 0;
-    const inRad = coords ? d <= OFFICE_LOCATION.radius : false;
-    const base = {
-        uid: currentUser.uid,
-        email: currentUser.email,
-        nama: $('greetMsg').textContent.replace(/^[^,]*,\s*/, '') || currentUser.email,
-        lokasi: coords ? {lat:coords.lat,lng:coords.lng} : null,
-        jarak: d,
-        inRadius: inRad,
-        foto: null,
-        sizeKB: 0,
-        breakFilledAtCheckout: true
-    };
-    await addDoc(collection(db,'absensi'), Object.assign({}, base, { tipe:'break_in', ts: Timestamp.fromDate(sd) }));
-    await addDoc(collection(db,'absensi'), Object.assign({}, base, { tipe:'break_out', ts: Timestamp.fromDate(ed) }));
-    $('breakRangeModal').classList.add('hidden');
-    await loadToday(currentUser.uid);
-    proceedClockOutSelfie();
-};
-
-// ===== Action dispatcher =====
+// ===== Handlers =====
 async function handleAction(type){
-    const err = validateSequence(type);
-    if (err){ alert(err); return; }
+  const err = validateSequence(type);
+  if (err){ alert(err); return; }
+  if (!coords) try{ await refreshLocStatus(); }catch(e){}
 
-    if (type === 'clock_out'){
-        await handleClockOutFlow();
-        return;
-    }
-
-    if (NO_SELFIE_TYPES.has(type)){
-        await doNoSelfieAction(type);
-        return;
-    }
-
-    // Clock In or Overtime Out -> selfie
-    openSelfie(type);
+  if (NO_SELFIE_TYPES.has(type)){
+    return doNoSelfieAction(type);
+  }
+  // Clock In / Clock Out / Selesai Lembur -> pakai selfie
+  if (type === 'clock_out'){
+    return handleClockOut();
+  }
+  openSelfie(type);
 }
 
 $('btnClockIn').onclick = ()=> handleAction('clock_in');
@@ -424,30 +320,166 @@ $('btnBreakOut').onclick = ()=> handleAction('break_out');
 $('btnOtIn').onclick = ()=> handleAction('overtime_in');
 $('btnOtOut').onclick = ()=> handleAction('overtime_out');
 
-// ===== Avatar upload =====
+// ===== Clock Out flow dengan auto-handle istirahat =====
+async function handleClockOut(){
+  // Case A: sudah ada break_in tapi belum break_out -> auto-cap 1 jam
+  if (hasToday('break_in') && !hasToday('break_out')){
+    const bi = getTodayEntry('break_in');
+    const biTime = bi.ts && bi.ts.toDate ? bi.ts.toDate() : new Date();
+    const autoEnd = new Date(biTime.getTime() + BREAK_MAX_MS);
+    // Simpan auto break_out
+    await saveAttendance({
+      tipe:'break_out',
+      lokasi: bi.lokasi || null,
+      jarak: bi.jarak || 0,
+      inRadius: bi.inRadius || false,
+      autoCap: true
+    });
+    await loadToday(currentUser.uid);
+    $('forgotBreakOutModal').classList.remove('hidden');
+    return; // user click OK -> proceed
+  }
+  // Case B: belum break_in sama sekali -> WAJIB isi range
+  if (!hasToday('break_in')){
+    openBreakRangeModal();
+    return; // user fill -> save -> proceed
+  }
+  // Case C: break sudah selesai -> langsung selfie
+  proceedClockOut();
+}
+
+function proceedClockOut(){
+  // Cek apakah sudah waktunya pulang
+  const hm = parseHM(workEndTime) || {h:17, m:0};
+  const now = new Date();
+  const endShift = new Date(); endShift.setHours(hm.h, hm.m, 0, 0);
+  if (now < endShift){
+    $('earlyModal').classList.remove('hidden');
+    return;
+  }
+  openSelfie('clock_out');
+}
+
+$('btnEarlyCancel').onclick = ()=> $('earlyModal').classList.add('hidden');
+$('btnEarlyOk').onclick = ()=>{
+  const reason = ($('earlyReason').value||'').trim();
+  if (!reason){ alert('Mohon isi alasan.'); return; }
+  $('earlyModal').classList.add('hidden');
+  window.__earlyReason = reason;
+  openSelfie('clock_out');
+};
+
+$('btnForgotBreakOk').onclick = ()=>{
+  $('forgotBreakOutModal').classList.add('hidden');
+  proceedClockOut();
+};
+
+async function openBreakRangeModal(){
+  $('breakStartInput').value = '12:00';
+  $('breakEndInput').value = '13:00';
+  $('breakRangeModal').classList.remove('hidden');
+}
+
+$('btnBreakRangeOk').onclick = async ()=>{
+  const s = $('breakStartInput').value;
+  const e = $('breakEndInput').value;
+  if (!s || !e){ alert('Mohon isi kedua waktu.'); return; }
+  const sd = timeToTodayDate(s);
+  let ed = timeToTodayDate(e);
+  if (ed <= sd){ alert('Selesai Istirahat harus setelah Mulai Istirahat.'); return; }
+  if ((ed - sd) > BREAK_MAX_MS){
+    ed = new Date(sd.getTime() + BREAK_MAX_MS);
+    alert('Durasi istirahat dipotong maksimal 1 jam. Selesai jadi: ' + fmtTime(ed));
+  }
+  const d = coords ? distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng) : 0;
+  const inRad = coords ? d <= OFFICE_LOCATION.radius : false;
+  const base = {
+    uid: currentUser.uid,
+    email: currentUser.email,
+    nama: $('greetMsg').textContent.replace(/^[^,]*,\s*/, '') || currentUser.email,
+    lokasi: coords ? {lat:coords.lat, lng:coords.lng} : null,
+    jarak: d,
+    inRadius: inRad,
+    flag: 'breakFilledAtCheckout'
+  };
+  // Simpan break_in dengan ts custom
+  await addDoc(collection(db,'absensi'), Object.assign({}, base, {
+    tipe:'break_in',
+    ts: Timestamp.fromDate(sd)
+  }));
+  await addDoc(collection(db,'absensi'), Object.assign({}, base, {
+    tipe:'break_out',
+    ts: Timestamp.fromDate(ed)
+  }));
+  $('breakRangeModal').classList.add('hidden');
+  await loadToday(currentUser.uid);
+  proceedClockOut();
+};
+
+// ===== Avatar upload (dengan fallback base64) =====
 $('avatarWrap').onclick = ()=> $('avatarInput').click();
 $('avatarInput').onchange = async (ev)=>{
-    const f = ev.target.files[0]; if (!f) return;
-    const path = 'profil/' + currentUser.uid + '/avatar.jpg';
-    const r = ref(storage, path);
-    await uploadBytes(r, f);
-    const url = await getDownloadURL(r);
-    await setDoc(doc(db,'profil', currentUser.uid), { foto:url }, { merge:true });
+  const f = ev.target.files[0]; if (!f) return;
+  try{
+    // Resize ke max 400px untuk hemat storage
+    const dataUrl = await resizeImage(f, 400);
+    // Coba upload ke Firebase Storage
+    let url = dataUrl; // fallback default ke base64
+    try{
+      const path = 'profil/' + currentUser.uid + '/avatar.jpg';
+      const r = ref(storage, path);
+      // uploadString dengan data_url base64
+      await uploadString(r, dataUrl, 'data_url');
+      url = await getDownloadURL(r);
+      console.log('Avatar uploaded to Storage:', url);
+    }catch(storageErr){
+      console.warn('Storage upload gagal, pakai base64 inline:', storageErr.message);
+      // url tetap dataUrl (base64)
+    }
+    await setDoc(doc(db, 'profil', currentUser.uid), { foto: url }, { merge:true });
     $('avatarImg').src = url;
     $('avatarImg').style.display = 'block';
     $('avatarPlaceholder').style.display = 'none';
+    alert('Foto profil berhasil disimpan.');
+  }catch(e){
+    console.error('Avatar save error:', e);
+    alert('Gagal simpan foto: ' + e.message);
+  }
 };
+
+function resizeImage(file, maxSize){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ev =>{
+      const img = new Image();
+      img.onload = ()=>{
+        let w = img.width, h = img.height;
+        if (w > h && w > maxSize){ h = h * (maxSize/w); w = maxSize; }
+        else if (h > maxSize){ w = w * (maxSize/h); h = maxSize; }
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = reject;
+      img.src = ev.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 // ===== Logout =====
 $('btnLogout').onclick = ()=> signOut(auth).then(()=> location.href='index.html');
 
 // ===== Auth gate =====
 onAuthStateChanged(auth, async (user)=>{
-    if (!user){ location.href='index.html'; return; }
-    if (OWNER_EMAILS.includes((user.email||'').toLowerCase())){
-        location.href='owner.html'; return;
-    }
-    currentUser = user;
-    await loadProfileAvatar(user.uid);
-    await loadToday(user.uid);
+  if (!user){ location.href='index.html'; return; }
+  if (OWNER_EMAILS.includes((user.email||'').toLowerCase())){
+    location.href='owner.html'; return;
+  }
+  currentUser = user;
+  await loadProfileAvatar(user.uid);
+  await loadToday(user.uid);
+  refreshLocStatus();
 });
