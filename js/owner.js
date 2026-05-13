@@ -33,8 +33,17 @@ onAuthStateChanged(auth, user => {
     initBeranda();
 });
 
-$('btnLogout').onclick = () => signOut(auth).then(() => location.href = 'index.html');
+$('btnLogout').onclick = () => signOut(auth).then(() => location.href = 'index.html').catch(()=>location.href='index.html');
 $('btnFilter').onclick = loadData;
+// Klik Beranda untuk refresh data dashboard
+const _btnBeranda = $('berandaTitle');
+if (_btnBeranda){
+  _btnBeranda.addEventListener('click', ()=>{
+    const ic = $('berandaRefreshIcon');
+    if (ic){ ic.style.transition='transform .6s'; ic.style.transform='rotate(360deg)'; setTimeout(()=>{ic.style.transform='rotate(0deg)';}, 650); }
+    try { loadData(); } catch(e){}
+  });
+}
 $('btnExport').onclick = exportCSV;
 
 function initSidebar(){
@@ -520,29 +529,82 @@ if ($('formEditAbsen')) $('formEditAbsen').onsubmit = async (e)=>{
 
 // ===== Floating Bar Kehadiran di Beranda =====
 async function renderHadirFloating(rows){
-    const wrap = $('hadirFloating');
-    if (!wrap) return;
     const total = await getTotalKaryawan();
-    const clockInRows = rows.filter(r=>r.tipe==='clock_in');
-    const uniqUids = new Set();
-    clockInRows.forEach(r=>{ if (r.uid) uniqUids.add(r.uid); else if (r.email) uniqUids.add(r.email); });
-    const hadir = uniqUids.size;
-    const cnt = $('hadirCount'); if (cnt) cnt.textContent = '(' + hadir + ' of ' + total + ')';
-    const avWrap = $('hadirAvatars');
-    if (!avWrap) return;
-    avWrap.innerHTML = '';
-    const uids = Array.from(uniqUids).slice(0, 8);
-    for (const u of uids){
-        try{
-            const snap = await getDoc(doc(db,'profil', u));
-            let foto = '';
-            if (snap.exists()) foto = snap.data().foto || '';
-            if (!foto){
-                const initial = (clockInRows.find(r=>r.uid===u||r.email===u)?.nama||'?').charAt(0).toUpperCase();
-                avWrap.insertAdjacentHTML('beforeend', '<span class="hadir-avatar hadir-avatar-ph">'+initial+'</span>');
-            } else {
-                avWrap.insertAdjacentHTML('beforeend', '<img class="hadir-avatar" src="'+foto+'" alt="" />');
-            }
-        }catch(e){}
+
+    // group by uid, get all events sorted by time asc
+    const byUid = new Map();
+    for (const r of rows){
+        const key = r.uid || r.email;
+        if (!key) continue;
+        if (!byUid.has(key)) byUid.set(key, []);
+        byUid.get(key).push(r);
     }
+    // sort each user's events by waktu asc
+    for (const arr of byUid.values()){
+        arr.sort((a,b)=>{
+            const ta = a.waktu && a.waktu.toMillis ? a.waktu.toMillis() : (a.waktu||0);
+            const tb = b.waktu && b.waktu.toMillis ? b.waktu.toMillis() : (b.waktu||0);
+            return ta - tb;
+        });
+    }
+
+    const hadirUids = [];
+    const workingUids = [];
+    const breakUids = [];
+
+    for (const [uid, arr] of byUid){
+        const hasClockIn = arr.some(r=>r.tipe==='clock_in');
+        if (!hasClockIn) continue;
+        hadirUids.push(uid);
+
+        const hasClockOut = arr.some(r=>r.tipe==='clock_out');
+        if (hasClockOut) continue;
+
+        let lastBreakIn = -1, lastBreakOut = -1;
+        arr.forEach((r,i)=>{
+            if (r.tipe==='break_in') lastBreakIn = i;
+            if (r.tipe==='break_out') lastBreakOut = i;
+        });
+        if (lastBreakIn > lastBreakOut){
+            breakUids.push(uid);
+        } else {
+            workingUids.push(uid);
+        }
+    }
+
+    function namaOf(uid){
+        const r = rows.find(x=>(x.uid||x.email)===uid);
+        return (r && r.nama) ? r.nama : '';
+    }
+
+    async function paint(containerId, countId, uids){
+        const cnt = $(countId);
+        if (cnt) cnt.textContent = '(' + uids.length + ' of ' + total + ')';
+        const wrap = $(containerId);
+        if (!wrap) return;
+        wrap.innerHTML = '';
+        const slice = uids.slice(0, 8);
+        for (const u of slice){
+            let foto = '';
+            try{
+                const snap = await getDoc(doc(db,'profil', u));
+                if (snap.exists()) foto = snap.data().foto || '';
+            }catch(e){}
+            const initial = (namaOf(u) || '?').charAt(0).toUpperCase();
+            if (!foto){
+                wrap.insertAdjacentHTML('beforeend', '<span class="hadir-avatar hadir-avatar-ph" title="'+namaOf(u)+'">'+initial+'</span>');
+            } else {
+                wrap.insertAdjacentHTML('beforeend', '<img class="hadir-avatar" src="'+foto+'" alt="" title="'+namaOf(u)+'" />');
+            }
+        }
+        if (uids.length === 0){
+            wrap.insertAdjacentHTML('beforeend', '<span class="hadir-empty muted small">—</span>');
+        } else if (uids.length > 8){
+            wrap.insertAdjacentHTML('beforeend', '<span class="hadir-avatar hadir-avatar-ph">+'+(uids.length-8)+'</span>');
+        }
+    }
+
+    await paint('hadirAvatars', 'hadirCount', hadirUids);
+    await paint('workingAvatars', 'workingCount', workingUids);
+    await paint('breakAvatars', 'breakCount', breakUids);
 }
