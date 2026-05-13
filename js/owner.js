@@ -149,7 +149,7 @@ async function renderBeranda(rows){
             },
             options: { plugins:{ legend:{ position:'bottom' } }, cutout:'65%' }
         });
-        $('capLokasi').textContent = inRuko + ' di ruko Â· ' + outRuko + ' luar lokasi';
+        $('capLokasi').textContent = inRuko + ' di ruko ÃÂ· ' + outRuko + ' luar lokasi';
     }
 
     const tb = document.querySelector('#tblToday tbody');
@@ -247,9 +247,9 @@ function renderTable(rows) {
         const nama = r.nama || (r.email ? r.email.split('@')[0] : '-');
         let badge = '';
         if (r.inRadius === true) {
-            badge = '<span class="badge-loc badge-in">ð¢ In Office ('+(r.jarak!=null?r.jarak+'m':'')+')</span>';
+            badge = '<span class="badge-loc badge-in">Ã°ÂÂÂ¢ In Office ('+(r.jarak!=null?r.jarak+'m':'')+')</span>';
         } else if (r.inRadius === false) {
-            badge = '<span class="badge-loc badge-out">ð´ Out of Radius ('+(r.jarak!=null?r.jarak+'m':'')+')</span>';
+            badge = '<span class="badge-loc badge-out">Ã°ÂÂÂ´ Out of Radius ('+(r.jarak!=null?r.jarak+'m':'')+')</span>';
         } else {
             badge = '<span class="muted" style="font-size:11px">-</span>';
         }
@@ -456,7 +456,7 @@ else if (r.tipe === 'break_out') { tipeLabel = 'Working'; tipeColor = 'badge-gre
             ? '<img src="'+photo+'" alt="'+nama+'">'
             : '<div class="avatar-init">'+(nama[0]||'?').toUpperCase()+'</div>';
         const jam = r.ts.toDate().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-        return '<div class="working-item">' + avatar + '<div class="working-info"><b>'+nama+'</b><small>'+tipeLabel+' Â· '+jam+'</small></div><span class="badge '+tipeColor+'">'+tipeLabel+'</span></div>';
+        return '<div class="working-item">' + avatar + '<div class="working-info"><b>'+nama+'</b><small>'+tipeLabel+' ÃÂ· '+jam+'</small></div><span class="badge '+tipeColor+'">'+tipeLabel+'</span></div>';
     }).join('');
 }
 async function renderWorkingNowWithFetch(rows){
@@ -602,8 +602,8 @@ async function renderHadirFloating(rows){
     // sort each user's events by waktu asc
     for (const arr of byUid.values()){
         arr.sort((a,b)=>{
-            const ta = a.waktu && a.waktu.toMillis ? a.waktu.toMillis() : (a.waktu||0);
-            const tb = b.waktu && b.waktu.toMillis ? b.waktu.toMillis() : (b.waktu||0);
+            const ta = a.ts && a.ts.toMillis ? a.ts.toMillis() : (a.ts||0);
+            const tb = b.ts && b.ts.toMillis ? b.ts.toMillis() : (b.ts||0);
             return ta - tb;
         });
     }
@@ -659,7 +659,7 @@ async function renderHadirFloating(rows){
             }
         }
         if (uids.length === 0){
-            wrap.insertAdjacentHTML('beforeend', '<span class="hadir-empty muted small">â</span>');
+            wrap.insertAdjacentHTML('beforeend', '<span class="hadir-empty muted small">Ã¢ÂÂ</span>');
         } else if (uids.length > 8){
             wrap.insertAdjacentHTML('beforeend', '<span class="hadir-avatar hadir-avatar-ph">+'+(uids.length-8)+'</span>');
         }
