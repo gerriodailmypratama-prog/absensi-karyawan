@@ -36,7 +36,14 @@
       <h2 class="page-title">Beranda</h2>
       <p class="muted" id="berandaDate">-</p>
 
-      <div class="stats" id="berandaStats"></div>
+      <div id="hadirFloating" class="hadir-floating">
+          <div class="hadir-floating-left">
+            <div class="hadir-title">Kehadiran personalia hari ini <strong id="hadirCount">(0 of 0)</strong></div>
+            <div class="hadir-sub muted small">Karyawan yang sudah Clock In</div>
+          </div>
+          <div class="hadir-floating-right" id="hadirAvatars"></div>
+        </div>
+        <div class="stats" id="berandaStats"></div>
 
       <div class="grid-2-chart">
         <div class="card">
@@ -113,7 +120,7 @@
         <div class="table-wrap">
           <table id="tblAbsen">
             <thead>
-              <tr><th>Tanggal</th><th>Jam</th><th>Nama</th><th>Tipe</th><th>Status</th><th>Lokasi</th><th>Foto</th></tr>
+              <tr><th>Tanggal</th><th>Jam</th><th>Nama</th><th>Tipe</th><th>Status</th><th>Lokasi</th><th>Foto</th><th>Aksi</th></tr>
             </thead>
             <tbody></tbody>
           </table>
@@ -134,6 +141,7 @@
           <div><label>No. HP</label><input type="text" id="newPhone" placeholder="+62..."></div>
           <div><label>ID Karyawan</label><input type="text" id="newIdKaryawan" placeholder="auto (EMP-XXX) jika kosong"></div>
           <div><label>Jam Kerja (jam)</label><input type="number" id="newJamKerja" min="1" max="24" value="8"></div>
+          <div><label>Tanggal Join</label><input type="date" id="newTanggalJoin"></div>
           <div><label>Password</label><input type="text" id="newPassword" value="Goodgems2026"></div>
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" id="btnAddUser">Tambah Karyawan</button>
@@ -146,7 +154,7 @@
         <h3>Daftar Karyawan</h3>
         <div class="table-wrap">
           <table id="tblKaryawan">
-            <thead><tr><th>Nama</th><th>Email</th><th>No. HP</th><th>ID</th><th>Jam Kerja</th><th>Foto</th><th>Aksi</th></tr></thead>
+            <thead><tr><th>No.</th><th>Nama</th><th>Email</th><th>No. HP</th><th>ID</th><th>Jam Kerja</th><th>Tanggal Join</th><th>Foto</th><th>Aksi</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -165,11 +173,40 @@
       <div><label>No. HP</label><input type="text" id="editPhone"></div>
       <div><label>ID Karyawan</label><input type="text" id="editIdKaryawan"></div>
       <div><label>Jam Kerja (jam)</label><input type="number" id="editJamKerja" min="1" max="24"></div>
+      <div><label>Tanggal Join</label><input type="date" id="editTanggalJoin"></div>
       <div class="form-actions" style="display:flex;gap:8px">
         <button type="submit" class="btn btn-primary">Simpan</button>
         <button type="button" class="btn btn-secondary" id="btnEditCancel">Batal</button>
       </div>
     </form>
+  </div>
+</div>
+
+<div id="editAbsenModal" class="modal hidden">
+  <div class="modal-content card" style="max-width:480px">
+    <h3>Edit Absensi (Owner Only)</h3>
+    <form id="formEditAbsen" class="form-grid">
+      <input type="hidden" id="editAbsenId">
+      <div><label>Nama</label><input type="text" id="editAbsenNama" disabled></div>
+      <div><label>Tipe</label>
+        <select id="editAbsenTipe">
+          <option value="clock_in">Clock In</option>
+          <option value="clock_out">Clock Out</option>
+          <option value="break_in">Istirahat</option>
+          <option value="break_out">Selesai Istirahat</option>
+          <option value="overtime_in">Mulai Lembur</option>
+          <option value="overtime_out">Selesai Lembur</option>
+        </select>
+      </div>
+      <div><label>Tanggal</label><input type="date" id="editAbsenDate" required></div>
+      <div><label>Jam</label><input type="time" id="editAbsenTime" step="1" required></div>
+      <div><label>Catatan Edit (opsional)</label><input type="text" id="editAbsenNote" placeholder="alasan edit"></div>
+      <div class="form-actions" style="display:flex;gap:8px">
+        <button type="submit" class="btn btn-primary">Simpan</button>
+        <button type="button" class="btn btn-secondary" id="btnEditAbsenCancel">Batal</button>
+      </div>
+    </form>
+    <p class="muted small">Catatan: Edit dicatat dengan penanda "editedByOwner".</p>
   </div>
 </div>
 
