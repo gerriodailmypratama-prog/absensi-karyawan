@@ -230,6 +230,20 @@
   </div>
 </div>
 
+<div id="deleteAbsenModal" class="modal hidden">
+  <div class="modal-content card" style="max-width:440px">
+    <h3 style="color:#dc2626">Hapus Absen</h3>
+    <p id="deleteAbsenMsg" style="margin:8px 0 16px">Yakin hapus absen ini?</p>
+    <input type="hidden" id="deleteAbsenId">
+    <p class="muted small">Setelah dihapus, data tidak bisa dikembalikan. Karyawan dapat melakukan Clock In ulang untuk hari tersebut.</p>
+    <div class="form-actions" style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+      <button type="button" class="btn btn-secondary" id="btnDeleteAbsenCancel">Batal</button>
+      <button type="button" class="btn" id="btnDeleteAbsenConfirm" style="background:#dc2626;color:#fff">Hapus</button>
+    </div>
+  </div>
+</div>
+
+
 <div id="photoModal" class="modal hidden" onclick="this.classList.remove('show')">
   <img id="modalImg" alt="Foto absen">
 </div>
