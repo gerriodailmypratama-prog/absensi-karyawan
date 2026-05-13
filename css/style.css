@@ -226,16 +226,28 @@ td img{width:48px;height:48px;object-fit:cover;border-radius:6px;cursor:pointer}
 .hadir-floating-left .hadir-title{font-weight:600;font-size:14px;color:#0f172a}
 .hadir-floating-left .hadir-sub{font-size:11px;margin-top:2px}
 .hadir-floating-right{display:flex;align-items:center}
-.hadir-avatar{
-    width:36px;height:36px;border-radius:50%;
-    object-fit:cover;border:2px solid #fff;
+img.hadir-avatar,
+.hadir-floating-right .hadir-avatar,
+.hadir-floating-right img.hadir-avatar{
+    width:36px !important;
+    height:36px !important;
+    max-width:36px !important;
+    max-height:36px !important;
+    border-radius:50% !important;
+    object-fit:cover !important;
+    border:2px solid #fff !important;
     box-shadow:0 1px 3px rgba(0,0,0,0.15);
     margin-left:-8px;
     background:#e5e7eb;
-    display:inline-flex;align-items:center;justify-content:center;
-    font-weight:600;color:#64748b;font-size:13px;
+    flex-shrink:0 !important;
+    display:inline-flex !important;
+    align-items:center;
+    justify-content:center;
+    font-weight:600;
+    color:#64748b;
+    font-size:13px;
 }
-.hadir-avatar:first-child{margin-left:0}
+.hadir-avatar:first-child{margin-left:0 !important}
 .hadir-avatar-ph{background:#cbd5e1;color:#fff}
 
 /* ===== Break Countdown ===== */
