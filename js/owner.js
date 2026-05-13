@@ -9,7 +9,7 @@ import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.
 import { getAuth, createUserWithEmailAndPassword, signOut as authSignOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const $ = id => document.getElementById(id);
-const TIPE = { clock_in:'Clock In', clock_out:'Clock Out', overtime_in:'Overtime In', overtime_out:'Overtime Out' };
+const TIPE = { clock_in:'Clock In', clock_out:'Clock Out', break_in:'Break', break_out:'After Break', overtime_in:'Overtime In', overtime_out:'Overtime Out' };
 let cachedRows = [];
 let chartHadir = null, chartLokasi = null;
 let unsubToday = null;
@@ -23,7 +23,7 @@ function localDateStr(d) {
 
 onAuthStateChanged(auth, user => {
     if (!user) return location.href = 'index.html';
-    if (!OWNER_EMAILS.includes(user.email)) { alert('Akses ditolak'); return location.href = 'karyawan.html'; }
+    if (!OWNER_EMAILS.includes(user.email)) { alert('Access denied'); return location.href = 'karyawan.html'; }
     $('ownerEmail').textContent = user.email;
     const today = new Date();
     const weekAgo = new Date(); weekAgo.setDate(today.getDate() - 6);
@@ -56,7 +56,7 @@ function initSidebar(){
 
 function initBeranda(){
     const today = new Date();
-    $('berandaDate').textContent = today.toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+    $('berandaDate').textContent = today.toLocaleDateString('en-US', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 
     const start = new Date(); start.setHours(0,0,0,0);
     const end = new Date(); end.setHours(23,59,59,999);
@@ -91,7 +91,7 @@ async function getTotalKaryawan(){
 async function renderBeranda(rows){
     const total = await getTotalKaryawan();
     const clockInSet = new Set();
-    const stat = { clock_in:0, clock_out:0, overtime_in:0, overtime_out:0 };
+    const stat = { clock_in:0, clock_out:0, break_in:0, break_out:0, overtime_in:0, overtime_out:0 };
     let inRuko = 0, outRuko = 0;
 
     rows.forEach(r => {
@@ -107,12 +107,12 @@ async function renderBeranda(rows){
     const belum = Math.max(total - hadir, 0);
 
     $('berandaStats').innerHTML =
-        '<div class="stat"><b>' + hadir + '/' + total + '</b><small>Sudah Clock In</small></div>' +
+        '<div class="stat"><b>' + hadir + '/' + total + '</b><small>Clocked In</small></div>' +
         '<div class="stat"><b>' + stat.clock_in + '</b><small>Total Clock In</small></div>' +
         '<div class="stat"><b>' + stat.clock_out + '</b><small>Clock Out</small></div>' +
         '<div class="stat"><b>' + stat.overtime_in + '</b><small>OT In</small></div>' +
         '<div class="stat"><b>' + stat.overtime_out + '</b><small>OT Out</small></div>' +
-        '<div class="stat" style="background:#fef2f2"><b style="color:#dc2626">' + outRuko + '</b><small>Luar Lokasi</small></div>';
+        '<div class="stat" style="background:#fef2f2"><b style="color:#dc2626">' + outRuko + '</b><small>Out of Radius</small></div>';
 
     const ctx1 = document.getElementById('chartHadir');
     if (ctx1 && window.Chart) {
@@ -120,7 +120,7 @@ async function renderBeranda(rows){
         chartHadir = new Chart(ctx1, {
             type: 'doughnut',
             data: {
-                labels: ['Sudah Clock In', 'Belum'],
+                labels: ['Clocked In', 'Pending'],
                 datasets: [{ data: [hadir, belum], backgroundColor: ['#10b981', '#e5e7eb'], borderWidth: 0 }]
             },
             options: { plugins:{ legend:{ position:'bottom' } }, cutout:'65%' }
@@ -134,7 +134,7 @@ async function renderBeranda(rows){
         chartLokasi = new Chart(ctx2, {
             type: 'doughnut',
             data: {
-                labels: ['Di Ruko', 'Luar Lokasi'],
+                labels: ['In Office', 'Out of Radius'],
                 datasets: [{ data: [inRuko, outRuko], backgroundColor: ['#10b981', '#ef4444'], borderWidth: 0 }]
             },
             options: { plugins:{ legend:{ position:'bottom' } }, cutout:'65%' }
@@ -145,17 +145,17 @@ async function renderBeranda(rows){
     const tb = document.querySelector('#tblToday tbody');
     tb.innerHTML = '';
     if (!rows.length) {
-        $('emptyToday').textContent = 'Belum ada aktivitas absensi hari ini';
+        $('emptyToday').textContent = 'No attendance activity today';
         return;
     }
     $('emptyToday').textContent = '';
     rows.slice(0, 20).forEach(r => {
         const t = r.ts && r.ts.toDate ? r.ts.toDate() : new Date();
-        const jam = t.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
+        const jam = t.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
         const nama = r.nama || (r.email ? r.email.split('@')[0] : '-');
         let badge = '';
-        if (r.inRadius === true) badge = '<span class="badge-loc badge-in">Di Ruko'+(r.jarak!=null?' '+r.jarak+'m':'')+'</span>';
-        else if (r.inRadius === false) badge = '<span class="badge-loc badge-out">Luar '+(r.jarak!=null?r.jarak+'m':'')+'</span>';
+        if (r.inRadius === true) badge = '<span class="badge-loc badge-in">In Office'+(r.jarak!=null?' '+r.jarak+'m':'')+'</span>';
+        else if (r.inRadius === false) badge = '<span class="badge-loc badge-out">Out '+(r.jarak!=null?r.jarak+'m':'')+'</span>';
         else badge = '<span class="muted">-</span>';
         const tr = document.createElement('tr');
         if (r.inRadius === false) tr.style.background = '#fef2f2';
@@ -178,7 +178,7 @@ async function loadData() {
         snap.forEach(d => { const x = d.data(); rows.push(x); if (x.email) karyawanSet.add(x.email); });
 
         const sel = $('selKaryawan'); const prev = sel.value;
-        sel.innerHTML = '<option value="">Semua</option>';
+        sel.innerHTML = '<option value="">All</option>';
         [...karyawanSet].sort().forEach(e => {
             const o = document.createElement('option'); o.value = e; o.textContent = e; sel.appendChild(o);
         });
@@ -198,12 +198,12 @@ async function loadData() {
         renderTable(filtered);
     } catch (err) {
         console.error('loadData error:', err);
-        alert('Gagal memuat data: ' + (err.message || err));
+        alert('Failed to load data: ' + (err.message || err));
     }
 }
 
 function renderStats(rows) {
-    const stat = { clock_in:0, clock_out:0, overtime_in:0, overtime_out:0 };
+    const stat = { clock_in:0, clock_out:0, break_in:0, break_out:0, overtime_in:0, overtime_out:0 };
     let outCount = 0;
     rows.forEach(r => {
         if (stat[r.tipe] !== undefined) stat[r.tipe]++;
@@ -214,19 +214,19 @@ function renderStats(rows) {
         '<div class="stat"><b>'+stat.clock_out+'</b><small>Clock Out</small></div>'+
         '<div class="stat"><b>'+stat.overtime_in+'</b><small>Overtime In</small></div>'+
         '<div class="stat"><b>'+stat.overtime_out+'</b><small>Overtime Out</small></div>'+
-        '<div class="stat"><b>'+rows.length+'</b><small>Total Record</small></div>'+
-        '<div class="stat" style="background:#fef2f2"><b style="color:#dc2626">'+outCount+'</b><small>Luar Lokasi</small></div>';
+        '<div class="stat"><b>'+rows.length+'</b><small>Total Records</small></div>'+
+        '<div class="stat" style="background:#fef2f2"><b style="color:#dc2626">'+outCount+'</b><small>Out of Radius</small></div>';
 }
 
 function renderTable(rows) {
     const tb = document.querySelector('#tblAbsen tbody');
     tb.innerHTML = '';
-    if (!rows.length) { $('emptyMsg').textContent = 'Tidak ada data pada rentang tersebut'; return; }
+    if (!rows.length) { $('emptyMsg').textContent = 'No data in this range'; return; }
     $('emptyMsg').textContent = '';
     rows.forEach(r => {
         const t = r.ts && r.ts.toDate ? r.ts.toDate() : new Date();
-        const tanggal = t.toLocaleDateString('id-ID', { day:'2-digit', month:'2-digit', year:'numeric' });
-        const jam = t.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+        const tanggal = t.toLocaleDateString('en-US', { day:'2-digit', month:'2-digit', year:'numeric' });
+        const jam = t.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
         const loc = r.lokasi
             ? '<a href="https://www.google.com/maps?q='+r.lokasi.lat+','+r.lokasi.lng+'" target="_blank" rel="noopener">Map</a>'
             : '<span class="muted">-</span>';
@@ -237,9 +237,9 @@ function renderTable(rows) {
         const nama = r.nama || (r.email ? r.email.split('@')[0] : '-');
         let badge = '';
         if (r.inRadius === true) {
-            badge = '<span class="badge-loc badge-in">🟢 Di Ruko ('+(r.jarak!=null?r.jarak+'m':'')+')</span>';
+            badge = '<span class="badge-loc badge-in">🟢 In Office ('+(r.jarak!=null?r.jarak+'m':'')+')</span>';
         } else if (r.inRadius === false) {
-            badge = '<span class="badge-loc badge-out">🔴 Luar Lokasi ('+(r.jarak!=null?r.jarak+'m':'')+')</span>';
+            badge = '<span class="badge-loc badge-out">🔴 Out of Radius ('+(r.jarak!=null?r.jarak+'m':'')+')</span>';
         } else {
             badge = '<span class="muted" style="font-size:11px">-</span>';
         }
@@ -251,19 +251,19 @@ function renderTable(rows) {
 }
 
 function exportCSV() {
-    if (!cachedRows.length) { alert('Tidak ada data untuk diexport'); return; }
-    const header = ['Tanggal','Jam','Nama','Email','Tipe','Status Lokasi','Jarak(m)','Latitude','Longitude','Akurasi(m)','SizeKB','FotoURL'];
+    if (!cachedRows.length) { alert('No data to export'); return; }
+    const header = ['Date','Time','Name','Email','Type','Location Status','Distance(m)','Latitude','Longitude','Accuracy(m)','SizeKB','PhotoURL','BreakFilledAtCheckout','AutoCut1h','EarlyReason'];
     const lines = [header.join(',')];
     cachedRows.forEach(r => {
         const t = r.ts && r.ts.toDate ? r.ts.toDate() : new Date();
-        const tanggal = t.toLocaleDateString('id-ID');
-        const jam = t.toLocaleTimeString('id-ID');
+        const tanggal = t.toLocaleDateString('en-US');
+        const jam = t.toLocaleTimeString('en-US');
         const lat = r.lokasi ? r.lokasi.lat : '';
         const lng = r.lokasi ? r.lokasi.lng : '';
         const acc = r.lokasi ? r.lokasi.acc : '';
-        const statusLok = r.inRadius === true ? 'Di Ruko' : (r.inRadius === false ? 'Luar Lokasi' : '');
+        const statusLok = r.inRadius === true ? 'In Office' : (r.inRadius === false ? 'Out of Radius' : '');
         const jarak = r.jarak != null ? r.jarak : '';
-        const cells = [tanggal, jam, r.nama || '', r.email || '', TIPE[r.tipe] || r.tipe || '', statusLok, jarak, lat, lng, acc, r.sizeKB || '', r.foto || ''];
+        const cells = [tanggal, jam, r.nama || '', r.email || '', TIPE[r.tipe] || r.tipe || '', statusLok, jarak, lat, lng, acc, r.sizeKB || '', r.foto || '', r.breakFilledAtCheckout ? 'Yes' : '', r.autoCutByCheckout ? 'Yes' : '', r.alasanEarly || ''];
         lines.push(cells.map(c => '"'+String(c).replace(/"/g, '""')+'"').join(','));
     });
     const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
@@ -280,7 +280,7 @@ async function loadKaryawanList(){
         const tb = document.querySelector('#tblKaryawan tbody');
         tb.innerHTML = '';
         if (snap.empty) {
-            $('emptyKaryawan').textContent = 'Belum ada data karyawan terdaftar. Tambahkan via form di atas.';
+            $('emptyKaryawan').textContent = 'Pending ada data karyawan terdaftar. Tambahkan via form di atas.';
             return;
         }
         $('emptyKaryawan').textContent = '';
@@ -312,10 +312,10 @@ $('formAddUser').onsubmit = async (e) => {
     const idKaryawanRaw = $('newIdKaryawan').value.trim();
     const jamKerja = parseInt($('newJamKerja').value, 10) || 8;
     const password = $('newPassword').value;
-    if (!nama || !email || !password) { alert('Nama, Email, Password wajib diisi.'); return; }
-    if (password.length < 6) { alert('Password minimal 6 karakter.'); return; }
+    if (!nama || !email || !password) { alert('Name, Email, Password are required.'); return; }
+    if (password.length < 6) { alert('Password must be at least 6 characters.'); return; }
     btn.disabled = true;
-    btn.textContent = 'Menambah...';
+    btn.textContent = 'Adding...';
     let secondaryApp = null;
     try {
         // Init secondary app supaya session owner tidak terganggu
@@ -334,7 +334,7 @@ $('formAddUser').onsubmit = async (e) => {
         await authSignOut(secondaryAuth);
         await deleteApp(secondaryApp);
         secondaryApp = null;
-        alert('Karyawan ' + nama + ' berhasil ditambahkan.');
+        alert('Karyawan ' + nama + ' added successfully.');
         $('formAddUser').reset();
         $('newPassword').value = 'Goodgems2026';
         $('newJamKerja').value = 8;
@@ -342,14 +342,14 @@ $('formAddUser').onsubmit = async (e) => {
     } catch (err) {
         console.error('Add user error:', err);
         let msg = err.message || String(err);
-        if (err.code === 'auth/email-already-in-use') msg = 'Email sudah terdaftar.';
-        else if (err.code === 'auth/invalid-email') msg = 'Format email tidak valid.';
-        else if (err.code === 'auth/weak-password') msg = 'Password terlalu lemah.';
-        alert('Gagal tambah karyawan: ' + msg);
+        if (err.code === 'auth/email-already-in-use') msg = 'Email already registered.';
+        else if (err.code === 'auth/invalid-email') msg = 'Invalid email format.';
+        else if (err.code === 'auth/weak-password') msg = 'Password too weak.';
+        alert('Failed to add employee: ' + msg);
         if (secondaryApp) { try { await deleteApp(secondaryApp); } catch(e){} }
     } finally {
         btn.disabled = false;
-        btn.textContent = 'Tambah Karyawan';
+        btn.textContent = 'Add Employee';
     }
 };
 
@@ -358,7 +358,7 @@ $('formAddUser').onsubmit = async (e) => {
 async function openEditKaryawan(uid){
     try {
         const snap = await getDoc(doc(db,'karyawan',uid));
-        if (!snap.exists()) { alert('Data karyawan tidak ditemukan.'); return; }
+        if (!snap.exists()) { alert('Employee data not found.'); return; }
         const d = snap.data();
         $('editUid').value = uid;
         $('editNama').value = d.nama || '';
@@ -366,7 +366,7 @@ async function openEditKaryawan(uid){
         $('editIdKaryawan').value = d.idKaryawan || d.nik || '';
         $('editJamKerja').value = d.jamKerja || 8;
         $('editKaryawanModal').classList.remove('hidden');
-    } catch(e){ alert('Gagal load data: ' + e.message); }
+    } catch(e){ alert('Failed to load data: ' + e.message); }
 }
 $('btnEditCancel').onclick = () => $('editKaryawanModal').classList.add('hidden');
 $('formEditKaryawan').onsubmit = async (e) => {
@@ -376,12 +376,12 @@ $('formEditKaryawan').onsubmit = async (e) => {
     const phone = $('editPhone').value.trim();
     const idKaryawan = $('editIdKaryawan').value.trim();
     const jamKerja = parseInt($('editJamKerja').value, 10) || 8;
-    if (!nama) { alert('Nama wajib diisi.'); return; }
+    if (!nama) { alert('Name is required.'); return; }
     try {
         await setDoc(doc(db,'karyawan',uid), { nama, phone, idKaryawan, jamKerja }, {merge:true});
         $('editKaryawanModal').classList.add('hidden');
         loadKaryawanList();
-    } catch(err){ alert('Gagal simpan: ' + err.message); }
+    } catch(err){ alert('Failed to save: ' + err.message); }
 };
 
 // ============== KARYAWAN SEDANG BEKERJA ==============
@@ -395,10 +395,10 @@ function renderWorkingNow(rows, karyawanMap){
             latestByUid[r.uid] = r;
         }
     });
-    const working = Object.values(latestByUid).filter(r => r.tipe === 'clock_in' || r.tipe === 'overtime_in');
+    const working = Object.values(latestByUid).filter(r => r.tipe === 'clock_in' || r.tipe === 'overtime_in' || r.tipe === 'break_in' || r.tipe === 'break_out');
     if (working.length === 0) {
         list.innerHTML = '';
-        empty.textContent = 'Tidak ada karyawan yang sedang bekerja.';
+        empty.textContent = 'No employees currently working.';
         return;
     }
     empty.textContent = '';
@@ -406,12 +406,15 @@ function renderWorkingNow(rows, karyawanMap){
         const k = karyawanMap[r.uid] || {};
         const photo = k.photoURL || '';
         const nama = k.nama || r.nama || r.uid.slice(0,6);
-        const tipeLabel = r.tipe === 'clock_in' ? 'Clock In' : 'OT In';
-        const tipeColor = r.tipe === 'clock_in' ? 'badge-green' : 'badge-orange';
+        let tipeLabel = TIPE[r.tipe] || r.tipe;
+let tipeColor = 'badge-green';
+if (r.tipe === 'overtime_in') tipeColor = 'badge-orange';
+else if (r.tipe === 'break_in') { tipeLabel = 'On Break'; tipeColor = 'badge-yellow'; }
+else if (r.tipe === 'break_out') { tipeLabel = 'Working'; tipeColor = 'badge-green'; }
         const avatar = photo
             ? '<img src="'+photo+'" alt="'+nama+'">'
             : '<div class="avatar-init">'+(nama[0]||'?').toUpperCase()+'</div>';
-        const jam = r.ts.toDate().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+        const jam = r.ts.toDate().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
         return '<div class="working-item">' + avatar + '<div class="working-info"><b>'+nama+'</b><small>'+tipeLabel+' · '+jam+'</small></div><span class="badge '+tipeColor+'">'+tipeLabel+'</span></div>';
     }).join('');
 }
