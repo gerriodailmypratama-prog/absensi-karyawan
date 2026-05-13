@@ -3,7 +3,7 @@ import { auth, db, OWNER_EMAILS, firebaseConfig } from './firebase-config.js';
 
 
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, query, where, orderBy, getDocs, onSnapshot, Timestamp, setDoc, doc, serverTimestamp }
+import { collection, query, where, orderBy, getDocs, onSnapshot, Timestamp, setDoc, updateDoc, deleteDoc, getDoc, addDoc, doc, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signOut as authSignOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -89,6 +89,7 @@ async function getTotalKaryawan(){
 }
 
 async function renderBeranda(rows){
+    try{ await renderHadirFloating(rows); }catch(e){ console.warn('hadir floating err', e); }
     const total = await getTotalKaryawan();
     const clockInSet = new Set();
     const stat = { clock_in:0, clock_out:0, break_in:0, break_out:0, overtime_in:0, overtime_out:0 };
@@ -175,7 +176,7 @@ async function loadData() {
                         orderBy('ts', 'desc'));
         const snap = await getDocs(q);
         const rows = []; const karyawanSet = new Set();
-        snap.forEach(d => { const x = d.data(); rows.push(x); if (x.email) karyawanSet.add(x.email); });
+        snap.forEach(d => { const x = Object.assign({_id:d.id}, d.data()); rows.push(x); if (x.email) karyawanSet.add(x.email); });
 
         const sel = $('selKaryawan'); const prev = sel.value;
         sel.innerHTML = '<option value="">All</option>';
@@ -245,8 +246,12 @@ function renderTable(rows) {
         }
         const tr = document.createElement('tr');
         if (r.inRadius === false) tr.style.background = '#fef2f2';
-        tr.innerHTML = '<td>'+tanggal+'</td><td>'+jam+'</td><td>'+nama+'</td><td>'+tipeLabel+'</td><td>'+badge+'</td><td>'+loc+'</td><td>'+img+'</td>';
+        tr.innerHTML = '<td>'+tanggal+'</td><td>'+jam+'</td><td>'+nama+'</td><td>'+tipeLabel+'</td><td>'+badge+'</td><td>'+loc+'</td><td>'+img+'</td>'+
+            '<td><button class="btn-link btn-edit-absen" data-id="'+(r._id||'')+'" data-nama="'+nama+'" data-tipe="'+(r.tipe||'')+'" data-ts="'+(r.ts && r.ts.toDate ? r.ts.toDate().toISOString() : '')+'">Edit</button></td>';
         tb.appendChild(tr);
+    });
+    document.querySelectorAll('.btn-edit-absen').forEach(b=>{
+        b.onclick = ()=> openEditAbsen(b.dataset.id, b.dataset.nama, b.dataset.tipe, b.dataset.ts);
     });
 }
 
@@ -287,18 +292,31 @@ async function loadKaryawanList(){
         const rows = [];
         snap.forEach(d => rows.push({id:d.id, ...d.data()}));
         rows.sort((a,b)=>(a.nama||'').localeCompare(b.nama||''));
-        rows.forEach(x => {
+        rows.forEach((x, idx) => {
             const img = x.photoURL
                 ? '<img src="'+x.photoURL+'" alt="foto" style="width:40px;height:40px;border-radius:50%;object-fit:cover">'
                 : '<span class="muted">-</span>';
             const idDisplay = x.idKaryawan || x.nik || '-';
             const jamKerja = x.jamKerja || 8;
             const tr = document.createElement('tr');
-            tr.innerHTML = '<td>'+(x.nama||'-')+'</td><td>'+(x.email||'-')+'</td><td>'+(x.phone||'-')+'</td><td>'+idDisplay+'</td><td>'+jamKerja+' jam</td><td>'+img+'</td><td><button class="btn-link btn-edit-kar" data-uid="'+x.id+'">Edit</button></td>';
+            const tj = x.tanggalJoin ? (x.tanggalJoin.toDate ? x.tanggalJoin.toDate() : new Date(x.tanggalJoin)) : null;
+            const tjStr = tj ? tj.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-';
+            tr.innerHTML = '<td>'+(idx+1)+'</td>'+
+              '<td>'+(x.nama||'-')+'</td>'+
+              '<td>'+(x.email||'-')+'</td>'+
+              '<td>'+(x.phone||'-')+'</td>'+
+              '<td>'+idDisplay+'</td>'+
+              '<td>'+jamKerja+' jam</td>'+
+              '<td>'+tjStr+'</td>'+
+              '<td>'+img+'</td>'+
+              '<td><button class="btn-link btn-edit-kar" data-uid="'+x.id+'">Edit</button> <button class="btn-link btn-del-kar" data-uid="'+x.id+'" data-nama="'+(x.nama||'')+'" style="color:#dc2626">Hapus</button></td>';
             tb.appendChild(tr);
         });
         document.querySelectorAll('.btn-edit-kar').forEach(b => {
             b.onclick = () => openEditKaryawan(b.dataset.uid);
+        });
+        document.querySelectorAll('.btn-del-kar').forEach(b => {
+            b.onclick = () => deleteKaryawan(b.dataset.uid, b.dataset.nama);
         });
     } catch(e){ console.error('loadKaryawanList:', e); }
 }
@@ -312,6 +330,7 @@ $('formAddUser').onsubmit = async (e) => {
     const idKaryawanRaw = $('newIdKaryawan').value.trim();
     const jamKerja = parseInt($('newJamKerja').value, 10) || 8;
     const password = $('newPassword').value;
+        const tanggalJoinVal = $('newTanggalJoin') ? $('newTanggalJoin').value : '';
     if (!nama || !email || !password) { alert('Name, Email, Password are required.'); return; }
     if (password.length < 6) { alert('Password must be at least 6 characters.'); return; }
     btn.disabled = true;
@@ -329,13 +348,14 @@ $('formAddUser').onsubmit = async (e) => {
             phone: phone || '',
             idKaryawan: idKaryawanRaw || ('EMP-' + Math.random().toString(36).slice(2,6).toUpperCase()),
             jamKerja: jamKerja,
+            tanggalJoin: tanggalJoinVal ? Timestamp.fromDate(new Date(tanggalJoinVal)) : null,
             createdAt: serverTimestamp()
         }, {merge:true});
         await authSignOut(secondaryAuth);
         await deleteApp(secondaryApp);
         secondaryApp = null;
         alert('Karyawan ' + nama + ' added successfully.');
-        $('formAddUser').reset();
+        $('formAddUser').reset(); if ($('newTanggalJoin')) $('newTanggalJoin').value='';
         $('newPassword').value = 'Goodgems2026';
         $('newJamKerja').value = 8;
         loadKaryawanList();
@@ -365,6 +385,10 @@ async function openEditKaryawan(uid){
         $('editPhone').value = d.phone || '';
         $('editIdKaryawan').value = d.idKaryawan || d.nik || '';
         $('editJamKerja').value = d.jamKerja || 8;
+        if ($('editTanggalJoin')){
+            const tj = d.tanggalJoin ? (d.tanggalJoin.toDate ? d.tanggalJoin.toDate() : new Date(d.tanggalJoin)) : null;
+            $('editTanggalJoin').value = tj ? tj.toISOString().substring(0,10) : '';
+        }
         $('editKaryawanModal').classList.remove('hidden');
     } catch(e){ alert('Failed to load data: ' + e.message); }
 }
@@ -378,7 +402,9 @@ $('formEditKaryawan').onsubmit = async (e) => {
     const jamKerja = parseInt($('editJamKerja').value, 10) || 8;
     if (!nama) { alert('Name is required.'); return; }
     try {
-        await setDoc(doc(db,'karyawan',uid), { nama, phone, idKaryawan, jamKerja }, {merge:true});
+        const tanggalJoinVal = $('editTanggalJoin') ? $('editTanggalJoin').value : '';
+        const tjPayload = tanggalJoinVal ? Timestamp.fromDate(new Date(tanggalJoinVal)) : null;
+        await setDoc(doc(db,'karyawan',uid), { nama, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload }, {merge:true});
         $('editKaryawanModal').classList.add('hidden');
         loadKaryawanList();
     } catch(err){ alert('Failed to save: ' + err.message); }
@@ -425,4 +451,98 @@ async function renderWorkingNowWithFetch(rows){
         ksnap.forEach(d => map[d.id] = d.data());
         renderWorkingNow(rows, map);
     } catch(e){ console.warn('renderWorkingNowWithFetch:', e.message); }
+}
+
+
+// ===== Hapus Karyawan =====
+async function deleteKaryawan(uid, nama){
+    if (!uid){ alert('UID karyawan tidak valid.'); return; }
+    const ok = confirm('Hapus karyawan "' + (nama||uid) + '"?\n\nIni akan menghapus data karyawan dari Firestore (koleksi karyawan + profil).\n\nCATATAN: Akun login (Firebase Authentication) HARUS dihapus manual lewat Firebase Console > Authentication > Users.');
+    if (!ok) return;
+    try{
+        await deleteDoc(doc(db,'karyawan',uid));
+        try{ await deleteDoc(doc(db,'profil',uid)); }catch(e){ console.warn('profil delete err (boleh diabaikan):', e); }
+        alert('Karyawan "' + (nama||uid) + '" berhasil dihapus dari Firestore.\n\nJangan lupa hapus akun login lewat Firebase Console > Authentication.');
+        loadKaryawanList();
+    }catch(e){
+        alert('Gagal hapus: ' + (e.message||e));
+    }
+}
+
+// ===== Edit Absensi (Owner Only) =====
+function openEditAbsen(docId, nama, tipe, tsIso){
+    if (!docId){ alert('ID absen tidak ditemukan.'); return; }
+    $('editAbsenId').value = docId;
+    $('editAbsenNama').value = nama || '';
+    $('editAbsenTipe').value = tipe || 'clock_in';
+    if (tsIso){
+        try{
+            const d = new Date(tsIso);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth()+1).padStart(2,'0');
+            const dd = String(d.getDate()).padStart(2,'0');
+            const hh = String(d.getHours()).padStart(2,'0');
+            const mi = String(d.getMinutes()).padStart(2,'0');
+            const ss = String(d.getSeconds()).padStart(2,'0');
+            $('editAbsenDate').value = yyyy + '-' + mm + '-' + dd;
+            $('editAbsenTime').value = hh + ':' + mi + ':' + ss;
+        }catch(e){}
+    }
+    $('editAbsenNote').value = '';
+    $('editAbsenModal').classList.remove('hidden');
+}
+if ($('btnEditAbsenCancel')) $('btnEditAbsenCancel').onclick = ()=> $('editAbsenModal').classList.add('hidden');
+if ($('formEditAbsen')) $('formEditAbsen').onsubmit = async (e)=>{
+    e.preventDefault();
+    const id = $('editAbsenId').value;
+    const tipe = $('editAbsenTipe').value;
+    const dateStr = $('editAbsenDate').value;
+    const timeStr = $('editAbsenTime').value;
+    const note = ($('editAbsenNote').value||'').trim();
+    if (!id || !dateStr || !timeStr){ alert('Tanggal & Jam wajib diisi.'); return; }
+    const newDate = new Date(dateStr + 'T' + timeStr);
+    if (isNaN(newDate.getTime())){ alert('Format tanggal/jam tidak valid.'); return; }
+    try{
+        await updateDoc(doc(db,'absensi', id), {
+            tipe: tipe,
+            ts: Timestamp.fromDate(newDate),
+            editedByOwner: true,
+            editedAt: serverTimestamp(),
+            editNote: note || null
+        });
+        $('editAbsenModal').classList.add('hidden');
+        alert('Absensi berhasil di-update.');
+        if (typeof loadData === 'function') loadData();
+    }catch(err){
+        alert('Gagal update: ' + (err.message||err));
+    }
+};
+
+// ===== Floating Bar Kehadiran di Beranda =====
+async function renderHadirFloating(rows){
+    const wrap = $('hadirFloating');
+    if (!wrap) return;
+    const total = await getTotalKaryawan();
+    const clockInRows = rows.filter(r=>r.tipe==='clock_in');
+    const uniqUids = new Set();
+    clockInRows.forEach(r=>{ if (r.uid) uniqUids.add(r.uid); else if (r.email) uniqUids.add(r.email); });
+    const hadir = uniqUids.size;
+    const cnt = $('hadirCount'); if (cnt) cnt.textContent = '(' + hadir + ' of ' + total + ')';
+    const avWrap = $('hadirAvatars');
+    if (!avWrap) return;
+    avWrap.innerHTML = '';
+    const uids = Array.from(uniqUids).slice(0, 8);
+    for (const u of uids){
+        try{
+            const snap = await getDoc(doc(db,'profil', u));
+            let foto = '';
+            if (snap.exists()) foto = snap.data().foto || '';
+            if (!foto){
+                const initial = (clockInRows.find(r=>r.uid===u||r.email===u)?.nama||'?').charAt(0).toUpperCase();
+                avWrap.insertAdjacentHTML('beforeend', '<span class="hadir-avatar hadir-avatar-ph">'+initial+'</span>');
+            } else {
+                avWrap.insertAdjacentHTML('beforeend', '<img class="hadir-avatar" src="'+foto+'" alt="" />');
+            }
+        }catch(e){}
+    }
 }
