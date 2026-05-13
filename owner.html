@@ -1,1 +1,261 @@
-undefined
+<!DOCTYPE html>
+
+
+
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0ea5e9">
+<title>Dashboard Owner</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Orbitron:wght@600;800&display=swap" rel="stylesheet">
+</head>
+<body class="owner-body">
+<header class="topbar">
+  <div class="brand-wrap">
+    <button id="btnSidebar" class="btn-icon" style="background:transparent;padding:4px 10px;font-size:20px">&#x2630;</button>
+    <span class="brand-logo">GOODGEMS<span class="brand-logo-accent">ABSENSI</span></span>
+    <small id="ownerEmail" class="muted"></small>
+  </div>
+  <button id="btnLogout" class="btn-icon">Keluar</button>
+</header>
+
+<div class="layout">
+  <aside id="sidebar" class="sidebar">
+    <nav>
+      <a href="#beranda" class="nav-link active" data-page="beranda">&#x1F4CA; Beranda</a>
+      <a href="#kehadiran" class="nav-link" data-page="kehadiran">&#x1F5D3; Kehadiran Harian</a>
+      <a href="#karyawan" class="nav-link" data-page="karyawan">&#x1F465; Karyawan</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <!-- BERANDA -->
+    <section id="page-beranda" class="page active">
+      <h2 class="page-title" id="berandaTitle" title="Klik untuk refresh" style="cursor:pointer;user-select:none">Beranda <span id="berandaRefreshIcon" style="font-size:14px;color:#0ea5e9">&#x21BB;</span></h2>
+      <p class="muted" id="berandaDate">-</p>
+
+      <div id="hadirFloating" class="hadir-floating">
+          <div class="hadir-floating-left">
+            <div class="hadir-title">Kehadiran personalia hari ini <strong id="hadirCount">(0 of 0)</strong></div>
+            <div class="hadir-sub muted small">Karyawan yang sudah Clock In</div>
+          </div>
+          <div class="hadir-floating-right" id="hadirAvatars"></div>
+        </div>
+
+        <div id="workingFloating" class="hadir-floating">
+          <div class="hadir-floating-left">
+            <div class="hadir-title">On Working <strong id="workingCount">(0 of 0)</strong></div>
+            <div class="hadir-sub muted small">Sedang bekerja (belum Clock Out, tidak istirahat)</div>
+          </div>
+          <div class="hadir-floating-right" id="workingAvatars"></div>
+        </div>
+
+        <div id="breakFloating" class="hadir-floating">
+          <div class="hadir-floating-left">
+            <div class="hadir-title">On Break <strong id="breakCount">(0 of 0)</strong></div>
+            <div class="hadir-sub muted small">Sedang istirahat</div>
+          </div>
+          <div class="hadir-floating-right" id="breakAvatars"></div>
+        </div>
+
+        <div id="finishFloating" class="hadir-floating">
+          <div class="hadir-floating-left">
+            <div class="hadir-title">Finish Working <strong id="finishCount">(0 of 0)</strong></div>
+            <div class="hadir-sub muted small">Sudah Clock Out / OT Out</div>
+          </div>
+          <div class="hadir-floating-right" id="finishAvatars"></div>
+        </div>
+        <div class="stats" id="berandaStats"></div>
+
+      <div class="grid-2-chart">
+        <div class="card">
+          <h3>Kehadiran Hari Ini</h3>
+          <p class="muted" style="margin-bottom:8px">Total karyawan yang sudah Clock In hari ini</p>
+          <div class="chart-wrap"><canvas id="chartHadir"></canvas></div>
+          <p class="chart-caption" id="capHadir">-</p>
+        </div>
+        <div class="card">
+          <h3>Lokasi Clock In</h3>
+          <p class="muted" style="margin-bottom:8px">Berapa absen masuk hari ini di dalam radius vs luar lokasi</p>
+          <div class="chart-wrap"><canvas id="chartLokasi"></canvas></div>
+          <p class="chart-caption" id="capLokasi">-</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Aktivitas Terbaru Hari Ini</h3>
+        <div class="table-wrap">
+          <table id="tblToday">
+            <thead><tr><th>Jam</th><th>Nama</th><th>Tipe</th><th>Status</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="emptyToday" class="muted center"></p>
+      </div>
+
+      <div class="card" id="workingNowCard">
+        <h3>Karyawan Sedang Bekerja</h3>
+        <p class="muted" id="workingNowSubtitle">Status terakhir: Clock In atau OT In (belum Clock Out)</p>
+        <div id="workingNowList" class="working-list"></div>
+        <p id="emptyWorking" class="muted center"></p>
+      </div>
+    </section>
+
+    <!-- KEHADIRAN HARIAN -->
+    <section id="page-kehadiran" class="page">
+      <h2 class="page-title">Kehadiran Harian</h2>
+      <div class="card">
+        <h3>Filter</h3>
+        <div class="filter-row">
+          <div><label>Dari</label><input type="date" id="dateFrom"></div>
+          <div><label>Sampai</label><input type="date" id="dateTo"></div>
+          <div><label>Karyawan</label>
+            <select id="selKaryawan"><option value="">Semua</option></select>
+          </div>
+          <div><label>Tipe</label>
+            <select id="selType">
+              <option value="">Semua</option>
+              <option value="clock_in">Clock In</option>
+              <option value="clock_out">Clock Out</option>
+              <option value="overtime_in">Overtime In</option>
+              <option value="overtime_out">Overtime Out</option>
+            </select>
+          </div>
+          <div><label>Status Lokasi</label>
+            <select id="selLocation">
+              <option value="">Semua</option>
+              <option value="in">Di Ruko</option>
+              <option value="out">Luar Lokasi</option>
+            </select>
+          </div>
+          <div class="filter-actions">
+            <button id="btnFilter" class="btn btn-primary">Cari</button>
+            <button id="btnExport" class="btn btn-success">Export CSV</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats" id="stats"></div>
+
+      <div class="card">
+        <h3>Data Absensi</h3>
+        <div class="table-wrap">
+          <table id="tblAbsen">
+            <thead>
+              <tr><th>Tanggal</th><th>Jam</th><th>Nama</th><th>Tipe</th><th>Status</th><th>Lokasi</th><th>Foto</th><th>Aksi</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="emptyMsg" class="muted center"></p>
+      </div>
+    </section>
+
+    <!-- KARYAWAN -->
+    <section id="page-karyawan" class="page">
+      <h2 class="page-title">Karyawan</h2>
+      <div class="card">
+        <h3>Tambah Karyawan Baru</h3>
+        <p class="muted" id="addUserNote">Owner tetap login. User baru dibuat via secondary Auth instance (session owner tidak terganggu).</p>
+        <form id="formAddUser" class="form-grid" autocomplete="off">
+          <div><label>Nama</label><input type="text" id="newNama" required></div>
+          <div><label>Email</label><input type="email" id="newEmail" required></div>
+          <div><label>No. HP</label><input type="text" id="newPhone" placeholder="+62..."></div>
+          <div><label>ID Karyawan</label><input type="text" id="newIdKaryawan" placeholder="auto (EMP-XXX) jika kosong"></div>
+          <div><label>Jam Kerja (jam)</label><input type="number" id="newJamKerja" min="1" max="24" value="8"></div>
+          <div><label>Tanggal Join</label><input type="date" id="newTanggalJoin"></div>
+          <div><label>Password</label><input type="text" id="newPassword" value="Goodgems2026"></div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="btnAddUser">Tambah Karyawan</button>
+          </div>
+        </form>
+        <p id="addUserMsg" class="msg"></p>
+      </div>
+
+      <div class="card">
+        <h3>Daftar Karyawan</h3>
+        <div class="table-wrap">
+          <table id="tblKaryawan">
+            <thead><tr><th>No.</th><th>Nama</th><th>Email</th><th>No. HP</th><th>ID</th><th>Jam Kerja</th><th>Tanggal Join</th><th>Foto</th><th>Aksi</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="emptyKaryawan" class="muted center"></p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="editKaryawanModal" class="modal hidden">
+  <div class="modal-content card" style="max-width:480px">
+    <h3>Edit Karyawan</h3>
+    <form id="formEditKaryawan" class="form-grid">
+      <input type="hidden" id="editUid">
+      <div><label>Nama</label><input type="text" id="editNama" required></div>
+      <div><label>No. HP</label><input type="text" id="editPhone"></div>
+      <div><label>ID Karyawan</label><input type="text" id="editIdKaryawan"></div>
+      <div><label>Jam Kerja (jam)</label><input type="number" id="editJamKerja" min="1" max="24"></div>
+      <div><label>Tanggal Join</label><input type="date" id="editTanggalJoin"></div>
+      <div class="form-actions" style="display:flex;gap:8px">
+        <button type="submit" class="btn btn-primary">Simpan</button>
+        <button type="button" class="btn btn-secondary" id="btnEditCancel">Batal</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="editAbsenModal" class="modal hidden">
+  <div class="modal-content card" style="max-width:480px">
+    <h3>Edit Absensi (Owner Only)</h3>
+    <form id="formEditAbsen" class="form-grid">
+      <input type="hidden" id="editAbsenId">
+      <div><label>Nama</label><input type="text" id="editAbsenNama" disabled></div>
+      <div><label>Tipe</label>
+        <select id="editAbsenTipe">
+          <option value="clock_in">Clock In</option>
+          <option value="clock_out">Clock Out</option>
+          <option value="break_in">Istirahat</option>
+          <option value="break_out">Selesai Istirahat</option>
+          <option value="overtime_in">Mulai Lembur</option>
+          <option value="overtime_out">Selesai Lembur</option>
+        </select>
+      </div>
+      <div><label>Tanggal</label><input type="date" id="editAbsenDate" required></div>
+      <div><label>Jam</label><input type="time" id="editAbsenTime" step="1" required></div>
+      <div><label>Catatan Edit (opsional)</label><input type="text" id="editAbsenNote" placeholder="alasan edit"></div>
+      <div class="form-actions" style="display:flex;gap:8px">
+        <button type="submit" class="btn btn-primary">Simpan</button>
+        <button type="button" class="btn btn-secondary" id="btnEditAbsenCancel">Batal</button>
+      </div>
+    </form>
+    <p class="muted small">Catatan: Edit dicatat dengan penanda "editedByOwner".</p>
+  </div>
+</div>
+
+<div id="deleteAbsenModal" class="modal hidden">
+  <div class="modal-content card" style="max-width:440px">
+    <h3 style="color:#dc2626">Hapus Absen</h3>
+    <p id="deleteAbsenMsg" style="margin:8px 0 16px">Yakin hapus absen ini?</p>
+    <input type="hidden" id="deleteAbsenId">
+    <p class="muted small">Setelah dihapus, data tidak bisa dikembalikan. Karyawan dapat melakukan Clock In ulang untuk hari tersebut.</p>
+    <div class="form-actions" style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+      <button type="button" class="btn btn-secondary" id="btnDeleteAbsenCancel">Batal</button>
+      <button type="button" class="btn" id="btnDeleteAbsenConfirm" style="background:#dc2626;color:#fff">Hapus</button>
+    </div>
+  </div>
+</div>
+
+
+<div id="photoModal" class="modal hidden" onclick="this.classList.remove('show')">
+  <img id="modalImg" alt="Foto absen">
+</div>
+
+<script type="module" src="js/owner.js"></script>
+</body>
+</html>
