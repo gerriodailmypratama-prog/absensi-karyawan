@@ -77,7 +77,7 @@ function initBeranda(){
     });
 }
 
-const TOTAL_KARYAWAN_DEFAULT = 8;
+const TOTAL_KARYAWAN_DEFAULT = 0;
 async function getTotalKaryawan(){
     try {
         const snap = await getDocs(collection(db, 'karyawan'));
