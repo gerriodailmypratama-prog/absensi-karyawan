@@ -137,3 +137,74 @@ td img{width:48px;height:48px;object-fit:cover;border-radius:6px;cursor:pointer}
 .wc-label{font-size:12px;color:#475569;margin-bottom:2px}
 .wc-time{font-size:24px;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums}
 .wc-sub{font-size:11px;color:#64748b;margin-top:2px}
+
+/* ===== Owner Dashboard Layout ===== */
+.owner-body{background:#f1f5f9;min-height:100vh}
+.owner-body .topbar{display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#0ea5e9,#0284c7);color:#fff;padding:12px 16px;box-shadow:0 2px 6px rgba(0,0,0,.06)}
+.owner-body .topbar strong{font-size:16px;font-weight:700;color:#fff}
+.owner-body .topbar small{color:#e0f2fe}
+.owner-body .topbar .btn-icon{background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 14px;cursor:pointer}
+.owner-body .topbar .btn-icon:hover{background:rgba(255,255,255,.28)}
+
+.layout{display:flex;min-height:calc(100vh - 56px)}
+.sidebar{width:220px;background:#fff;border-right:1px solid #e2e8f0;padding:12px 0;flex-shrink:0;position:sticky;top:0;align-self:flex-start;height:100vh;overflow-y:auto}
+.sidebar nav{display:flex;flex-direction:column;gap:2px;padding:8px}
+.sidebar .nav-link{display:block;padding:10px 14px;color:#334155;text-decoration:none;border-radius:8px;font-size:14px;font-weight:500;transition:all .15s}
+.sidebar .nav-link:hover{background:#f1f5f9}
+.sidebar .nav-link.active{background:#0ea5e9;color:#fff}
+.content{flex:1;padding:18px 22px;max-width:100%;overflow-x:hidden}
+.page{display:none}
+.page.active{display:block}
+.page-title{margin:0 0 4px 0;font-size:22px;font-weight:700;color:#0f172a}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:14px 0}
+.stat-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:center}
+.stat-card .stat-num{font-size:28px;font-weight:700;color:#0ea5e9;line-height:1}
+.stat-card .stat-label{font-size:12px;color:#64748b;margin-top:4px}
+.stat-card.danger .stat-num{color:#dc2626}
+.stat-card.danger{background:#fef2f2;border-color:#fecaca}
+
+.grid-2-chart{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+@media (max-width:900px){.grid-2-chart{grid-template-columns:1fr}}
+.chart-wrap{position:relative;width:100%;max-width:380px;margin:0 auto;aspect-ratio:1}
+.chart-caption{text-align:center;color:#64748b;font-size:13px;margin-top:6px}
+
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;align-items:end}
+.filters label{display:block;font-size:12px;color:#475569;margin-bottom:4px}
+.filters input,.filters select{width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px}
+.filter-actions{display:flex;gap:8px;align-items:end}
+.btn-success{background:#10b981;color:#fff;border:1px solid #059669}
+.btn-secondary{background:#e2e8f0;color:#0f172a;border:1px solid #cbd5e1}
+
+.table-wrap{overflow-x:auto;border-radius:8px;border:1px solid #e2e8f0}
+.table-wrap table{width:100%;border-collapse:collapse;font-size:13px}
+.table-wrap th,.table-wrap td{padding:8px 10px;text-align:left;border-bottom:1px solid #f1f5f9}
+.table-wrap th{background:#f8fafc;font-weight:600;color:#475569;position:sticky;top:0}
+.table-wrap tr:hover{background:#f8fafc}
+
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.form-grid label{display:block;font-size:12px;color:#475569;margin-bottom:4px;font-weight:500}
+.form-grid input{width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px}
+.form-actions{grid-column:1/-1;display:flex;gap:8px;margin-top:6px}
+.msg{margin-top:8px;font-size:13px}
+.msg.ok{color:#059669}
+.msg.err{color:#dc2626}
+
+.karyawan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:12px}
+.karyawan-card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;display:flex;gap:12px;align-items:flex-start}
+.karyawan-card .avatar{width:60px;height:60px;border-radius:10px;background:#f1f5f9;object-fit:cover;flex-shrink:0}
+.karyawan-card .info{flex:1;font-size:13px;color:#475569;line-height:1.5}
+.karyawan-card .info strong{display:block;font-size:15px;color:#0f172a;margin-bottom:2px}
+.karyawan-card .actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.karyawan-card .actions button{background:transparent;border:none;cursor:pointer;color:#475569;padding:4px}
+.karyawan-card .actions button:hover{color:#0ea5e9}
+
+#btnSidebar{display:none}
+@media (max-width:768px){
+  #btnSidebar{display:inline-block}
+  .sidebar{position:fixed;top:0;left:-240px;height:100vh;z-index:100;transition:left .25s;box-shadow:2px 0 8px rgba(0,0,0,.12)}
+  body.sidebar-open .sidebar{left:0}
+  body.sidebar-open::before{content:'';position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:99}
+  .content{padding:14px}
+  .grid-2-chart{grid-template-columns:1fr}
+}
