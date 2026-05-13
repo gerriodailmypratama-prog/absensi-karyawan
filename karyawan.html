@@ -44,7 +44,7 @@
         <span class="tile-icon">
           <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M10 30 L32 14 L54 30 L54 50 L10 50 Z"/>
-            <path d="M32 22 L32 40 M24 34 L32 42 L40 34"/>
+            <path d="M32 22 L32 34 M24 34 L40 34"/>
             <circle cx="46" cy="44" r="6"/>
             <path d="M46 41 L46 44 L48 46"/>
           </svg>
@@ -69,36 +69,31 @@
       <button id="btnBreakIn" class="action-tile tile-break">
         <span class="tile-icon">
           <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M22 8 L22 28 M22 28 C22 32 26 34 26 38 L26 56 L18 56 L18 38 C18 34 22 32 22 28"/>
-            <path d="M16 8 L16 20 M28 8 L28 20"/>
-            <ellipse cx="44" cy="18" rx="6" ry="10"/>
-            <path d="M44 28 L44 56"/>
+            <path d="M22 10 L22 30 M18 10 L26 10 M30 10 L30 30 C30 26 34 26 34 22 L34 10"/>
+            <path d="M42 10 C46 10 50 14 50 22 C50 30 46 32 46 32 L46 54"/>
           </svg>
         </span>
         <span class="tile-label">Istirahat</span>
         <span class="tile-status" id="sBreakIn">-</span>
       </button>
 
-      <button id="btnBreakOut" class="action-tile tile-after-break">
+      <button id="btnBreakOut" class="action-tile tile-afterbreak">
         <span class="tile-icon">
           <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M10 28 C10 18 22 14 32 14 C42 14 54 18 54 28"/>
-            <path d="M6 30 L58 30"/>
-            <path d="M14 36 L50 36 L46 46 L18 46 Z"/>
-            <path d="M22 18 L22 12 M32 18 L32 10 M42 18 L42 12"/>
+            <rect x="10" y="22" width="44" height="28" rx="4"/>
+            <path d="M14 30 L20 30 M28 30 L34 30 M42 30 L48 30 M14 38 L20 38 M28 38 L34 38 M42 38 L48 38"/>
           </svg>
         </span>
         <span class="tile-label">Selesai Istirahat</span>
         <span class="tile-status" id="sBreakOut">-</span>
       </button>
 
-      <button id="btnOtIn" class="action-tile tile-ot-in">
+      <button id="btnOtIn" class="action-tile tile-ot">
         <span class="tile-icon">
           <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="32" cy="34" r="20"/>
             <path d="M32 22 L32 34 L40 38"/>
-            <path d="M24 10 L40 10"/>
-            <path d="M20 42 L20 50 M16 46 L24 46"/>
+            <path d="M26 12 L38 12"/>
           </svg>
         </span>
         <span class="tile-label">Mulai Lembur</span>
@@ -109,26 +104,16 @@
         <span class="tile-icon">
           <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="32" cy="34" r="20"/>
-            <path d="M32 22 L32 34 L40 38"/>
-            <path d="M24 10 L40 10"/>
-            <rect x="16" y="42" width="10" height="10"/>
+            <rect x="26" y="28" width="12" height="12" rx="1"/>
+            <path d="M26 12 L38 12"/>
           </svg>
         </span>
         <span class="tile-label">Selesai Lembur</span>
         <span class="tile-status" id="sOtOut">-</span>
       </button>
     </div>
-    <div id="locStatus" class="muted small center" style="margin-top:8px"><span class="warn">Lokasi belum tersedia</span></div>
-  </div>
-
-  <div class="card">
-    <h3>Riwayat Hari Ini</h3>
-    <div id="todayList" class="list"></div>
   </div>
 </main>
-
-<video id="cam" autoplay muted playsinline class="cam-hidden"></video>
-<canvas id="snap" class="cam-hidden"></canvas>
 
 <div id="selfieModal" class="modal hidden">
   <div class="modal-box">
@@ -177,6 +162,27 @@
     <small id="breakRangeInfo" class="muted">Durasi istirahat maksimal 1 jam (otomatis dipotong jika lebih).</small>
     <div class="row">
       <button id="btnBreakRangeOk" class="btn btn-primary">Simpan & Clock Out</button>
+    </div>
+  </div>
+</div>
+
+<div id="confirmModal" class="modal hidden">
+  <div class="modal-box">
+    <h3 id="confirmTitle">Konfirmasi</h3>
+    <p id="confirmMsg" class="muted small">Apakah Anda yakin?</p>
+    <div class="row">
+      <button id="btnConfirmCancel" class="btn btn-ghost">Batal</button>
+      <button id="btnConfirmOk" class="btn btn-primary">Ya, Lanjutkan</button>
+    </div>
+  </div>
+</div>
+
+<div id="forgotClockOutModal" class="modal hidden">
+  <div class="modal-box">
+    <h3 id="forgotTitle">Lupa Clock Out</h3>
+    <p id="forgotMsg" class="muted small"></p>
+    <div class="row">
+      <button id="btnForgotClockOutOk" class="btn btn-primary">Mengerti</button>
     </div>
   </div>
 </div>
