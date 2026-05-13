@@ -530,7 +530,7 @@ async function checkForgottenClockOut(uid){
       autoCutByForgot: true,
       lupaClockOut: true,
       autoClockOut: true,
-      editNote: 'Auto Clock Out (lupa) — dihitung ' + jamKerja + ' jam setelah Clock In ' + clockInTime.toLocaleString('id-ID'),
+      editNote: 'Auto Clock Out (lupa) â dihitung ' + jamKerja + ' jam setelah Clock In ' + clockInTime.toLocaleString('id-ID'),
       tanggal: tanggalKemarin,
       // Timestamp HARUS waktu kemarin (clock-in + jam kerja), bukan now()
       ts: Timestamp.fromDate(autoCutTime)
@@ -593,3 +593,18 @@ function resizeImage(file, maxSize){
     reader.readAsDataURL(file);
   });
 }
+
+
+// === Auto-refresh absen state agar sinkron dengan owner side ===
+async function refreshAbsenState(){
+  try{
+    if(!currentUser || !currentUser.uid) return;
+    await loadToday(currentUser.uid);
+    renderStatuses();
+    updateWorkCountdown();
+    if(typeof updateBreakCountdown==='function') updateBreakCountdown();
+  }catch(err){ console.warn('refreshAbsenState error', err); }
+}
+setInterval(refreshAbsenState, 30000);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshAbsenState(); });
+window.addEventListener('focus', refreshAbsenState);
