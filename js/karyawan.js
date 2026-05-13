@@ -201,7 +201,7 @@ function renderStatuses(){
 }
 
 onAuthStateChanged(auth, async u => {
-  if (!u){ location.replace('login.html'); return; }
+  if (!u){ location.replace('index.html'); return; }
   if (OWNER_EMAILS.includes((u.email||'').toLowerCase())) {
     location.replace('owner.html'); return;
   }
@@ -212,7 +212,7 @@ onAuthStateChanged(auth, async u => {
   refreshLocStatus();
 });
 
-$('btnLogout').onclick = () => signOut(auth).then(()=>location.replace('login.html'));
+$('btnLogout').onclick = () => signOut(auth).then(()=>location.replace('index.html')).catch(()=>location.replace('index.html'));
 
 async function refreshLocStatus(){
   return new Promise(resolve => {
