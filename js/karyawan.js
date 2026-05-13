@@ -22,11 +22,11 @@ const ST_ID = {
   overtime_out:'sOtOut'
 };
 const NO_SELFIE_TYPES = new Set(['break_in','break_out','overtime_in']);
-const BREAK_MAX_MS = 60 * 60 * 1000; // 1 jam
+const BREAK_MAX_MS = 60 * 60 * 1000;
 
 let currentUser=null, currentType=null, stream=null, coords=null, cameraReady=false;
 let todayCache = [];
-let workEndTime = '17:00'; // default jam pulang
+let userProfile = { nama:'', jamKerja:8, foto:'' };
 
 function distanceMeters(lat1, lng1, lat2, lng2){
   const R = 6371000;
@@ -38,17 +38,17 @@ function distanceMeters(lat1, lng1, lat2, lng2){
 }
 
 function greetingByHour(h){
-  if (h < 11) return { msg:'Selamat Pagi', emoji:'' };
-  if (h < 15) return { msg:'Selamat Siang', emoji:'' };
-  if (h < 18) return { msg:'Selamat Sore', emoji:'' };
-  return { msg:'Selamat Malam', emoji:'' };
+  if (h < 11) return 'Selamat Pagi';
+  if (h < 15) return 'Selamat Siang';
+  if (h < 18) return 'Selamat Sore';
+  return 'Selamat Malam';
 }
 
-function updateGreeting(displayName){
+function updateGreeting(){
   const h = new Date().getHours();
   const g = greetingByHour(h);
-  const nama = displayName || (currentUser && currentUser.email && currentUser.email.split('@')[0]) || '';
-  $('greetMsg').textContent = g.msg + (nama ? ', ' + nama : '');
+  const nama = userProfile.nama || (currentUser?.email?.split('@')[0]) || '';
+  $('greetMsg').textContent = g + (nama ? ', ' + nama : '');
   $('greetSub').textContent = 'selamat beraktivitas';
 }
 
@@ -59,27 +59,23 @@ function tickClock(){
 }
 setInterval(tickClock, 1000); tickClock();
 
-// ===== Countdown jam kerja =====
-function parseHM(s){
-  const m = /^(\d{1,2}):(\d{2})$/.exec((s||'').trim());
-  if(!m) return null;
-  return { h: parseInt(m[1],10), m: parseInt(m[2],10) };
-}
-
+// ===== Countdown jam kerja (berdasarkan Clock In + jamKerja jam) =====
 function updateWorkCountdown(){
   const wc = $('workCountdown');
   if(!wc) return;
-  // Hanya tampilkan jika sudah Clock In dan belum Clock Out
-  if (!hasToday('clock_in') || hasToday('clock_out')) {
+  const clockInEntry = getTodayEntry('clock_in');
+  if (!clockInEntry || hasToday('clock_out')) {
     wc.classList.add('hidden');
     return;
   }
-  const hm = parseHM(workEndTime) || {h:17, m:0};
+  const clockInTime = clockInEntry.ts && clockInEntry.ts.toDate ? clockInEntry.ts.toDate() : null;
+  if (!clockInTime) { wc.classList.add('hidden'); return; }
+  const jamKerja = parseFloat(userProfile.jamKerja) || 8;
+  const endTime = new Date(clockInTime.getTime() + jamKerja * 3600 * 1000);
   const now = new Date();
-  const end = new Date(); end.setHours(hm.h, hm.m, 0, 0);
-  const diff = end - now;
+  const diff = endTime - now;
   wc.classList.remove('hidden');
-  $('wcSub').textContent = 'Jam pulang: ' + String(hm.h).padStart(2,'0') + ':' + String(hm.m).padStart(2,'0');
+  $('wcSub').textContent = 'Jam pulang: ' + endTime.toLocaleTimeString('id-ID',{hour:'2-digit', minute:'2-digit', hour12:false}) + ' (' + jamKerja + ' jam dari Clock In)';
   if (diff <= 0) {
     $('wcTime').textContent = 'Waktunya pulang!';
     wc.classList.add('done');
@@ -99,19 +95,34 @@ setInterval(updateWorkCountdown, 1000);
 
 function fmtTime(d){ return d.toLocaleTimeString('id-ID',{hour12:false}); }
 
-async function loadProfileAvatar(uid){
+async function loadUserProfile(uid){
   try{
-    const snap = await getDoc(doc(db, 'profil', uid));
-    if (snap.exists()){
-      const u = snap.data();
-      if (u.foto){
-        $('avatarImg').src = u.foto;
-        $('avatarImg').style.display = 'block';
-        $('avatarPlaceholder').style.display = 'none';
+    // Pertama coba dari koleksi 'karyawan' (utama)
+    let nama='', jamKerja=8, foto='';
+    try{
+      const snap = await getDoc(doc(db, 'karyawan', uid));
+      if (snap.exists()){
+        const u = snap.data();
+        nama = u.nama || '';
+        jamKerja = (u.jamKerja!=null) ? parseFloat(u.jamKerja) : 8;
       }
-      if (u.jamPulang) workEndTime = u.jamPulang;
-      updateGreeting(u.nama || '');
+    }catch(e){ console.warn('karyawan profile load err', e); }
+    // Foto disimpan di koleksi 'profil' (terpisah biar avatar bisa di-update karyawan sendiri)
+    try{
+      const snap2 = await getDoc(doc(db, 'profil', uid));
+      if (snap2.exists()){
+        const u2 = snap2.data();
+        if (u2.foto) foto = u2.foto;
+        if (!nama && u2.nama) nama = u2.nama;
+      }
+    }catch(e){ console.warn('profil load err', e); }
+    userProfile = { nama, jamKerja, foto };
+    if (foto){
+      $('avatarImg').src = foto;
+      $('avatarImg').style.display = 'block';
+      $('avatarPlaceholder').style.display = 'none';
     }
+    updateGreeting();
   }catch(e){ console.warn('profile load err', e); }
 }
 
@@ -131,7 +142,6 @@ async function loadToday(uid){
     orderBy('ts','asc'));
   const snap = await getDocs(q);
   const list = $('todayList'); list.innerHTML = '';
-  // Reset status indicators
   Object.values(ST_ID).forEach(id => { const el=$(id); if(el) el.textContent='-'; });
   snap.forEach(s=>{
     const a = s.data(); todayCache.push(a);
@@ -139,10 +149,8 @@ async function loadToday(uid){
     const dist = (a.jarak!=null)? a.jarak + ' m' : '-';
     const inRad = !!a.inRadius;
     const label = TIPE[a.tipe] || a.tipe;
-    // Update status
     const sid = ST_ID[a.tipe];
     if (sid) $(sid).textContent = fmtTime(t);
-    // Riwayat row
     const row = document.createElement('div');
     row.className = 'list-row';
     const note = a.flag === 'breakFilledAtCheckout' ? ' <span class="muted small">(diisi saat Clock Out)</span>' : '';
@@ -189,7 +197,6 @@ async function refreshLocStatus(){
 }
 setInterval(refreshLocStatus, 30000);
 
-// ===== Selfie flow =====
 async function openSelfie(type){
   currentType = type;
   $('selfieTitle').textContent = 'Ambil Selfie - ' + (TIPE[type]||type);
@@ -220,55 +227,54 @@ $('btnSelfieShoot').onclick = async ()=>{
   if (!coords){ alert('Lokasi belum tersedia.'); return; }
   const d = distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
   const inRad = d <= OFFICE_LOCATION.radius;
-  // Upload selfie
-  const path = 'selfie/' + currentUser.uid + '/' + Date.now() + '.jpg';
-  const r = ref(storage, path);
-  await uploadBytes(r, blob);
-  const url = await getDownloadURL(r);
+  let selfieUrl = '';
+  try{
+    const path = 'selfie/' + currentUser.uid + '/' + Date.now() + '.jpg';
+    const r = ref(storage, path);
+    await uploadBytes(r, blob);
+    selfieUrl = await getDownloadURL(r);
+  }catch(e){
+    console.warn('Selfie upload gagal:', e.message);
+  }
   const extra = {};
   if (currentType === 'clock_out' && window.__earlyReason){
     extra.earlyReason = window.__earlyReason;
     window.__earlyReason = null;
   }
-  await saveAttendance(Object.assign({ tipe: currentType, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad, fotoSelfie:url }, extra));
+  await saveAttendance(Object.assign({ tipe: currentType, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad, fotoSelfie:selfieUrl }, extra));
   await loadToday(currentUser.uid);
 };
 
-// ===== No-selfie flow (Istirahat / Selesai Istirahat / Mulai Lembur) =====
 async function doNoSelfieAction(type, extra={}){
   if (!coords) try{ await refreshLocStatus(); }catch(e){}
   if (!coords){ alert('Lokasi belum tersedia.'); return; }
   const d = distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
   const inRad = d <= OFFICE_LOCATION.radius;
-
-  // Geofence: Selesai Istirahat WAJIB di radius (karyawan kembali ke kantor)
   if (type === 'break_out' && !inRad){
     alert('Anda harus di kantor untuk tap Selesai Istirahat. Jarak: ' + d + ' m');
     return;
   }
-
   await saveAttendance(Object.assign({ tipe:type, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad }, extra));
   await loadToday(currentUser.uid);
 }
 
 async function saveAttendance(payload){
+  const namaForSave = userProfile.nama || (currentUser.email||'').split('@')[0];
   const data = Object.assign({
     uid: currentUser.uid,
     email: currentUser.email,
-    nama: $('greetMsg').textContent.replace(/^[^,]*,\s*/, '') || currentUser.email,
+    nama: namaForSave,
     ts: serverTimestamp()
   }, payload);
   await addDoc(collection(db,'absensi'), data);
 }
 
-// ===== Validasi urutan =====
 function validateSequence(type){
   if (type === 'clock_in'){
     if (hasToday('clock_in')) return 'Anda sudah Clock In hari ini.';
     return null;
   }
   if (!hasToday('clock_in')) return 'Anda harus Clock In dulu.';
-
   if (type === 'break_in'){
     if (hasToday('break_in')) return 'Anda sudah mulai Istirahat.';
     if (hasToday('clock_out')) return 'Anda sudah Clock Out.';
@@ -297,16 +303,13 @@ function validateSequence(type){
   return null;
 }
 
-// ===== Handlers =====
 async function handleAction(type){
   const err = validateSequence(type);
   if (err){ alert(err); return; }
   if (!coords) try{ await refreshLocStatus(); }catch(e){}
-
   if (NO_SELFIE_TYPES.has(type)){
     return doNoSelfieAction(type);
   }
-  // Clock In / Clock Out / Selesai Lembur -> pakai selfie
   if (type === 'clock_out'){
     return handleClockOut();
   }
@@ -320,14 +323,9 @@ $('btnBreakOut').onclick = ()=> handleAction('break_out');
 $('btnOtIn').onclick = ()=> handleAction('overtime_in');
 $('btnOtOut').onclick = ()=> handleAction('overtime_out');
 
-// ===== Clock Out flow dengan auto-handle istirahat =====
 async function handleClockOut(){
-  // Case A: sudah ada break_in tapi belum break_out -> auto-cap 1 jam
   if (hasToday('break_in') && !hasToday('break_out')){
     const bi = getTodayEntry('break_in');
-    const biTime = bi.ts && bi.ts.toDate ? bi.ts.toDate() : new Date();
-    const autoEnd = new Date(biTime.getTime() + BREAK_MAX_MS);
-    // Simpan auto break_out
     await saveAttendance({
       tipe:'break_out',
       lokasi: bi.lokasi || null,
@@ -337,25 +335,26 @@ async function handleClockOut(){
     });
     await loadToday(currentUser.uid);
     $('forgotBreakOutModal').classList.remove('hidden');
-    return; // user click OK -> proceed
+    return;
   }
-  // Case B: belum break_in sama sekali -> WAJIB isi range
   if (!hasToday('break_in')){
     openBreakRangeModal();
-    return; // user fill -> save -> proceed
+    return;
   }
-  // Case C: break sudah selesai -> langsung selfie
   proceedClockOut();
 }
 
 function proceedClockOut(){
-  // Cek apakah sudah waktunya pulang
-  const hm = parseHM(workEndTime) || {h:17, m:0};
-  const now = new Date();
-  const endShift = new Date(); endShift.setHours(hm.h, hm.m, 0, 0);
-  if (now < endShift){
-    $('earlyModal').classList.remove('hidden');
-    return;
+  const clockInEntry = getTodayEntry('clock_in');
+  if (clockInEntry && clockInEntry.ts && clockInEntry.ts.toDate){
+    const clockInTime = clockInEntry.ts.toDate();
+    const jamKerja = parseFloat(userProfile.jamKerja) || 8;
+    const endTime = new Date(clockInTime.getTime() + jamKerja * 3600 * 1000);
+    const now = new Date();
+    if (now < endTime){
+      $('earlyModal').classList.remove('hidden');
+      return;
+    }
   }
   openSelfie('clock_out');
 }
@@ -393,16 +392,16 @@ $('btnBreakRangeOk').onclick = async ()=>{
   }
   const d = coords ? distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng) : 0;
   const inRad = coords ? d <= OFFICE_LOCATION.radius : false;
+  const namaForSave = userProfile.nama || (currentUser.email||'').split('@')[0];
   const base = {
     uid: currentUser.uid,
     email: currentUser.email,
-    nama: $('greetMsg').textContent.replace(/^[^,]*,\s*/, '') || currentUser.email,
+    nama: namaForSave,
     lokasi: coords ? {lat:coords.lat, lng:coords.lng} : null,
     jarak: d,
     inRadius: inRad,
     flag: 'breakFilledAtCheckout'
   };
-  // Simpan break_in dengan ts custom
   await addDoc(collection(db,'absensi'), Object.assign({}, base, {
     tipe:'break_in',
     ts: Timestamp.fromDate(sd)
@@ -416,34 +415,38 @@ $('btnBreakRangeOk').onclick = async ()=>{
   proceedClockOut();
 };
 
-// ===== Avatar upload (dengan fallback base64) =====
+// ===== Avatar upload (Storage with base64 fallback) =====
 $('avatarWrap').onclick = ()=> $('avatarInput').click();
 $('avatarInput').onchange = async (ev)=>{
   const f = ev.target.files[0]; if (!f) return;
   try{
-    // Resize ke max 400px untuk hemat storage
     const dataUrl = await resizeImage(f, 400);
-    // Coba upload ke Firebase Storage
-    let url = dataUrl; // fallback default ke base64
+    let url = dataUrl;
     try{
       const path = 'profil/' + currentUser.uid + '/avatar.jpg';
       const r = ref(storage, path);
-      // uploadString dengan data_url base64
       await uploadString(r, dataUrl, 'data_url');
       url = await getDownloadURL(r);
-      console.log('Avatar uploaded to Storage:', url);
+      console.log('Avatar uploaded to Storage');
     }catch(storageErr){
       console.warn('Storage upload gagal, pakai base64 inline:', storageErr.message);
-      // url tetap dataUrl (base64)
     }
-    await setDoc(doc(db, 'profil', currentUser.uid), { foto: url }, { merge:true });
+    // Coba simpan ke koleksi profil
+    try{
+      await setDoc(doc(db, 'profil', currentUser.uid), { foto: url, nama: userProfile.nama }, { merge:true });
+    }catch(profErr){
+      console.warn('profil setDoc gagal, coba update karyawan doc:', profErr.message);
+      // Fallback: simpan ke koleksi karyawan
+      await setDoc(doc(db, 'karyawan', currentUser.uid), { foto: url }, { merge:true });
+    }
+    userProfile.foto = url;
     $('avatarImg').src = url;
     $('avatarImg').style.display = 'block';
     $('avatarPlaceholder').style.display = 'none';
     alert('Foto profil berhasil disimpan.');
   }catch(e){
     console.error('Avatar save error:', e);
-    alert('Gagal simpan foto: ' + e.message);
+    alert('Gagal simpan foto: ' + (e.message || e.code || e));
   }
 };
 
@@ -469,17 +472,15 @@ function resizeImage(file, maxSize){
   });
 }
 
-// ===== Logout =====
 $('btnLogout').onclick = ()=> signOut(auth).then(()=> location.href='index.html');
 
-// ===== Auth gate =====
 onAuthStateChanged(auth, async (user)=>{
   if (!user){ location.href='index.html'; return; }
   if (OWNER_EMAILS.includes((user.email||'').toLowerCase())){
     location.href='owner.html'; return;
   }
   currentUser = user;
-  await loadProfileAvatar(user.uid);
+  await loadUserProfile(user.uid);
   await loadToday(user.uid);
   refreshLocStatus();
 });
