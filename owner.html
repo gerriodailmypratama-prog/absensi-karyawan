@@ -33,7 +33,7 @@
   <main class="content">
     <!-- BERANDA -->
     <section id="page-beranda" class="page active">
-      <h2 class="page-title">Beranda</h2>
+      <h2 class="page-title" id="berandaTitle" title="Klik untuk refresh" style="cursor:pointer;user-select:none">Beranda <span id="berandaRefreshIcon" style="font-size:14px;color:#0ea5e9">↻</span></h2>
       <p class="muted" id="berandaDate">-</p>
 
       <div id="hadirFloating" class="hadir-floating">
@@ -42,6 +42,22 @@
             <div class="hadir-sub muted small">Karyawan yang sudah Clock In</div>
           </div>
           <div class="hadir-floating-right" id="hadirAvatars"></div>
+        </div>
+
+        <div id="workingFloating" class="hadir-floating">
+          <div class="hadir-floating-left">
+            <div class="hadir-title">On Working <strong id="workingCount">(0 of 0)</strong></div>
+            <div class="hadir-sub muted small">Sedang bekerja (belum Clock Out, tidak istirahat)</div>
+          </div>
+          <div class="hadir-floating-right" id="workingAvatars"></div>
+        </div>
+
+        <div id="breakFloating" class="hadir-floating">
+          <div class="hadir-floating-left">
+            <div class="hadir-title">On Break <strong id="breakCount">(0 of 0)</strong></div>
+            <div class="hadir-sub muted small">Sedang istirahat</div>
+          </div>
+          <div class="hadir-floating-right" id="breakAvatars"></div>
         </div>
         <div class="stats" id="berandaStats"></div>
 
