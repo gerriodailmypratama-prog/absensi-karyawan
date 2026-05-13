@@ -1,6 +1,6 @@
 import { auth, db, storage, OWNER_EMAILS, OFFICE_LOCATION } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, addDoc, query, where, orderBy, getDocs, getDoc, setDoc, doc, Timestamp, serverTimestamp }
+import { collection, addDoc, doc, query, where, orderBy, getDocs, getDoc, setDoc, Timestamp, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { ref, uploadBytes, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
@@ -24,7 +24,8 @@ const ST_ID = {
 const NO_SELFIE_TYPES = new Set(['break_in','break_out','overtime_in']);
 const BREAK_MAX_MS = 60 * 60 * 1000;
 
-let currentUser=null, currentType=null, stream=null, coords=null, cameraReady=false;
+let currentUser=null, currentType=null, stream=null, coords=null;
+let cameraReady=false;
 let todayCache = [];
 let userProfile = { nama:'', jamKerja:8, foto:'' };
 
@@ -33,7 +34,8 @@ function distanceMeters(lat1, lng1, lat2, lng2){
   const toRad = d => d * Math.PI / 180;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
   return Math.round(2 * R * Math.asin(Math.sqrt(a)));
 }
 
@@ -47,7 +49,7 @@ function greetingByHour(h){
 function updateGreeting(){
   const h = new Date().getHours();
   const g = greetingByHour(h);
-  const nama = userProfile.nama || (currentUser?.email?.split('@')[0]) || '';
+  const nama = userProfile.nama || (currentUser?.email||'').split('@')[0] || '';
   $('greetMsg').textContent = g + (nama ? ', ' + nama : '');
   $('greetSub').textContent = 'selamat beraktivitas';
 }
@@ -55,21 +57,18 @@ function updateGreeting(){
 function tickClock(){
   const d = new Date();
   $('liveClock').textContent = d.toLocaleTimeString('id-ID',{hour12:false});
-  $('liveDate').textContent = d.toLocaleDateString('id-ID',{weekday:'long', day:'2-digit', month:'long', year:'numeric'});
+  $('liveDate').textContent  = d.toLocaleDateString('id-ID',{weekday:'long', day:'2-digit', month:'long', year:'numeric'});
 }
 setInterval(tickClock, 1000); tickClock();
 
-// ===== Countdown jam kerja (berdasarkan Clock In + jamKerja jam) =====
 function updateWorkCountdown(){
   const wc = $('workCountdown');
   if(!wc) return;
   const clockInEntry = getTodayEntry('clock_in');
   if (!clockInEntry || hasToday('clock_out')) {
-    wc.classList.add('hidden');
-    return;
+    wc.classList.add('hidden'); return;
   }
-  const clockInTime = clockInEntry.ts && clockInEntry.ts.toDate ? clockInEntry.ts.toDate() : null;
-  if (!clockInTime) { wc.classList.add('hidden'); return; }
+  const clockInTime = clockInEntry.ts.toDate();
   const jamKerja = parseFloat(userProfile.jamKerja) || 8;
   const endTime = new Date(clockInTime.getTime() + jamKerja * 3600 * 1000);
   const now = new Date();
@@ -97,7 +96,6 @@ function fmtTime(d){ return d.toLocaleTimeString('id-ID',{hour12:false}); }
 
 async function loadUserProfile(uid){
   try{
-    // Pertama coba dari koleksi 'karyawan' (utama)
     let nama='', jamKerja=8, foto='';
     try{
       const snap = await getDoc(doc(db, 'karyawan', uid));
@@ -106,8 +104,7 @@ async function loadUserProfile(uid){
         nama = u.nama || '';
         jamKerja = (u.jamKerja!=null) ? parseFloat(u.jamKerja) : 8;
       }
-    }catch(e){ console.warn('karyawan profile load err', e); }
-    // Foto disimpan di koleksi 'profil' (terpisah biar avatar bisa di-update karyawan sendiri)
+    }catch(e){ console.warn('karyawan profile load err:', e); }
     try{
       const snap2 = await getDoc(doc(db, 'profil', uid));
       if (snap2.exists()){
@@ -115,7 +112,7 @@ async function loadUserProfile(uid){
         if (u2.foto) foto = u2.foto;
         if (!nama && u2.nama) nama = u2.nama;
       }
-    }catch(e){ console.warn('profil load err', e); }
+    }catch(e){ console.warn('profil load err:', e); }
     userProfile = { nama, jamKerja, foto };
     if (foto){
       $('avatarImg').src = foto;
@@ -123,14 +120,15 @@ async function loadUserProfile(uid){
       $('avatarPlaceholder').style.display = 'none';
     }
     updateGreeting();
-  }catch(e){ console.warn('profile load err', e); }
+  }catch(e){ console.warn('profile load err:', e); }
 }
 
-function startOfDay(){ const d=new Date(); d.setHours(0,0,0,0); return d; }
-function endOfDay(){ const d=new Date(); d.setHours(23,59,59,999); return d; }
+function startOfDay(d0){ const d=new Date(d0||Date.now()); d.setHours(0,0,0,0); return d; }
+function endOfDay(d0){ const d=new Date(d0||Date.now()); d.setHours(23,59,59,999); return d; }
 function timeToTodayDate(hhmm){
   const [h,m] = hhmm.split(':').map(Number);
-  const d = new Date(); d.setHours(h, m||0, 0, 0); return d;
+  const d = new Date(); d.setHours(h, m||0, 0, 0);
+  return d;
 }
 
 async function loadToday(uid){
@@ -141,68 +139,54 @@ async function loadToday(uid){
     where('ts','<=', Timestamp.fromDate(endOfDay())),
     orderBy('ts','asc'));
   const snap = await getDocs(q);
-  const list = $('todayList'); list.innerHTML = '';
-  Object.values(ST_ID).forEach(id => { const el=$(id); if(el) el.textContent='-'; });
-  snap.forEach(s=>{
-    const a = s.data(); todayCache.push(a);
-    const t = a.ts && a.ts.toDate ? a.ts.toDate() : new Date();
-    const dist = (a.jarak!=null)? a.jarak + ' m' : '-';
-    const inRad = !!a.inRadius;
-    const label = TIPE[a.tipe] || a.tipe;
-    const sid = ST_ID[a.tipe];
-    if (sid) $(sid).textContent = fmtTime(t);
-    const row = document.createElement('div');
-    row.className = 'list-row';
-    const note = a.flag === 'breakFilledAtCheckout' ? ' <span class="muted small">(diisi saat Clock Out)</span>' : '';
-    const auto = a.autoCap ? ' <span class="muted small">(auto 1 jam)</span>' : '';
-    row.innerHTML = '<div><strong>' + label + '</strong>' + note + auto +
-      '<div class="muted small">' + fmtTime(t) + ' &middot; ' + dist + ' &middot; ' + (inRad?'<span class="ok">dalam radius</span>':'<span class="warn">luar radius</span>') + '</div></div>';
-    list.appendChild(row);
-  });
+  snap.forEach(d => todayCache.push(d.data()));
+  renderStatuses();
   updateWorkCountdown();
 }
 
-function hasToday(type){ return todayCache.some(a => a.tipe === type); }
-function getTodayEntry(type){ return todayCache.find(a => a.tipe === type); }
+function hasToday(type){ return todayCache.some(r => r.tipe === type); }
+function getTodayEntry(type){ return todayCache.find(r => r.tipe === type) || null; }
 
-async function getLocation(){
-  return new Promise((resolve, reject)=>{
-    if (!navigator.geolocation) return reject(new Error('Geolocation tidak didukung'));
-    navigator.geolocation.getCurrentPosition(
-      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy }),
-      err => reject(err),
-      { enableHighAccuracy:true, timeout:15000, maximumAge:30000 }
-    );
+function renderStatuses(){
+  Object.keys(ST_ID).forEach(k => {
+    const el = $(ST_ID[k]); if (!el) return;
+    const e = getTodayEntry(k);
+    if (e && e.ts) el.textContent = fmtTime(e.ts.toDate());
+    else el.textContent = '-';
   });
 }
 
-let __lastLocKey = '';
-async function refreshLocStatus(){
-  try{
-    const c = await getLocation();
-    coords = c;
-    const d = distanceMeters(c.lat, c.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
-    const inRad = d <= OFFICE_LOCATION.radius;
-    const key = (inRad?'in':'out') + ':' + d;
-    if (key === __lastLocKey) return;
-    __lastLocKey = key;
-    $('locStatus').innerHTML = inRad
-      ? '<span class="ok">Dalam radius kantor</span> &middot; jarak ' + d + ' m'
-      : '<span class="warn">Di luar radius kantor</span> &middot; jarak ' + d + ' m';
-  }catch(e){
-    if (__lastLocKey === 'err') return;
-    __lastLocKey = 'err';
-    $('locStatus').innerHTML = '<span class="warn">Lokasi belum tersedia</span>';
+onAuthStateChanged(auth, async u => {
+  if (!u){ location.replace('login.html'); return; }
+  if (OWNER_EMAILS.includes((u.email||'').toLowerCase())) {
+    location.replace('owner.html'); return;
   }
+  currentUser = u;
+  await loadUserProfile(u.uid);
+  await loadToday(u.uid);
+  await checkForgottenClockOut(u.uid);
+  refreshLocStatus();
+});
+
+$('btnLogout').onclick = () => signOut(auth).then(()=>location.replace('login.html'));
+
+async function refreshLocStatus(){
+  return new Promise(resolve => {
+    if (!navigator.geolocation){ coords=null; resolve(); return; }
+    navigator.geolocation.getCurrentPosition(p => {
+      coords = { lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy };
+      resolve();
+    }, err => { coords=null; resolve(); }, { enableHighAccuracy:true, timeout:8000, maximumAge:0 });
+  });
 }
-setInterval(refreshLocStatus, 30000);
 
 async function openSelfie(type){
   currentType = type;
   $('selfieTitle').textContent = 'Ambil Selfie - ' + (TIPE[type]||type);
   $('selfieModal').classList.remove('hidden');
+  $('selfieCanvas').classList.add('hidden');
   try{
-    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user' }, audio:false });
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode:'user' }, audio:false });
     const v = $('selfieVideo'); v.srcObject = stream; cameraReady = true;
   }catch(e){
     alert('Tidak bisa akses kamera: ' + e.message);
@@ -251,7 +235,7 @@ async function doNoSelfieAction(type, extra={}){
   const d = distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
   const inRad = d <= OFFICE_LOCATION.radius;
   if (type === 'break_out' && !inRad){
-    alert('Anda harus di kantor untuk tap Selesai Istirahat. Jarak: ' + d + ' m');
+    alert('Anda harus di kantor untuk tap Selesai Istirahat. Jarak: ' + d + 'm');
     return;
   }
   await saveAttendance(Object.assign({ tipe:type, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad }, extra));
@@ -274,9 +258,9 @@ function validateSequence(type){
     if (hasToday('clock_in')) return 'Anda sudah Clock In hari ini.';
     return null;
   }
-  if (!hasToday('clock_in')) return 'Anda harus Clock In dulu.';
   if (type === 'break_in'){
-    if (hasToday('break_in')) return 'Anda sudah mulai Istirahat.';
+    if (!hasToday('clock_in')) return 'Anda harus Clock In dulu.';
+    if (hasToday('break_in')) return 'Anda sudah tap Istirahat.';
     if (hasToday('clock_out')) return 'Anda sudah Clock Out.';
     return null;
   }
@@ -303,10 +287,41 @@ function validateSequence(type){
   return null;
 }
 
+function askConfirm(title, message, okLabel){
+  return new Promise(resolve => {
+    $('confirmTitle').textContent = title;
+    $('confirmMsg').textContent = message;
+    $('btnConfirmOk').textContent = okLabel || 'Ya, Lanjutkan';
+    const modal = $('confirmModal');
+    modal.classList.remove('hidden');
+    const cleanup = ()=>{
+      modal.classList.add('hidden');
+      $('btnConfirmOk').onclick = null;
+      $('btnConfirmCancel').onclick = null;
+    };
+    $('btnConfirmOk').onclick = ()=>{ cleanup(); resolve(true); };
+    $('btnConfirmCancel').onclick = ()=>{ cleanup(); resolve(false); };
+  });
+}
+
 async function handleAction(type){
   const err = validateSequence(type);
   if (err){ alert(err); return; }
   if (!coords) try{ await refreshLocStatus(); }catch(e){}
+
+  if (type === 'break_in'){
+    const ok = await askConfirm('Mulai Istirahat?', 'Apakah Anda yakin ingin mulai Istirahat sekarang? Tap Selesai Istirahat saat kembali bekerja.', 'Ya, Mulai Istirahat');
+    if (!ok) return;
+  }
+  if (type === 'break_out'){
+    const ok = await askConfirm('Selesai Istirahat?', 'Apakah Anda yakin sudah selesai Istirahat dan siap kembali bekerja?', 'Ya, Selesai Istirahat');
+    if (!ok) return;
+  }
+  if (type === 'clock_out'){
+    const ok = await askConfirm('Clock Out Sekarang?', 'Apakah Anda yakin ingin Clock Out? Aksi ini menandakan Anda selesai bekerja hari ini.', 'Ya, Clock Out');
+    if (!ok) return;
+  }
+
   if (NO_SELFIE_TYPES.has(type)){
     return doNoSelfieAction(type);
   }
@@ -316,12 +331,12 @@ async function handleAction(type){
   openSelfie(type);
 }
 
-$('btnClockIn').onclick = ()=> handleAction('clock_in');
-$('btnClockOut').onclick = ()=> handleAction('clock_out');
-$('btnBreakIn').onclick = ()=> handleAction('break_in');
-$('btnBreakOut').onclick = ()=> handleAction('break_out');
-$('btnOtIn').onclick = ()=> handleAction('overtime_in');
-$('btnOtOut').onclick = ()=> handleAction('overtime_out');
+$('btnClockIn').onclick  = () => handleAction('clock_in');
+$('btnClockOut').onclick = () => handleAction('clock_out');
+$('btnBreakIn').onclick  = () => handleAction('break_in');
+$('btnBreakOut').onclick = () => handleAction('break_out');
+$('btnOtIn').onclick     = () => handleAction('overtime_in');
+$('btnOtOut').onclick    = () => handleAction('overtime_out');
 
 async function handleClockOut(){
   if (hasToday('break_in') && !hasToday('break_out')){
@@ -375,7 +390,7 @@ $('btnForgotBreakOk').onclick = ()=>{
 
 async function openBreakRangeModal(){
   $('breakStartInput').value = '12:00';
-  $('breakEndInput').value = '13:00';
+  $('breakEndInput').value   = '13:00';
   $('breakRangeModal').classList.remove('hidden');
 }
 
@@ -415,9 +430,58 @@ $('btnBreakRangeOk').onclick = async ()=>{
   proceedClockOut();
 };
 
-// ===== Avatar upload (Storage with base64 fallback) =====
-$('avatarWrap').onclick = ()=> $('avatarInput').click();
-$('avatarInput').onchange = async (ev)=>{
+async function checkForgottenClockOut(uid){
+  try{
+    const since = new Date(); since.setDate(since.getDate()-7); since.setHours(0,0,0,0);
+    const yesterdayEnd = new Date(); yesterdayEnd.setHours(0,0,0,0); yesterdayEnd.setMilliseconds(-1);
+    const q = query(collection(db,'absensi'),
+      where('uid','==', uid),
+      where('ts','>=', Timestamp.fromDate(since)),
+      where('ts','<=', Timestamp.fromDate(yesterdayEnd)),
+      orderBy('ts','asc'));
+    const snap = await getDocs(q);
+    const byDay = new Map();
+    snap.forEach(d=>{
+      const r = d.data();
+      if (!r.ts || !r.ts.toDate) return;
+      const day = r.ts.toDate().toDateString();
+      if (!byDay.has(day)) byDay.set(day, []);
+      byDay.get(day).push(r);
+    });
+    let forgotten = null;
+    for (const [day, rows] of byDay){
+      const ci = rows.find(r=>r.tipe==='clock_in');
+      const co = rows.find(r=>r.tipe==='clock_out');
+      if (ci && !co){ forgotten = { day, ci }; break; }
+    }
+    if (!forgotten) return;
+    const clockInTime = forgotten.ci.ts.toDate();
+    const jamKerja = parseFloat(userProfile.jamKerja) || 8;
+    const autoCutTime = new Date(clockInTime.getTime() + jamKerja * 3600 * 1000);
+    const namaForSave = userProfile.nama || (currentUser.email||'').split('@')[0];
+    await addDoc(collection(db,'absensi'), {
+      uid: currentUser.uid,
+      email: currentUser.email,
+      nama: namaForSave,
+      tipe: 'clock_out',
+      lokasi: forgotten.ci.lokasi || null,
+      jarak: forgotten.ci.jarak || 0,
+      inRadius: forgotten.ci.inRadius || false,
+      autoCutByForgot: true,
+      ts: Timestamp.fromDate(autoCutTime)
+    });
+    $('forgotTitle').textContent = 'Lupa Clock Out';
+    $('forgotMsg').textContent =
+      'Anda lupa Clock Out pada ' + clockInTime.toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'long'}) +
+      '. Sistem otomatis Clock Out pada ' + autoCutTime.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',hour12:false}) +
+      ' (sesuai jam kerja ' + jamKerja + ' jam). Hubungi atasan jika perlu koreksi.';
+    $('forgotClockOutModal').classList.remove('hidden');
+    $('btnForgotClockOutOk').onclick = ()=> $('forgotClockOutModal').classList.add('hidden');
+  }catch(e){ console.warn('checkForgottenClockOut err:', e); }
+}
+
+$('avatarWrap').onclick = () => $('avatarInput').click();
+$('avatarInput').onchange = async (ev) => {
   const f = ev.target.files[0]; if (!f) return;
   try{
     const dataUrl = await resizeImage(f, 400);
@@ -431,56 +495,34 @@ $('avatarInput').onchange = async (ev)=>{
     }catch(storageErr){
       console.warn('Storage upload gagal, pakai base64 inline:', storageErr.message);
     }
-    // Coba simpan ke koleksi profil
-    try{
-      await setDoc(doc(db, 'profil', currentUser.uid), { foto: url, nama: userProfile.nama }, { merge:true });
-    }catch(profErr){
-      console.warn('profil setDoc gagal, coba update karyawan doc:', profErr.message);
-      // Fallback: simpan ke koleksi karyawan
-      await setDoc(doc(db, 'karyawan', currentUser.uid), { foto: url }, { merge:true });
-    }
+    await setDoc(doc(db,'profil', currentUser.uid), { foto: url, nama: userProfile.nama || '' }, { merge:true });
     userProfile.foto = url;
     $('avatarImg').src = url;
     $('avatarImg').style.display = 'block';
     $('avatarPlaceholder').style.display = 'none';
-    alert('Foto profil berhasil disimpan.');
   }catch(e){
-    console.error('Avatar save error:', e);
-    alert('Gagal simpan foto: ' + (e.message || e.code || e));
+    alert('Gagal simpan foto: ' + e.message);
   }
 };
 
 function resizeImage(file, maxSize){
   return new Promise((resolve, reject)=>{
     const reader = new FileReader();
-    reader.onload = ev =>{
+    reader.onload = e=>{
       const img = new Image();
       img.onload = ()=>{
-        let w = img.width, h = img.height;
-        if (w > h && w > maxSize){ h = h * (maxSize/w); w = maxSize; }
-        else if (h > maxSize){ w = w * (maxSize/h); h = maxSize; }
         const c = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        if (w > h && w > maxSize){ h = h * maxSize / w; w = maxSize; }
+        else if (h > maxSize){ w = w * maxSize / h; h = maxSize; }
         c.width = w; c.height = h;
         c.getContext('2d').drawImage(img, 0, 0, w, h);
         resolve(c.toDataURL('image/jpeg', 0.85));
       };
       img.onerror = reject;
-      img.src = ev.target.result;
+      img.src = e.target.result;
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
 }
-
-$('btnLogout').onclick = ()=> signOut(auth).then(()=> location.href='index.html');
-
-onAuthStateChanged(auth, async (user)=>{
-  if (!user){ location.href='index.html'; return; }
-  if (OWNER_EMAILS.includes((user.email||'').toLowerCase())){
-    location.href='owner.html'; return;
-  }
-  currentUser = user;
-  await loadUserProfile(user.uid);
-  await loadToday(user.uid);
-  refreshLocStatus();
-});
