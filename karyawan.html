@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="theme-color" content="#0ea5e9">
-<title>Employee Dashboard</title>
+<title>Dashboard Karyawan</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="stylesheet" href="css/style.css">
@@ -13,17 +13,17 @@
 <header class="topbar topbar-greet">
   <div class="greet-wrap">
     <div class="greet-text">
-      <strong id="greetMsg">Hello!</strong>
-      <small id="greetSub" class="muted">have a nice day</small>
+      <strong id="greetMsg">Halo!</strong>
+      <small id="greetSub" class="muted">selamat beraktivitas</small>
     </div>
   </div>
   <div class="greet-right">
-    <div id="avatarWrap" class="avatar-wrap" title="Change profile photo">
+    <div id="avatarWrap" class="avatar-wrap" title="Ganti foto profil">
       <img id="avatarImg" src="" alt="" />
       <span id="avatarPlaceholder" class="avatar-ph">+</span>
       <input type="file" id="avatarInput" accept="image/*" hidden>
     </div>
-    <button id="btnLogout" class="btn-icon">Logout</button>
+    <button id="btnLogout" class="btn-icon">Keluar</button>
   </div>
 </header>
 
@@ -31,6 +31,11 @@
   <div class="card center">
     <div class="clock" id="liveClock">--:--:--</div>
     <div class="muted" id="liveDate">-</div>
+    <div id="workCountdown" class="work-countdown hidden">
+      <div class="wc-label">Sisa jam kerja hari ini</div>
+      <div class="wc-time" id="wcTime">--:--:--</div>
+      <div class="wc-sub" id="wcSub">Jam pulang: --:--</div>
+    </div>
   </div>
 
   <div class="card">
@@ -64,11 +69,13 @@
       <button id="btnBreakIn" class="action-tile tile-break">
         <span class="tile-icon">
           <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M22 10 L22 30 M18 10 L26 10 M22 30 C18 30 16 33 18 38 L22 50"/>
-            <path d="M42 10 C36 10 34 18 36 26 C37 30 40 30 42 30 L42 50"/>
+            <path d="M22 8 L22 28 M22 28 C22 32 26 34 26 38 L26 56 L18 56 L18 38 C18 34 22 32 22 28"/>
+            <path d="M16 8 L16 20 M28 8 L28 20"/>
+            <ellipse cx="44" cy="18" rx="6" ry="10"/>
+            <path d="M44 28 L44 56"/>
           </svg>
         </span>
-        <span class="tile-label">Break</span>
+        <span class="tile-label">Istirahat</span>
         <span class="tile-status" id="sBreakIn">-</span>
       </button>
 
@@ -81,7 +88,7 @@
             <path d="M22 18 L22 12 M32 18 L32 10 M42 18 L42 12"/>
           </svg>
         </span>
-        <span class="tile-label">After Break</span>
+        <span class="tile-label">Selesai Istirahat</span>
         <span class="tile-status" id="sBreakOut">-</span>
       </button>
 
@@ -94,7 +101,7 @@
             <path d="M20 42 L20 50 M16 46 L24 46"/>
           </svg>
         </span>
-        <span class="tile-label">Overtime In</span>
+        <span class="tile-label">Mulai Lembur</span>
         <span class="tile-status" id="sOtIn">-</span>
       </button>
 
@@ -104,77 +111,82 @@
             <circle cx="32" cy="34" r="20"/>
             <path d="M32 22 L32 34 L40 38"/>
             <path d="M24 10 L40 10"/>
-            <rect x="16" y="42" width="8" height="8"/>
+            <rect x="16" y="42" width="10" height="10"/>
           </svg>
         </span>
-        <span class="tile-label">Overtime Out</span>
+        <span class="tile-label">Selesai Lembur</span>
         <span class="tile-status" id="sOtOut">-</span>
       </button>
     </div>
-
-    <div class="muted center small" id="locStatus">Checking location...</div>
+    <div id="locStatus" class="muted small center" style="margin-top:8px"><span class="warn">Lokasi belum tersedia</span></div>
   </div>
 
   <div class="card">
-    <h3>Today's Activity</h3>
+    <h3>Riwayat Hari Ini</h3>
     <div id="todayList" class="list"></div>
   </div>
 </main>
 
+<video id="cam" autoplay muted playsinline class="cam-hidden"></video>
+<canvas id="snap" class="cam-hidden"></canvas>
+
 <div id="selfieModal" class="modal hidden">
   <div class="modal-box">
-    <h3 id="selfieTitle">Selfie</h3>
-    <video id="selfieVideo" autoplay playsinline muted></video>
-    <canvas id="selfieCanvas" hidden></canvas>
-    <div class="row">
-      <button id="btnCapture" class="btn">Capture</button>
-      <button id="btnRetake" class="btn btn-ghost hidden">Retake</button>
-      <button id="btnSend" class="btn btn-primary hidden">Send</button>
-      <button id="btnCancelSelfie" class="btn btn-ghost">Cancel</button>
+    <h3 id="selfieTitle">Ambil Selfie</h3>
+    <div class="cam-frame">
+      <video id="selfieVideo" autoplay muted playsinline></video>
+      <canvas id="selfieCanvas" class="hidden"></canvas>
     </div>
-    <small id="selfieInfo" class="muted">-</small>
-  </div>
-</div>
-
-<div id="earlyModal" class="modal hidden">
-  <div class="modal-box">
-    <h3>Reason for Early Clock Out</h3>
-    <p class="muted small">It is not yet the end of shift. Please provide a reason.</p>
-    <textarea id="earlyReason" rows="3" placeholder="e.g. sick, family matter, etc."></textarea>
     <div class="row">
-      <button id="btnEarlyCancel" class="btn btn-ghost">Cancel</button>
-      <button id="btnEarlyOk" class="btn btn-primary">Continue</button>
-    </div>
-  </div>
-</div>
-
-<div id="breakRangeModal" class="modal hidden">
-  <div class="modal-box">
-    <h3>Forgot to Check Break?</h3>
-    <p class="muted small">You have not checked in your break today. Break is mandatory. Please fill in your break time before Clock Out.</p>
-    <label class="small">Break Start</label>
-    <input type="time" id="breakStartInput" />
-    <label class="small">Break End</label>
-    <input type="time" id="breakEndInput" />
-    <small id="breakRangeInfo" class="muted">Maximum break duration is 1 hour.</small>
-    <div class="row">
-      <button id="btnBreakRangeOk" class="btn btn-primary">Save and Continue Clock Out</button>
+      <button id="btnSelfieCancel" class="btn btn-ghost">Batal</button>
+      <button id="btnSelfieShoot" class="btn btn-primary">Ambil Foto</button>
     </div>
   </div>
 </div>
 
 <div id="forgotBreakOutModal" class="modal hidden">
   <div class="modal-box">
-    <h3>Forgot to End Break?</h3>
-    <p class="muted small" id="forgotBreakOutMsg">You have not tapped After Break today. The system will automatically end your break at <strong id="autoBreakEndTime">--:--</strong> (1 hour after Break In).</p>
-    <p class="muted small">Reminder: please always tap After Break when you return to work to avoid this warning next time.</p>
+    <h3>Lupa Tap Selesai Istirahat?</h3>
+    <p class="muted small">Anda sudah Istirahat tapi belum tap "Selesai Istirahat". Durasi istirahat otomatis dipotong maksimal 1 jam dari waktu mulai istirahat.</p>
     <div class="row">
-      <button id="btnForgotBreakOk" class="btn btn-primary">OK, Continue Clock Out</button>
+      <button id="btnForgotBreakOk" class="btn btn-primary">Mengerti, Lanjutkan</button>
+    </div>
+  </div>
+</div>
+
+<div id="earlyModal" class="modal hidden">
+  <div class="modal-box">
+    <h3>Alasan Pulang Lebih Awal</h3>
+    <p class="muted small">Belum waktunya pulang. Mohon isi alasan pulang lebih awal.</p>
+    <textarea id="earlyReason" rows="3" placeholder="misal: sakit, urusan keluarga, dll."></textarea>
+    <div class="row">
+      <button id="btnEarlyCancel" class="btn btn-ghost">Batal</button>
+      <button id="btnEarlyOk" class="btn btn-primary">Lanjutkan</button>
+    </div>
+  </div>
+</div>
+
+<div id="breakRangeModal" class="modal hidden">
+  <div class="modal-box">
+    <h3>Lupa Tap Istirahat?</h3>
+    <p class="muted small">Anda belum tap Istirahat hari ini. Istirahat wajib dicatat. Mohon isi waktu istirahat Anda sebelum Clock Out.</p>
+    <label class="small">Mulai Istirahat</label>
+    <input type="time" id="breakStartInput" />
+    <label class="small">Selesai Istirahat</label>
+    <input type="time" id="breakEndInput" />
+    <small id="breakRangeInfo" class="muted">Durasi istirahat maksimal 1 jam (otomatis dipotong jika lebih).</small>
+    <div class="row">
+      <button id="btnBreakRangeOk" class="btn btn-primary">Simpan & Clock Out</button>
     </div>
   </div>
 </div>
 
 <script type="module" src="js/firebase-config.js"></script>
 <script type="module" src="js/karyawan.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('service-worker.js').catch(()=>{}));
+}
+</script>
 </body>
 </html>
