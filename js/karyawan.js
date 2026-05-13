@@ -127,25 +127,41 @@ async function getLocation(){
         navigator.geolocation.getCurrentPosition(
             pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy }),
             err => reject(err),
-            { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
+            { enableHighAccuracy:true, timeout:15000, maximumAge:30000 }
         );
     });
 }
 
+let __lastLocKey = '';
 async function refreshLocStatus(){
     try{
         const c = await getLocation();
         coords = c;
         const d = distanceMeters(c.lat, c.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
         const inRad = d <= OFFICE_LOCATION.radius;
-        $('locStatus').innerHTML = inRad
-            ? '<span class="ok">In radius</span> &middot; distance ' + d + ' m'
-            : '<span class="warn">Out of radius</span> &middot; distance ' + d + ' m';
+        const key = (inRad?'in':'out') + ':' + d;
+        if (key === __lastLocKey) return;
+        __lastLocKey = key;
+        const el = $('locStatus');
+        if (el.firstChild && el.children.length === 1){
+            const span = el.children[0];
+            span.className = inRad ? 'ok' : 'warn';
+            span.textContent = inRad ? 'In radius' : 'Out of radius';
+            if (el.childNodes.length >= 2 && el.childNodes[1].nodeType === 3){
+                el.childNodes[1].nodeValue = ' \u00b7 distance ' + d + ' m';
+            } else {
+                el.appendChild(document.createTextNode(' \u00b7 distance ' + d + ' m'));
+            }
+        } else {
+            el.innerHTML = (inRad?'<span class="ok">In radius</span>':'<span class="warn">Out of radius</span>') + ' \u00b7 distance ' + d + ' m';
+        }
     }catch(e){
+        if (__lastLocKey === 'err') return;
+        __lastLocKey = 'err';
         $('locStatus').innerHTML = '<span class="warn">Location unavailable</span>';
     }
 }
-refreshLocStatus(); setInterval(refreshLocStatus, 15000);
+refreshLocStatus(); setInterval(refreshLocStatus, 30000);
 
 // ===== Selfie flow =====
 async function openSelfie(type){
