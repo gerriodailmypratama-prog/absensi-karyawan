@@ -1,4 +1,4 @@
-const CACHE = 'absensi-v6';
+const CACHE = 'absensi-v7';
 
 
 
