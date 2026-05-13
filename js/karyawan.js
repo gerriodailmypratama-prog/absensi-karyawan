@@ -156,6 +156,7 @@ async function loadUserProfile(uid){
       }
     }catch(e){ console.warn('profil load err:', e); }
     userProfile = { nama, jamKerja, foto };
+    if (!foto){ showMandatoryAvatarModal(); }
     if (foto){
       $('avatarImg').src = foto;
       $('avatarImg').style.display = 'block';
@@ -352,6 +353,10 @@ function askConfirm(title, message, okLabel){
 }
 
 async function handleAction(type){
+  if (!userProfile || !userProfile.foto){
+    showMandatoryAvatarModal();
+    return;
+  }
   const err = validateSequence(type);
   if (err){ alert(err); return; }
   if (!coords) try{ await refreshLocStatus(); }catch(e){}
@@ -598,6 +603,7 @@ $('avatarInput').onchange = async (ev) => {
     $('avatarImg').src = url;
     $('avatarImg').style.display = 'block';
     $('avatarPlaceholder').style.display = 'none';
+    $('mandatoryAvatarModal').classList.add('hidden');
   }catch(e){
     alert('Gagal simpan foto: ' + e.message);
   }
@@ -639,3 +645,17 @@ async function refreshAbsenState(){
 setInterval(refreshAbsenState, 30000);
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshAbsenState(); });
 window.addEventListener('focus', refreshAbsenState);
+
+
+function showMandatoryAvatarModal(){
+  try{
+    const m = $('mandatoryAvatarModal');
+    if (m) m.classList.remove('hidden');
+  }catch(e){}
+}
+(function(){
+  try{
+    const b = document.getElementById('btnUploadAvatarNow');
+    if (b) b.onclick = ()=>{ try{ $('avatarInput').click(); }catch(e){} };
+  }catch(e){}
+})();
