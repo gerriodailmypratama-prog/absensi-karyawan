@@ -18,7 +18,7 @@
 <body class="owner-body">
 <header class="topbar">
   <div class="brand-wrap">
-    <button id="btnSidebar" class="btn-icon" style="background:transparent;padding:4px 10px;font-size:20px">☰</button>
+    <button id="btnSidebar" class="btn-icon" style="background:transparent;padding:4px 10px;font-size:20px">â°</button>
     <span class="brand-logo">GOODGEMS<span class="brand-logo-accent">ABSENSI</span></span>
     <small id="ownerEmail" class="muted"></small>
   </div>
@@ -28,16 +28,16 @@
 <div class="layout">
   <aside id="sidebar" class="sidebar">
     <nav>
-      <a href="#beranda" class="nav-link active" data-page="beranda">📊 Beranda</a>
-      <a href="#kehadiran" class="nav-link" data-page="kehadiran">🗓️ Kehadiran Harian</a>
-      <a href="#karyawan" class="nav-link" data-page="karyawan">👥 Karyawan</a>
+      <a href="#beranda" class="nav-link active" data-page="beranda">ð Beranda</a>
+      <a href="#kehadiran" class="nav-link" data-page="kehadiran">ðï¸ Kehadiran Harian</a>
+      <a href="#karyawan" class="nav-link" data-page="karyawan">ð¥ Karyawan</a>
     </nav>
   </aside>
 
   <main class="content">
     <!-- BERANDA -->
     <section id="page-beranda" class="page active">
-      <h2 class="page-title" id="berandaTitle" title="Klik untuk refresh" style="cursor:pointer;user-select:none">Beranda <span id="berandaRefreshIcon" style="font-size:14px;color:#0ea5e9">↻</span></h2>
+      <h2 class="page-title" id="berandaTitle" title="Klik untuk refresh" style="cursor:pointer;user-select:none">Beranda <span id="berandaRefreshIcon" style="font-size:14px;color:#0ea5e9">â»</span></h2>
       <p class="muted" id="berandaDate">-</p>
 
       <div id="hadirFloating" class="hadir-floating">
@@ -62,6 +62,14 @@
             <div class="hadir-sub muted small">Sedang istirahat</div>
           </div>
           <div class="hadir-floating-right" id="breakAvatars"></div>
+        </div>
+
+        <div id="finishFloating" class="hadir-floating">
+          <div class="hadir-floating-left">
+            <div class="hadir-title">Finish Working <strong id="finishCount">(0 of 0)</strong></div>
+            <div class="hadir-sub muted small">Sudah Clock Out / OT Out</div>
+          </div>
+          <div class="hadir-floating-right" id="finishAvatars"></div>
         </div>
         <div class="stats" id="berandaStats"></div>
 
