@@ -181,7 +181,14 @@ async function loadToday(uid){
     where('ts','<=', Timestamp.fromDate(endOfDay())),
     orderBy('ts','asc'));
   const snap = await getDocs(q);
-  snap.forEach(d => todayCache.push(d.data()));
+  const _pad = n => String(n).padStart(2,'0');
+  const _today = new Date();
+  const todayStr = _today.getFullYear() + '-' + _pad(_today.getMonth()+1) + '-' + _pad(_today.getDate());
+  snap.forEach(d => {
+    const r = d.data();
+    if (r.tanggal && r.tanggal !== todayStr) return;
+    todayCache.push(r);
+  });
   renderStatuses();
   updateWorkCountdown();
   if (hasToday('break_out')) window.__breakOverPrompted = false;
@@ -511,7 +518,7 @@ async function checkForgottenClockOut(uid){
     const pad = n => String(n).padStart(2,'0');
     const tanggalKemarin = autoCutTime.getFullYear() + '-' + pad(autoCutTime.getMonth()+1) + '-' + pad(autoCutTime.getDate());
 
-    // GUARD: cek localStorage — apakah user sudah klik 'Mengerti' untuk tanggal ini?
+    // GUARD: cek localStorage â apakah user sudah klik 'Mengerti' untuk tanggal ini?
     const lsKey = 'lupaResolved_' + uid + '_' + tanggalKemarin;
     if (localStorage.getItem(lsKey) === '1') {
       return;
