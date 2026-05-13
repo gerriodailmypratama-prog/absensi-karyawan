@@ -479,7 +479,7 @@ async function checkForgottenClockOut(uid){
     // Cari clock_in di 7 hari kebelakang sampai END of yesterday (local time)
     const since = new Date(); since.setDate(since.getDate()-7); since.setHours(0,0,0,0);
     const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-    const yesterdayEnd = new Date(todayStart.getTime() - 1); // 23:59:59.999 kemarin
+    const yesterdayEnd = new Date(todayStart.getTime() - 1);
 
     const q = query(collection(db,'absensi'),
       where('uid','==', uid),
@@ -496,7 +496,6 @@ async function checkForgottenClockOut(uid){
       byDay.get(day).push(r);
     });
 
-    // Cari hari pertama (paling lama) yg ada clock_in tapi tidak ada clock_out
     let forgotten = null;
     for (const [day, rows] of byDay){
       const ci = rows.find(r=>r.tipe==='clock_in');
@@ -505,36 +504,18 @@ async function checkForgottenClockOut(uid){
     }
     if (!forgotten) return;
 
-    // Hitung waktu auto Clock Out: tepat (jamKerja jam) setelah Clock In
     const clockInTime = forgotten.ci.ts.toDate();
     const jamKerja = parseFloat(userProfile && userProfile.jamKerja) || 8;
-
-    // PENTING: Auto Clock Out harus pakai TANGGAL & JAM dari Clock In + jamKerja,
-    // BUKAN waktu sekarang. Supaya tercatat ke tanggal kemarin (sesuai Clock In).
     const autoCutTime = new Date(clockInTime.getTime() + jamKerja * 60 * 60 * 1000);
 
-    // Format tanggal kemarin (YYYY-MM-DD) sebagai fallback / penanda eksplisit
     const pad = n => String(n).padStart(2,'0');
     const tanggalKemarin = autoCutTime.getFullYear() + '-' + pad(autoCutTime.getMonth()+1) + '-' + pad(autoCutTime.getDate());
 
-    const namaForSave = userProfile.nama || (currentUser.email||'').split('@')[0];
-    await addDoc(collection(db,'absensi'), {
-      uid: currentUser.uid,
-      email: currentUser.email,
-      nama: namaForSave,
-      tipe: 'clock_out',
-      lokasi: forgotten.ci.lokasi || null,
-      jarak: forgotten.ci.jarak || 0,
-      inRadius: forgotten.ci.inRadius || false,
-      // Flag audit / penanda
-      autoCutByForgot: true,
-      lupaClockOut: true,
-      autoClockOut: true,
-      editNote: 'Auto Clock Out (lupa) â dihitung ' + jamKerja + ' jam setelah Clock In ' + clockInTime.toLocaleString('id-ID'),
-      tanggal: tanggalKemarin,
-      // Timestamp HARUS waktu kemarin (clock-in + jam kerja), bukan now()
-      ts: Timestamp.fromDate(autoCutTime)
-    });
+    // GUARD: cek localStorage — apakah user sudah klik 'Mengerti' untuk tanggal ini?
+    const lsKey = 'lupaResolved_' + uid + '_' + tanggalKemarin;
+    if (localStorage.getItem(lsKey) === '1') {
+      return;
+    }
 
     $('forgotTitle').textContent = 'Lupa Clock Out';
     $('forgotMsg').textContent =
@@ -543,7 +524,37 @@ async function checkForgottenClockOut(uid){
       ' jam ' + autoCutTime.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',hour12:false}) +
       ' (sesuai jam kerja ' + jamKerja + ' jam). Hubungi atasan jika perlu koreksi.';
     $('forgotClockOutModal').classList.remove('hidden');
-    $('btnForgotClockOutOk').onclick = ()=> $('forgotClockOutModal').classList.add('hidden');
+
+    // Auto Clock Out HANYA di-create setelah user klik 'Mengerti'
+    $('btnForgotClockOutOk').onclick = async () => {
+      if ($('btnForgotClockOutOk').dataset.processing === '1') return;
+      $('btnForgotClockOutOk').dataset.processing = '1';
+      try{ localStorage.setItem(lsKey, '1'); }catch(e){}
+      try{
+        const namaForSave = userProfile.nama || (currentUser.email||'').split('@')[0];
+        await addDoc(collection(db,'absensi'), {
+          uid: currentUser.uid,
+          email: currentUser.email,
+          nama: namaForSave,
+          tipe: 'clock_out',
+          lokasi: forgotten.ci.lokasi || null,
+          jarak: forgotten.ci.jarak || 0,
+          inRadius: forgotten.ci.inRadius || false,
+          autoCutByForgot: true,
+          lupaClockOut: true,
+          autoClockOut: true,
+          editNote: 'Auto Clock Out (lupa) dihitung ' + jamKerja + ' jam setelah Clock In ' + clockInTime.toLocaleString('id-ID'),
+          tanggal: tanggalKemarin,
+          ts: Timestamp.fromDate(autoCutTime)
+        });
+      }catch(err){
+        console.warn('addDoc auto-clockOut error', err);
+        try{ localStorage.removeItem(lsKey); }catch(e){}
+        alert('Gagal mencatat auto Clock Out: ' + (err && err.message ? err.message : err));
+      }
+      $('btnForgotClockOutOk').dataset.processing = '';
+      $('forgotClockOutModal').classList.add('hidden');
+    };
   }catch(e){ console.warn('checkForgottenClockOut err:', e); }
 }
 
