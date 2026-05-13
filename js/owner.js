@@ -256,11 +256,17 @@ function renderTable(rows) {
         const tr = document.createElement('tr');
         if (r.inRadius === false) tr.style.background = '#fef2f2';
         tr.innerHTML = '<td>'+tanggal+'</td><td>'+jam+'</td><td>'+nama+'</td><td>'+tipeLabel+'</td><td>'+badge+'</td><td>'+loc+'</td><td>'+img+'</td>'+
-            '<td><button class="btn-link btn-edit-absen" data-id="'+(r._id||'')+'" data-nama="'+nama+'" data-tipe="'+(r.tipe||'')+'" data-ts="'+(r.ts && r.ts.toDate ? r.ts.toDate().toISOString() : '')+'">Edit</button></td>';
+            '<td>'+
+              '<button class="btn-link btn-edit-absen" data-id="'+(r._id||'')+'" data-nama="'+nama+'" data-tipe="'+(r.tipe||'')+'" data-ts="'+(r.ts && r.ts.toDate ? r.ts.toDate().toISOString() : '')+'">Edit</button>'+
+              ' <button class="btn-link btn-hapus-absen" data-id="'+(r._id||'')+'" data-nama="'+nama+'" data-tipe="'+(r.tipe||'')+'" data-ts="'+(r.ts && r.ts.toDate ? r.ts.toDate().toISOString() : '')+'" style="color:#dc2626">Hapus</button>'+
+              '</td>';
         tb.appendChild(tr);
     });
     document.querySelectorAll('.btn-edit-absen').forEach(b=>{
         b.onclick = ()=> openEditAbsen(b.dataset.id, b.dataset.nama, b.dataset.tipe, b.dataset.ts);
+    });
+    document.querySelectorAll('.btn-hapus-absen').forEach(b=>{
+        b.onclick = ()=> openDeleteAbsen(b.dataset.id, b.dataset.nama, b.dataset.tipe, b.dataset.ts);
     });
 }
 
@@ -526,6 +532,60 @@ if ($('formEditAbsen')) $('formEditAbsen').onsubmit = async (e)=>{
         alert('Gagal update: ' + (err.message||err));
     }
 };
+
+// ===== Hapus Absen (Owner Only) =====
+let _pendingDeleteAbsenId = null;
+function openDeleteAbsen(id, nama, tipe, tsIso){
+    if (!id) return;
+    const tipeLabels = {
+        clock_in:'Clock In', clock_out:'Clock Out',
+        break_in:'Istirahat', break_out:'Selesai Istirahat',
+        overtime_in:'Mulai Lembur', overtime_out:'Selesai Lembur'
+    };
+    const tipeLabel = tipeLabels[tipe] || tipe || '-';
+    let tglStr = '-';
+    try {
+        if (tsIso){
+            const d = new Date(tsIso);
+            tglStr = d.toLocaleDateString('id-ID',{weekday:'long', day:'2-digit', month:'long', year:'numeric'}) +
+                     ' jam ' + d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',hour12:false});
+        }
+    }catch(e){}
+    _pendingDeleteAbsenId = id;
+    $('deleteAbsenId').value = id;
+    $('deleteAbsenMsg').innerHTML = 'Yakin hapus absen <strong>' + tipeLabel + '</strong> milik <strong>' + (nama||'-') + '</strong> tanggal <strong>' + tglStr + '</strong>?';
+    $('deleteAbsenModal').classList.remove('hidden');
+}
+
+// Setup modal handlers (jalan sekali saat file load)
+(function setupDeleteAbsenModal(){
+    const cancelBtn = $('btnDeleteAbsenCancel');
+    const confirmBtn = $('btnDeleteAbsenConfirm');
+    const modal = $('deleteAbsenModal');
+    if (cancelBtn){
+        cancelBtn.onclick = ()=>{ _pendingDeleteAbsenId = null; if (modal) modal.classList.add('hidden'); };
+    }
+    if (confirmBtn){
+        confirmBtn.onclick = async ()=>{
+            const id = _pendingDeleteAbsenId || ($('deleteAbsenId') && $('deleteAbsenId').value);
+            if (!id){ if (modal) modal.classList.add('hidden'); return; }
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Menghapus...';
+            try {
+                await deleteDoc(doc(db,'absensi', id));
+                console.log('[AUDIT] Absen dihapus oleh', auth.currentUser && auth.currentUser.email, 'docId=', id, 'pada', new Date().toISOString());
+                _pendingDeleteAbsenId = null;
+                if (modal) modal.classList.add('hidden');
+                try { loadData(); } catch(e){}
+            } catch(err){
+                alert('Gagal hapus absen: ' + (err.message || err));
+            } finally {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Hapus';
+            }
+        };
+    }
+})();
 
 // ===== Floating Bar Kehadiran di Beranda =====
 async function renderHadirFloating(rows){
