@@ -277,3 +277,34 @@ img.hadir-avatar,
 #workingFloating { background:#ecfeff; border:1px solid #a5f3fc; }
 .hadir-empty { padding:0 6px; }
 #berandaTitle:hover #berandaRefreshIcon { color:#0284c7; }
+
+
+/* ===== Brand Logo (GOODGEMS ABSENSI) ===== */
+.brand-wrap { display:flex; align-items:center; gap:10px; }
+.brand-logo {
+    font-family: 'Audiowide', 'Orbitron', system-ui, sans-serif;
+    font-size: 20px;
+    letter-spacing: 2px;
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.15);
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+}
+.brand-logo-accent {
+    font-family: 'Orbitron', 'Audiowide', system-ui, sans-serif;
+    font-weight: 800;
+    font-size: 18px;
+    letter-spacing: 3px;
+    color: #fde047;
+    padding: 2px 8px;
+    border: 1.5px solid rgba(253, 224, 71, 0.7);
+    border-radius: 6px;
+    background: rgba(255,255,255,0.08);
+}
+@media (max-width: 480px){
+    .brand-logo { font-size: 16px; letter-spacing: 1.5px; }
+    .brand-logo-accent { font-size: 14px; letter-spacing: 2px; padding: 1px 6px; }
+}
