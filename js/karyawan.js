@@ -285,10 +285,6 @@ async function doNoSelfieAction(type, extra={}){
   if (!coords){ alert('Lokasi belum tersedia.'); return; }
   const d = distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
   const inRad = d <= OFFICE_LOCATION.radius;
-  if (type === 'break_out' && !inRad){
-    alert('Anda harus di kantor untuk tap Selesai Istirahat. Jarak: ' + d + 'm');
-    return;
-  }
   await saveAttendance(Object.assign({ tipe:type, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad }, extra));
   await loadToday(currentUser.uid);
 }
@@ -483,7 +479,6 @@ $('btnBreakRangeOk').onclick = async ()=>{
 
 async function checkForgottenClockOut(uid){
   try{
-    // Cari clock_in di 7 hari kebelakang sampai END of yesterday (local time)
     const since = new Date(); since.setDate(since.getDate()-7); since.setHours(0,0,0,0);
     const todayStart = new Date(); todayStart.setHours(0,0,0,0);
     const yesterdayEnd = new Date(todayStart.getTime() - 1);
@@ -498,65 +493,82 @@ async function checkForgottenClockOut(uid){
     snap.forEach(d=>{
       const r = d.data();
       if (!r.ts || !r.ts.toDate) return;
-      const day = r.ts.toDate().toDateString();
-      if (!byDay.has(day)) byDay.set(day, []);
-      byDay.get(day).push(r);
+      const tgl = r.tanggal || (function(){
+        const dd = r.ts.toDate();
+        const _pad = n => String(n).padStart(2,'0');
+        return dd.getFullYear()+'-'+_pad(dd.getMonth()+1)+'-'+_pad(dd.getDate());
+      })();
+      if (!byDay.has(tgl)) byDay.set(tgl, []);
+      byDay.get(tgl).push(r);
     });
 
-    let forgotten = null;
+    let target = null;
     for (const [day, rows] of byDay){
       const ci = rows.find(r=>r.tipe==='clock_in');
       const co = rows.find(r=>r.tipe==='clock_out');
-      if (ci && !co){ forgotten = { day, ci }; break; }
+      if (!ci) continue;
+      if (!co){
+        target = { day, ci, co: null, mode: 'CREATE' };
+        break;
+      }
+      if (co && co.autoClockOut === true){
+        target = { day, ci, co, mode: 'INFO' };
+        break;
+      }
     }
-    if (!forgotten) return;
+    if (!target) return;
 
-    const clockInTime = forgotten.ci.ts.toDate();
+    const clockInTime = target.ci.ts.toDate();
     const jamKerja = parseFloat(userProfile && userProfile.jamKerja) || 8;
-    const autoCutTime = new Date(clockInTime.getTime() + jamKerja * 60 * 60 * 1000);
-
+    const autoCutTime = target.co ? target.co.ts.toDate() : new Date(clockInTime.getTime() + jamKerja * 60 * 60 * 1000);
     const pad = n => String(n).padStart(2,'0');
-    const tanggalKemarin = autoCutTime.getFullYear() + '-' + pad(autoCutTime.getMonth()+1) + '-' + pad(autoCutTime.getDate());
+    const tanggalKemarin = target.day || (autoCutTime.getFullYear()+'-'+pad(autoCutTime.getMonth()+1)+'-'+pad(autoCutTime.getDate()));
 
-    // GUARD: cek localStorage â apakah user sudah klik 'Mengerti' untuk tanggal ini?
-    const lsKey = 'lupaResolved_' + uid + '_' + tanggalKemarin;
-    if (localStorage.getItem(lsKey) === '1') {
-      return;
+    const sessionKey = 'lupaShown_'+uid+'_'+tanggalKemarin;
+    if (sessionStorage.getItem(sessionKey) === '1') return;
+
+    if (target.mode === 'CREATE'){
+      $('forgotTitle').textContent = 'Lupa Clock Out';
+      $('forgotMsg').textContent =
+        'Anda lupa Clock Out pada ' + clockInTime.toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}) +
+        '. Sistem otomatis mencatat Clock Out pada ' + autoCutTime.toLocaleDateString('id-ID',{day:'2-digit',month:'long'}) +
+        ' jam ' + autoCutTime.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',hour12:false}) +
+        ' (sesuai jam kerja ' + jamKerja + ' jam). Hubungi atasan jika perlu koreksi.';
+    } else {
+      $('forgotTitle').textContent = 'Pemberitahuan: Lupa Clock Out';
+      $('forgotMsg').textContent =
+        'Anda lupa Clock Out pada ' + clockInTime.toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}) +
+        '. Sistem sudah otomatis mencatat Clock Out pada jam ' + autoCutTime.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',hour12:false}) +
+        ' (sesuai jam kerja ' + jamKerja + ' jam). Hubungi atasan jika perlu koreksi.';
     }
-
-    $('forgotTitle').textContent = 'Lupa Clock Out';
-    $('forgotMsg').textContent =
-      'Anda lupa Clock Out pada ' + clockInTime.toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}) +
-      '. Sistem otomatis mencatat Clock Out pada ' + autoCutTime.toLocaleDateString('id-ID',{day:'2-digit',month:'long'}) +
-      ' jam ' + autoCutTime.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',hour12:false}) +
-      ' (sesuai jam kerja ' + jamKerja + ' jam). Hubungi atasan jika perlu koreksi.';
     $('forgotClockOutModal').classList.remove('hidden');
 
-    // Auto Clock Out HANYA di-create setelah user klik 'Mengerti'
     $('btnForgotClockOutOk').onclick = async () => {
       if ($('btnForgotClockOutOk').dataset.processing === '1') return;
       $('btnForgotClockOutOk').dataset.processing = '1';
-      try{ localStorage.setItem(lsKey, '1'); }catch(e){}
+      try{ sessionStorage.setItem(sessionKey, '1'); }catch(e){}
       try{
-        const namaForSave = userProfile.nama || (currentUser.email||'').split('@')[0];
-        await addDoc(collection(db,'absensi'), {
-          uid: currentUser.uid,
-          email: currentUser.email,
-          nama: namaForSave,
-          tipe: 'clock_out',
-          lokasi: forgotten.ci.lokasi || null,
-          jarak: forgotten.ci.jarak || 0,
-          inRadius: forgotten.ci.inRadius || false,
-          autoCutByForgot: true,
-          lupaClockOut: true,
-          autoClockOut: true,
-          editNote: 'Auto Clock Out (lupa) dihitung ' + jamKerja + ' jam setelah Clock In ' + clockInTime.toLocaleString('id-ID'),
-          tanggal: tanggalKemarin,
-          ts: Timestamp.fromDate(autoCutTime)
-        });
+        if (target.mode === 'CREATE'){
+          const namaForSave = userProfile.nama || (currentUser.email||'').split('@')[0];
+          await addDoc(collection(db,'absensi'), {
+            uid: currentUser.uid,
+            email: currentUser.email,
+            nama: namaForSave,
+            tipe: 'clock_out',
+            lokasi: target.ci.lokasi || null,
+            jarak: target.ci.jarak || 0,
+            inRadius: target.ci.inRadius || false,
+            autoCutByForgot: true,
+            lupaClockOut: true,
+            autoClockOut: true,
+            editNote: 'Auto Clock Out (lupa) dihitung ' + jamKerja + ' jam setelah Clock In ' + clockInTime.toLocaleString('id-ID'),
+            tanggal: tanggalKemarin,
+            ts: Timestamp.fromDate(autoCutTime)
+          });
+        }
       }catch(err){
         console.warn('addDoc auto-clockOut error', err);
-        try{ localStorage.removeItem(lsKey); }catch(e){}
+        try{ sessionStorage.removeItem(sessionKey); }catch(e){}
         alert('Gagal mencatat auto Clock Out: ' + (err && err.message ? err.message : err));
       }
       $('btnForgotClockOutOk').dataset.processing = '';
@@ -564,6 +576,7 @@ async function checkForgottenClockOut(uid){
     };
   }catch(e){ console.warn('checkForgottenClockOut err:', e); }
 }
+
 
 $('avatarWrap').onclick = () => $('avatarInput').click();
 $('avatarInput').onchange = async (ev) => {
