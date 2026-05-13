@@ -1,5 +1,6 @@
 *{box-sizing:border-box;margin:0;padding:0}
 
+
 body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f1f5f9;color:#0f172a;line-height:1.5}
 .container{max-width:480px;margin:0 auto;padding:16px}
 .container.wide{max-width:1100px}
@@ -61,69 +62,70 @@ td img{width:48px;height:48px;object-fit:cover;border-radius:6px;cursor:pointer}
 .badge.clock_out{background:#fee2e2;color:#b91c1c}
 .badge.overtime_in{background:#fef3c7;color:#a16207}
 .badge.overtime_out{background:#ede9fe;color:#6d28d9}
-.hidden{display:none}
-.center{text-align:center}
-h3{margin:14px 0 8px;font-size:16px;color:#334155}
-/* ===== Karyawan: Welcome + Avatar ===== */
-.topbar.topbar-greet{align-items:center}
-.greet-wrap{display:flex;flex-direction:column;line-height:1.25}
-.greet-text strong{font-size:16px}
-.greet-text small{color:#e0f2fe;font-size:12px}
+
+/* ===== Karyawan tile grid (Hadirr-style) ===== */
+.topbar-greet{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:linear-gradient(135deg,#0ea5e9,#0284c7);color:#fff}
+.greet-wrap{display:flex;align-items:center;gap:10px}
+.greet-text strong{display:block;font-size:16px}
+.greet-text small{color:rgba(255,255,255,.85);font-size:12px}
 .greet-right{display:flex;align-items:center;gap:10px}
-.avatar-wrap{position:relative;width:38px;height:38px;border-radius:50%;background:#e0f2fe;border:2px solid #fff;cursor:pointer;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.avatar-wrap{position:relative;width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;border:2px solid #fff}
 .avatar-wrap img{width:100%;height:100%;object-fit:cover;display:none}
-.avatar-ph{color:#0ea5e9;font-weight:700;font-size:18px}
+.avatar-ph{color:#fff;font-size:22px;font-weight:300}
+.btn-icon{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);color:#fff;padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:500;font-size:13px;width:auto;display:inline-block}
+.btn-icon:hover{background:rgba(255,255,255,.28)}
 
-/* ===== Owner: Layout & Sidebar ===== */
-.owner-body{background:#f1f5f9}
-.layout{display:flex;min-height:calc(100vh - 56px)}
-.sidebar{width:220px;background:#fff;border-right:1px solid #e2e8f0;padding:16px 0;flex-shrink:0;position:sticky;top:56px;height:calc(100vh - 56px);overflow-y:auto}
-.sidebar nav{display:flex;flex-direction:column}
-.sidebar .nav-link{display:block;padding:12px 20px;color:#475569;text-decoration:none;font-size:14px;font-weight:500;border-left:3px solid transparent;transition:.15s}
-.sidebar .nav-link:hover{background:#f8fafc;color:#0ea5e9}
-.sidebar .nav-link.active{background:#e0f2fe;color:#0284c7;border-left-color:#0ea5e9;font-weight:600}
-.content{flex:1;padding:20px;max-width:1100px;width:100%}
-.page{display:none}
-.page.active{display:block}
-.page-title{font-size:22px;color:#0f172a;margin:0 0 4px;font-weight:700}
+.clock{font-size:38px;font-weight:700;letter-spacing:1px;color:#0f172a;font-variant-numeric:tabular-nums}
+.small{font-size:12px}
+.ok{color:#10b981;font-weight:600}
+.warn{color:#ef4444;font-weight:600}
 
-@media (max-width:768px){
-  .sidebar{position:fixed;left:-220px;top:56px;z-index:50;transition:left .2s;box-shadow:2px 0 8px rgba(0,0,0,.1)}
-  body.sidebar-open .sidebar{left:0}
-  .content{padding:14px}
-}
+.action-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.action-tile{background:#fff;border:1.5px solid #e5e7eb;border-radius:14px;padding:14px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;transition:all .18s ease;min-height:130px;color:#0f172a;width:auto}
+.action-tile:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,.08)}
+.action-tile:active{transform:translateY(0)}
+.tile-icon{width:54px;height:54px;display:flex;align-items:center;justify-content:center}
+.tile-icon svg{width:100%;height:100%}
+.tile-label{font-weight:600;font-size:14px;color:#0f172a}
+.tile-status{font-size:11px;color:#64748b}
+.tile-in{color:#0ea5e9}
+.tile-in:hover{border-color:#0ea5e9}
+.tile-out{color:#0284c7}
+.tile-out:hover{border-color:#0284c7}
+.tile-break{color:#f59e0b}
+.tile-break:hover{border-color:#f59e0b}
+.tile-after-break{color:#10b981}
+.tile-after-break:hover{border-color:#10b981}
+.tile-ot-in{color:#8b5cf6}
+.tile-ot-in:hover{border-color:#8b5cf6}
+.tile-ot-out{color:#7c3aed}
+.tile-ot-out:hover{border-color:#7c3aed}
 
-/* ===== Beranda charts ===== */
-.grid-2-chart{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
-@media (min-width:900px){ .grid-2-chart{grid-template-columns:1fr 1fr} }
-.chart-wrap{position:relative;height:240px}
-.chart-caption{text-align:center;color:#475569;font-size:13px;margin-top:6px}
+.list{display:flex;flex-direction:column;gap:8px}
+.list-item{background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px}
+.list-item strong{font-size:14px}
+.tag{display:inline-block;background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;margin-left:6px;vertical-align:middle}
+.tag.warn{background:#fee2e2;color:#991b1b}
+.tag.ok{background:#d1fae5;color:#065f46}
+.tag.info{background:#dbeafe;color:#1e40af}
 
-/* ===== Badge lokasi ===== */
-.badge-loc{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
-.badge-in{background:#dcfce7;color:#166534}
-.badge-out{background:#fee2e2;color:#991b1b}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px}
+.modal.hidden{display:none}
+.modal-box{background:#fff;border-radius:14px;padding:18px;width:100%;max-width:380px;max-height:90vh;overflow:auto}
+.modal-box h3{margin:0 0 8px 0}
+.modal-box video{width:100%;border-radius:10px;background:#000}
+.modal-box canvas{width:100%;border-radius:10px}
+.modal-box label{display:block;margin-top:10px;font-weight:600}
+.modal-box input[type=time],.modal-box textarea{width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;margin-top:4px;font-family:inherit}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;justify-content:flex-end}
+.btn.btn-ghost{background:transparent;color:#64748b;border:1px solid #e5e7eb;width:auto;display:inline-block}
+.btn.btn-primary{width:auto;display:inline-block}
+.modal-box .btn{width:auto;display:inline-block;padding:9px 14px}
+.hidden{display:none !important}
 
-/* ===== Karyawan form ===== */
-.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
-.form-grid .form-actions{grid-column:1/-1;display:flex;justify-content:flex-end}
+/* Badges for break_in / break_out */
+.badge.break_in{background:#fef3c7;color:#92400e}
+.badge.break_out{background:#d1fae5;color:#065f46}
+.badge.on_break{background:#fef3c7;color:#92400e;border:1px solid #fbbf24}
 
-
-/* ===== Karyawan Sedang Bekerja list ===== */
-.working-list { display:flex; flex-direction:column; gap:10px; }
-.working-item { display:flex; align-items:center; gap:12px; padding:10px; border-radius:10px; background:#f8fafc; border:1px solid #e5e7eb; }
-.working-item img, .working-item .avatar-init { width:44px; height:44px; border-radius:50%; object-fit:cover; flex-shrink:0; }
-.working-item .avatar-init { background:#e0e7ff; color:#4338ca; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:18px; }
-.working-item .working-info { flex:1; display:flex; flex-direction:column; }
-.working-item .working-info b { font-size:14px; }
-.working-item .working-info small { color:#6b7280; font-size:12px; }
-.working-item .badge { padding:4px 10px; border-radius:999px; font-size:11px; font-weight:600; }
-.badge-green { background:#dcfce7; color:#166534; }
-.badge-orange { background:#ffedd5; color:#9a3412; }
-
-/* ===== Edit Karyawan Modal ===== */
-.modal { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000; padding:16px; }
-.modal.hidden { display:none; }
-.modal-content { background:#fff; max-width:480px; width:100%; max-height:90vh; overflow:auto; }
-.btn-link { background:none; border:none; color:#2563eb; cursor:pointer; padding:4px 8px; text-decoration:underline; font-size:13px; }
-.btn-secondary { background:#e5e7eb; color:#111827; border:none; padding:10px 16px; border-radius:8px; cursor:pointer; }
+@media (max-width:380px){.action-tile{min-height:110px;padding:12px 8px}.tile-icon{width:46px;height:46px}.clock{font-size:30px}}
