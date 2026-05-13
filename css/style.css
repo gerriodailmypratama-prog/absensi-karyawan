@@ -265,3 +265,15 @@ img.hadir-avatar,
 
 /* Btn-link delete khusus */
 .btn-link.btn-del-kar{color:#dc2626}
+
+
+/* ===== Floating sections On Working & On Break ===== */
+#workingFloating, #breakFloating {
+    margin-top: 8px;
+}
+#workingFloating .hadir-title strong,
+#breakFloating .hadir-title strong { color:#0f172a; }
+#breakFloating { background:#fff7ed; border:1px solid #fed7aa; }
+#workingFloating { background:#ecfeff; border:1px solid #a5f3fc; }
+.hadir-empty { padding:0 6px; }
+#berandaTitle:hover #berandaRefreshIcon { color:#0284c7; }
