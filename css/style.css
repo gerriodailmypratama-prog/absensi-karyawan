@@ -129,3 +129,11 @@ td img{width:48px;height:48px;object-fit:cover;border-radius:6px;cursor:pointer}
 .badge.on_break{background:#fef3c7;color:#92400e;border:1px solid #fbbf24}
 
 @media (max-width:380px){.action-tile{min-height:110px;padding:12px 8px}.tile-icon{width:46px;height:46px}.clock{font-size:30px}}
+
+/* ===== Work countdown ===== */
+.work-countdown{margin-top:12px;padding:10px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;text-align:center}
+.work-countdown.hidden{display:none}
+.work-countdown.done{background:#fef3c7;border-color:#fcd34d}
+.wc-label{font-size:12px;color:#475569;margin-bottom:2px}
+.wc-time{font-size:24px;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums}
+.wc-sub{font-size:11px;color:#64748b;margin-top:2px}
