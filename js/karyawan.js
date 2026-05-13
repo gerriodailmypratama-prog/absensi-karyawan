@@ -476,8 +476,11 @@ $('btnBreakRangeOk').onclick = async ()=>{
 
 async function checkForgottenClockOut(uid){
   try{
+    // Cari clock_in di 7 hari kebelakang sampai END of yesterday (local time)
     const since = new Date(); since.setDate(since.getDate()-7); since.setHours(0,0,0,0);
-    const yesterdayEnd = new Date(); yesterdayEnd.setHours(0,0,0,0); yesterdayEnd.setMilliseconds(-1);
+    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+    const yesterdayEnd = new Date(todayStart.getTime() - 1); // 23:59:59.999 kemarin
+
     const q = query(collection(db,'absensi'),
       where('uid','==', uid),
       where('ts','>=', Timestamp.fromDate(since)),
@@ -492,6 +495,8 @@ async function checkForgottenClockOut(uid){
       if (!byDay.has(day)) byDay.set(day, []);
       byDay.get(day).push(r);
     });
+
+    // Cari hari pertama (paling lama) yg ada clock_in tapi tidak ada clock_out
     let forgotten = null;
     for (const [day, rows] of byDay){
       const ci = rows.find(r=>r.tipe==='clock_in');
@@ -499,9 +504,19 @@ async function checkForgottenClockOut(uid){
       if (ci && !co){ forgotten = { day, ci }; break; }
     }
     if (!forgotten) return;
+
+    // Hitung waktu auto Clock Out: tepat (jamKerja jam) setelah Clock In
     const clockInTime = forgotten.ci.ts.toDate();
-    const jamKerja = parseFloat(userProfile.jamKerja) || 8;
-    const autoCutTime = new Date(clockInTime.getTime() + jamKerja * 3600 * 1000);
+    const jamKerja = parseFloat(userProfile && userProfile.jamKerja) || 8;
+
+    // PENTING: Auto Clock Out harus pakai TANGGAL & JAM dari Clock In + jamKerja,
+    // BUKAN waktu sekarang. Supaya tercatat ke tanggal kemarin (sesuai Clock In).
+    const autoCutTime = new Date(clockInTime.getTime() + jamKerja * 60 * 60 * 1000);
+
+    // Format tanggal kemarin (YYYY-MM-DD) sebagai fallback / penanda eksplisit
+    const pad = n => String(n).padStart(2,'0');
+    const tanggalKemarin = autoCutTime.getFullYear() + '-' + pad(autoCutTime.getMonth()+1) + '-' + pad(autoCutTime.getDate());
+
     const namaForSave = userProfile.nama || (currentUser.email||'').split('@')[0];
     await addDoc(collection(db,'absensi'), {
       uid: currentUser.uid,
@@ -511,13 +526,21 @@ async function checkForgottenClockOut(uid){
       lokasi: forgotten.ci.lokasi || null,
       jarak: forgotten.ci.jarak || 0,
       inRadius: forgotten.ci.inRadius || false,
+      // Flag audit / penanda
       autoCutByForgot: true,
+      lupaClockOut: true,
+      autoClockOut: true,
+      editNote: 'Auto Clock Out (lupa) — dihitung ' + jamKerja + ' jam setelah Clock In ' + clockInTime.toLocaleString('id-ID'),
+      tanggal: tanggalKemarin,
+      // Timestamp HARUS waktu kemarin (clock-in + jam kerja), bukan now()
       ts: Timestamp.fromDate(autoCutTime)
     });
+
     $('forgotTitle').textContent = 'Lupa Clock Out';
     $('forgotMsg').textContent =
-      'Anda lupa Clock Out pada ' + clockInTime.toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'long'}) +
-      '. Sistem otomatis Clock Out pada ' + autoCutTime.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',hour12:false}) +
+      'Anda lupa Clock Out pada ' + clockInTime.toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}) +
+      '. Sistem otomatis mencatat Clock Out pada ' + autoCutTime.toLocaleDateString('id-ID',{day:'2-digit',month:'long'}) +
+      ' jam ' + autoCutTime.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',hour12:false}) +
       ' (sesuai jam kerja ' + jamKerja + ' jam). Hubungi atasan jika perlu koreksi.';
     $('forgotClockOutModal').classList.remove('hidden');
     $('btnForgotClockOutOk').onclick = ()=> $('forgotClockOutModal').classList.add('hidden');
