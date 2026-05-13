@@ -92,6 +92,48 @@ function updateWorkCountdown(){
 }
 setInterval(updateWorkCountdown, 1000);
 
+// ===== Countdown Istirahat (60 menit dari tap Istirahat) =====
+function updateBreakCountdown(){
+    let wc = document.getElementById('breakCountdown');
+    const bi = getTodayEntry('break_in');
+    const bo = getTodayEntry('break_out');
+    if (!bi || bo){ if (wc) wc.classList.add('hidden'); return; }
+    if (!wc){
+        const c = document.createElement('div');
+        c.id = 'breakCountdown';
+        c.className = 'work-countdown break-countdown';
+        c.innerHTML = '<div class="wc-label">Sisa waktu Istirahat</div><div class="wc-time" id="bcTime">--:--</div><div class="wc-sub" id="bcSub">Maksimal 1 jam</div>';
+        const parent = document.getElementById('workCountdown')?.parentNode;
+        if (parent) parent.appendChild(c); else document.querySelector('main')?.appendChild(c);
+        wc = c;
+    }
+    wc.classList.remove('hidden');
+    const startTime = bi.ts.toDate();
+    const endTime = new Date(startTime.getTime() + 60*60*1000);
+    const now = new Date();
+    const diff = endTime - now;
+    const bcTime = document.getElementById('bcTime');
+    const bcSub = document.getElementById('bcSub');
+    if (diff <= 0){
+        if (bcTime) bcTime.textContent = 'Waktu habis!';
+        if (bcSub) bcSub.textContent = 'Silakan tap Selesai Istirahat';
+        wc.classList.add('done');
+        if (!window.__breakOverPrompted){
+            window.__breakOverPrompted = true;
+            try{ if (navigator.vibrate) navigator.vibrate([200,100,200]); }catch(e){}
+            alert('Waktu istirahat 1 jam sudah habis. Silakan tap "Selesai Istirahat".');
+        }
+        return;
+    }
+    wc.classList.remove('done');
+    const totalSec = Math.floor(diff/1000);
+    const m = Math.floor(totalSec/60);
+    const s = totalSec%60;
+    if (bcTime) bcTime.textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+    if (bcSub) bcSub.textContent = 'Maksimal 1 jam dari mulai Istirahat';
+}
+setInterval(updateBreakCountdown, 1000);
+
 function fmtTime(d){ return d.toLocaleTimeString('id-ID',{hour12:false}); }
 
 async function loadUserProfile(uid){
@@ -142,6 +184,8 @@ async function loadToday(uid){
   snap.forEach(d => todayCache.push(d.data()));
   renderStatuses();
   updateWorkCountdown();
+  if (hasToday('break_out')) window.__breakOverPrompted = false;
+  updateBreakCountdown();
 }
 
 function hasToday(type){ return todayCache.some(r => r.tipe === type); }
