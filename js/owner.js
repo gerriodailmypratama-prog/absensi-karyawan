@@ -347,7 +347,7 @@ function renderTable(rows) {
         const tipeOpts = ['clock_in','clock_out','break_in','break_out','overtime_in','overtime_out']
             .map(v=>'<option value="'+v+'"'+(v===(r.tipe||'')?' selected':'')+'>'+(TIPE[v]||v)+'</option>').join('');
         tr.innerHTML = '<td><input type="date" class="kh-edit-tgl" data-id="'+(r._id||'')+'" value="'+tanggalYMD+'"></td>'+
-            '<td><input type="time" step="1" class="kh-edit-jam" data-id="'+(r._id||'')+'" value="'+jamHHMMSS+'"></td>'+
+            '<td><input type="time" lang="id-ID" step="1" class="kh-edit-jam" data-id="'+(r._id||'')+'" value="'+jamHHMMSS+'"></td>'+
             '<td>'+nama+'</td>'+
             '<td><select class="kh-edit-tipe" data-id="'+(r._id||'')+'">'+tipeOpts+'</select></td>'+
             '<td>'+badge+'</td><td>'+loc+'</td><td>'+img+'</td>'+
@@ -1022,7 +1022,7 @@ function renderKehadiranMatrix(){
       const ev = row.byTipe[col.tipe];
       const val = ev && ev.ts && ev.ts.toDate ? fmtHM(ev.ts.toDate()) : '';
       const editedFlag = ev && (ev.editedByOwner||ev.manualEdit) ? ' kh-edited' : '';
-      cells += '<td><input type="time" class="kh-time'+editedFlag+'" data-tipe="'+col.tipe+'" value="'+val+'" data-orig="'+val+'"></td>';
+      cells += '<td><input type="time" lang="id-ID" class="kh-time'+editedFlag+'" data-tipe="'+col.tipe+'" value="'+val+'" data-orig="'+val+'"></td>';
       const pair = DUR_PAIRS[col.tipe];
       if (pair){
         const evIn = row.byTipe[pair.inTipe];
@@ -1404,7 +1404,7 @@ function openRekapDetail(uid, nama){
             const status = ev.inRadius===true ? '<span class="badge-loc badge-in">In Office</span>' : (ev.inRadius===false ? '<span class="badge-loc badge-out">Out of Radius</span>' : '<span class="muted small">-</span>');
             return '<tr data-id="'+ev.id+'">'+
                 '<td><input type="date" class="rd-edit-tgl" data-id="'+ev.id+'" value="'+tgl+'"></td>'+
-                '<td><input type="time" step="1" class="rd-edit-jam" data-id="'+ev.id+'" value="'+jam+'"></td>'+
+                '<td><input type="time" lang="id-ID" step="1" class="rd-edit-jam" data-id="'+ev.id+'" value="'+jam+'"></td>'+
                 '<td><select class="rd-edit-tipe" data-id="'+ev.id+'">'+opts+'</select></td>'+
                 '<td>'+status+'</td>'+
                 '<td><button class="btn-link rd-hapus" data-id="'+ev.id+'" data-nama="'+(nama||'').replace(/"/g,'&quot;')+'" data-tipe="'+(ev.tipe||'')+'" style="color:#dc2626">🗑️ Hapus</button></td>'+
