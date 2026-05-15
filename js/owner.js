@@ -1630,178 +1630,181 @@ async function loadPayroll(){
 }
 
 async function calcPayroll(){
-  const yyyymm = $('prBulan').value;
-  if (!yyyymm){ alert('Pilih bulan dulu.'); return; }
-  const range = prMonthRange(yyyymm);
-  const start = range.start, end = range.end, label = range.label;
-  const tbody = document.querySelector('#tblPayroll tbody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="10" class="muted center">Menghitung...</td></tr>';
-  $('prEmpty').classList.add('hidden');
-  const karyMap = new Map();
-  const karySnap = await getDocs(collection(db, 'karyawan'));
-  karySnap.forEach(d => { karyMap.set(d.id, Object.assign({uid: d.id}, d.data())); });
-  const q = query(
-    collection(db, 'absensi'),
-    where('ts', '>=', Timestamp.fromDate(start)),
-    where('ts', '<=', Timestamp.fromDate(end)),
-    orderBy('ts', 'asc')
-  );
-  const snap = await getDocs(q);
-  const byPerson = new Map();
-  snap.forEach(d => {
-    const r = d.data();
-    const key = r.uid || r.email;
-    if (!key) return;
-    if (!byPerson.has(key)) byPerson.set(key, new Map());
-    const personMap = byPerson.get(key);
-    const ts = r.ts && r.ts.toDate ? r.ts.toDate() : new Date();
-    const dateStr = ts.toISOString().substring(0,10);
-    if (!personMap.has(dateStr)) personMap.set(dateStr, []);
-    personMap.get(dateStr).push({tipe: r.tipe, ts: ts, id: d.id});
-  });
-  const rows = [];
-  let totalBudget = 0, totalHari = 0, totalLemburJam = 0;
-  for (const k of karyMap.values()){
-    const baseHarian = parseInt(k.baseHarian, 10) || 0;
-    const jamKerja = parseInt(k.jamKerja, 10) || 8;
-    const multiplierLembur = parseFloat(k.multiplierLembur) || 1.5;
-    const ratePerJam = jamKerja > 0 ? (baseHarian / jamKerja) : 0;
-    const personMap = byPerson.get(k.uid) || byPerson.get(k.email) || new Map();
-    let hariHadir = 0, hariSetengah = 0, totalJamLembur = 0;
-    const dailyDetails = [];
-    for (const entry of personMap){
-      const dateStr = entry[0]; const events = entry[1];
-      events.sort((a,b)=>a.ts - b.ts);
-      const ci = events.find(e=>e.tipe==='clock_in');
-      const coArr = events.filter(e=>e.tipe==='clock_out');
-      const co = coArr.length ? coArr[coArr.length-1] : null;
-      const oi = events.find(e=>e.tipe==='overtime_in');
-      const ooArr = events.filter(e=>e.tipe==='overtime_out');
-      const oo = ooArr.length ? ooArr[ooArr.length-1] : null;
-      let durJam = 0;
-      if (ci && co){
-        durJam = (co.ts - ci.ts) / 3600000;
-        const breaks = [];
-        events.forEach(e=>{ if (e.tipe==='break_in' || e.tipe==='break_out') breaks.push(e); });
-        for (let i=0; i<breaks.length-1; i++){
-          if (breaks[i].tipe==='break_in' && breaks[i+1].tipe==='break_out'){
-            durJam -= (breaks[i+1].ts - breaks[i].ts)/3600000;
-            i++;
-          }
-        }
-      }
-      let kategori = 'absen', kontribusi = 0;
-      if (ci && co){
-        if (durJam >= jamKerja * 0.75){ kategori = 'penuh'; kontribusi = baseHarian; hariHadir++; }
-        else if (durJam >= jamKerja * 0.25){ kategori = 'setengah'; kontribusi = baseHarian * 0.5; hariSetengah++; }
-        else { kategori = 'short'; kontribusi = 0; }
-      } else if (ci && !co){ kategori = 'tidak-clockout'; kontribusi = 0; }
-      let lemburJam = 0;
-      if (oi && oo){ lemburJam = Math.max(0, (oo.ts - oi.ts) / 3600000); totalJamLembur += lemburJam; }
-      dailyDetails.push({
-        date: dateStr,
-        jamMasuk: ci ? ci.ts.toTimeString().substring(0,5) : '--',
-        jamKeluar: co ? co.ts.toTimeString().substring(0,5) : '--',
-        durJam: durJam.toFixed(2),
-        lemburJam: lemburJam.toFixed(2),
-        kategori: kategori,
-        kontribusi: kontribusi
-      });
-    }
-    const upahPokok = (hariHadir * baseHarian) + (hariSetengah * baseHarian * 0.5);
-    const upahLembur = totalJamLembur * ratePerJam * multiplierLembur;
-    const total = upahPokok + upahLembur;
-    rows.push({
-      uid: k.uid, nama: k.nama || '-', idKaryawan: k.idKaryawan || '-',
-      baseHarian: baseHarian, jamKerja: jamKerja, multiplierLembur: multiplierLembur,
-      hariHadir: hariHadir, hariSetengah: hariSetengah, totalJamLembur: totalJamLembur,
-      upahPokok: upahPokok, upahLembur: upahLembur, total: total,
-      namaBank: k.namaBank || '', atasNamaRek: k.atasNamaRek || '', nomorRekening: k.nomorRekening || '',
-      dailyDetails: dailyDetails
-    });
-    totalBudget += total;
-    totalHari += hariHadir + hariSetengah*0.5;
-    totalLemburJam += totalJamLembur;
-  }
-  rows.sort((a,b)=>(a.nama||'').localeCompare(b.nama||''));
-  __payrollData = {yyyymm: yyyymm, label: label, rows: rows};
-  renderPayrollTable();
-  $('prTotalKaryawan').textContent = rows.length;
-  $('prTotalBudget').textContent = prFormatRp(totalBudget);
-  $('prTotalHari').textContent = totalHari.toFixed(1);
-  $('prTotalLembur').textContent = totalLemburJam.toFixed(1) + ' jam';
-  $('prLastCalc').textContent = 'Dihitung ' + new Date().toLocaleTimeString('id-ID') + ' \u2014 Bulan: ' + label;
+const yyyymm = $('prBulan').value;
+if (!yyyymm){ alert('Pilih bulan dulu.'); return; }
+const range = prMonthRange(yyyymm);
+const start = range.start, end = range.end, label = range.label;
+const tbody = document.querySelector('#tblPayroll tbody');
+if (tbody) tbody.innerHTML = '<tr><td colspan="10" class="muted center">Menghitung...</td></tr>';
+$('prEmpty').classList.add('hidden');
+const karyMap = new Map();
+const karySnap = await getDocs(collection(db, 'karyawan'));
+karySnap.forEach(d => { karyMap.set(d.id, Object.assign({uid: d.id}, d.data())); });
+const q = query(
+collection(db, 'absensi'),
+where('ts', '>=', Timestamp.fromDate(start)),
+where('ts', '<=', Timestamp.fromDate(end)),
+orderBy('ts', 'asc')
+);
+const snap = await getDocs(q);
+const byPerson = new Map();
+snap.forEach(d => {
+const r = d.data();
+const key = r.uid || r.email;
+if (!key) return;
+if (!byPerson.has(key)) byPerson.set(key, new Map());
+const personMap = byPerson.get(key);
+const ts = r.ts && r.ts.toDate ? r.ts.toDate() : new Date();
+const dateStr = ts.toISOString().substring(0,10);
+if (!personMap.has(dateStr)) personMap.set(dateStr, []);
+personMap.get(dateStr).push({tipe: r.tipe, ts: ts, id: d.id});
+});
+const rows = [];
+let totalBudget = 0, totalHari = 0, totalLemburJam = 0, totalJamKerjaAll = 0;
+for (const k of karyMap.values()){
+const baseHarian = parseInt(k.baseHarian, 10) || 0;
+const jamKerja = parseInt(k.jamKerja, 10) || 8;
+const multiplierLembur = parseFloat(k.multiplierLembur) || 1.5;
+const ratePerJam = jamKerja > 0 ? (baseHarian / jamKerja) : 0;
+const personMap = byPerson.get(k.uid) || byPerson.get(k.email) || new Map();
+let hariHadir = 0, hariParsial = 0, totalJamLembur = 0, totalJamKerja = 0, totalKontribusi = 0;
+const dailyDetails = [];
+for (const entry of personMap){
+const dateStr = entry[0]; const events = entry[1];
+events.sort((a,b)=>a.ts - b.ts);
+const ci = events.find(e=>e.tipe==='clock_in');
+const coArr = events.filter(e=>e.tipe==='clock_out');
+const co = coArr.length ? coArr[coArr.length-1] : null;
+const oi = events.find(e=>e.tipe==='overtime_in');
+const ooArr = events.filter(e=>e.tipe==='overtime_out');
+const oo = ooArr.length ? ooArr[ooArr.length-1] : null;
+let durJam = 0;
+if (ci && co){
+durJam = (co.ts - ci.ts) / 3600000;
+const breaks = [];
+events.forEach(e=>{ if (e.tipe==='break_in' || e.tipe==='break_out') breaks.push(e); });
+for (let i=0; i<breaks.length-1; i++){
+if (breaks[i].tipe==='break_in' && breaks[i+1].tipe==='break_out'){
+durJam -= (breaks[i+1].ts - breaks[i].ts)/3600000;
+i++;
 }
-
-function renderPayrollTable(){
-  const tbody = document.querySelector('#tblPayroll tbody');
-  if (!tbody || !__payrollData) return;
-  tbody.innerHTML = '';
-  if (!__payrollData.rows.length){ $('prEmpty').classList.remove('hidden'); return; }
-  $('prEmpty').classList.add('hidden');
-  for (const r of __payrollData.rows){
-    const tr = document.createElement('tr');
-    tr.innerHTML = '<td><b>' + r.nama + '</b><br><small class="muted">' + r.idKaryawan + '</small></td>' +
-      '<td class="num">' + prFormatRp(r.baseHarian) + '</td>' +
-      '<td class="num">' + r.hariHadir + '</td>' +
-      '<td class="num">' + r.hariSetengah + '</td>' +
-      '<td class="num">' + r.totalJamLembur.toFixed(1) + '</td>' +
-      '<td class="num">' + prFormatRp(r.upahPokok) + '</td>' +
-      '<td class="num">' + prFormatRp(r.upahLembur) + '</td>' +
-      '<td class="num"><b>' + prFormatRp(r.total) + '</b></td>' +
-      '<td><span class="badge badge-warning">Belum Bayar</span></td>' +
-      '<td><button class="btn btn-sm btn-secondary pr-detail-btn" data-uid="' + r.uid + '">Detail</button></td>';
-    tbody.appendChild(tr);
-  }
-  document.querySelectorAll('.pr-detail-btn').forEach(b => { b.onclick = () => showPayrollDetail(b.dataset.uid); });
+}
+}
+if (durJam < 0) durJam = 0;
+const effJam = Math.min(durJam, jamKerja);
+let kategori = 'absen', kontribusi = 0;
+if (ci && co){
+kontribusi = effJam * ratePerJam;
+if (durJam >= jamKerja * 0.75){ kategori = 'hadir'; hariHadir++; }
+else if (durJam > 0){ kategori = 'parsial'; hariParsial++; }
+else { kategori = 'short'; }
+} else if (ci && !co){
+kategori = 'tidak-clockout'; kontribusi = 0;
+}
+totalJamKerja += effJam;
+totalKontribusi += kontribusi;
+let lemburJam = 0;
+if (oi && oo){ lemburJam = Math.max(0, (oo.ts - oi.ts) / 3600000); totalJamLembur += lemburJam; }
+dailyDetails.push({
+date: dateStr,
+jamMasuk: ci ? ci.ts.toTimeString().substring(0,5) : '--',
+jamKeluar: co ? co.ts.toTimeString().substring(0,5) : '--',
+durJam: durJam.toFixed(2),
+effJam: effJam.toFixed(2),
+lemburJam: lemburJam.toFixed(2),
+kategori: kategori,
+kontribusi: kontribusi
+});
+}
+const upahPokok = totalKontribusi;
+const upahLembur = totalJamLembur * ratePerJam * multiplierLembur;
+const total = upahPokok + upahLembur;
+rows.push({
+uid: k.uid, nama: k.nama || '-', idKaryawan: k.idKaryawan || '-',
+baseHarian: baseHarian, jamKerja: jamKerja, multiplierLembur: multiplierLembur,
+ratePerJam: ratePerJam,
+hariHadir: hariHadir, hariParsial: hariParsial,
+totalJamKerja: totalJamKerja, totalJamLembur: totalJamLembur,
+upahPokok: upahPokok, upahLembur: upahLembur, total: total,
+namaBank: k.namaBank || '', atasNamaRek: k.atasNamaRek || '', nomorRekening: k.nomorRekening || '',
+dailyDetails: dailyDetails
+});
+totalBudget += total;
+totalHari += hariHadir + hariParsial;
+totalLemburJam += totalJamLembur;
+totalJamKerjaAll += totalJamKerja;
+}
+rows.sort((a,b)=>(a.nama||'').localeCompare(b.nama||''));
+__payrollData = function renderPayrollTable(){
+const tbody = document.querySelector('#tblPayroll tbody');
+if (!tbody || !__payrollData) return;
+tbody.innerHTML = '';
+if (!__payrollData.rows.length){ $('prEmpty').classList.remove('hidden'); return; }
+$('prEmpty').classList.add('hidden');
+for (const r of __payrollData.rows){
+const tr = document.createElement('tr');
+tr.innerHTML = '<td><b>' + r.nama + '</b><br><small class="muted">' + r.idKaryawan + '</small></td>' +
+'<td class="num">' + prFormatRp(r.baseHarian) + '</td>' +
+'<td class="num">' + r.hariHadir + (r.hariParsial ? ' <small class="muted">(+' + r.hariParsial + ' parsial)</small>' : '') + '</td>' +
+'<td class="num">' + r.totalJamKerja.toFixed(1) + ' jam</td>' +
+'<td class="num">' + r.totalJamLembur.toFixed(1) + '</td>' +
+'<td class="num">' + prFormatRp(r.upahPokok) + '</td>' +
+'<td class="num">' + prFormatRp(r.upahLembur) + '</td>' +
+'<td class="num"><b>' + prFormatRp(r.total) + '</b></td>' +
+'<td><span class="badge badge-warning">Belum Bayar</span></td>' +
+'<td><button class="btn btn-sm btn-secondary pr-detail-btn" data-uid="' + r.uid + '">Detail</button></td>';
+tbody.appendChild(tr);
+}
+document.querySelectorAll('.pr-detail-btn').forEach(b => { b.onclick = () => showPayrollDetail(b.dataset.uid); });
 }
 
 function showPayrollDetail(uid){
-  if (!__payrollData) return;
-  const r = __payrollData.rows.find(x => x.uid === uid);
-  if (!r) return;
-  $('prDetailTitle').textContent = 'Detail Payroll \u2014 ' + r.nama;
-  $('prDetailSub').textContent = 'Bulan: ' + __payrollData.label + ' \u2014 Total: ' + prFormatRp(r.total);
-  const tb = document.querySelector('#tblPayrollDetail tbody');
-  tb.innerHTML = '';
-  if (!r.dailyDetails.length){
-    tb.innerHTML = '<tr><td colspan="6" class="muted center">Tidak ada catatan kehadiran bulan ini.</td></tr>';
-  } else {
-    for (const d of r.dailyDetails){
-      const tr = document.createElement('tr');
-      const kategoriBadge = d.kategori === 'penuh' ? '<span style="color:#16a34a">Penuh</span>'
-        : d.kategori === 'setengah' ? '<span style="color:#ea580c">&frac12; Hari</span>'
-        : d.kategori === 'short' ? '<span style="color:#94a3b8">Short</span>'
-        : d.kategori === 'tidak-clockout' ? '<span style="color:#dc2626">Belum Clock Out</span>'
-        : '<span class="muted">' + d.kategori + '</span>';
-      tr.innerHTML = '<td>' + d.date + '</td><td>' + d.jamMasuk + '</td><td>' + d.jamKeluar + '</td><td>' + d.durJam + ' jam</td><td>' + kategoriBadge + '</td><td class="num">' + prFormatRp(d.kontribusi) + '</td>';
-      tb.appendChild(tr);
-    }
-  }
-  $('payrollDetailModal').classList.remove('hidden');
+if (!__payrollData) return;
+const r = __payrollData.rows.find(x => x.uid === uid);
+if (!r) return;
+$('prDetailTitle').textContent = 'Detail Payroll \u2014 ' + r.nama;
+$('prDetailSub').textContent = 'Bulan: ' + __payrollData.label + ' \u2014 Total Jam: ' + r.totalJamKerja.toFixed(1) + ' jam \u2014 Rate: ' + prFormatRp(r.ratePerJam||0) + '/jam \u2014 Total: ' + prFormatRp(r.total);
+const tb = document.querySelector('#tblPayrollDetail tbody');
+tb.innerHTML = '';
+if (!r.dailyDetails.length){
+tb.innerHTML = '<tr><td colspan="6" class="muted center">Tidak ada catatan kehadiran bulan ini.</td></tr>';
+} else {
+for (const d of r.dailyDetails){
+const tr = document.createElement('tr');
+const kategoriBadge = d.kategori === 'hadir' ? '<span style="color:#16a34a">\u2713 Hadir</span>'
+: d.kategori === 'parsial' ? '<span style="color:#ea580c">Parsial</span>'
+: d.kategori === 'short' ? '<span style="color:#94a3b8">Short</span>'
+: d.kategori === 'tidak-clockout' ? '<span style="color:#dc2626">Belum Clock Out</span>'
+: '<span class="muted">' + d.kategori + '</span>';
+const jamLabel = d.durJam + ' jam' + (parseFloat(d.effJam) < parseFloat(d.durJam) ? ' <small class="muted">(eff ' + d.effJam + ')</small>' : '');
+tr.innerHTML = '<td>' + d.date + '</td><td>' + d.jamMasuk + '</td><td>' + d.jamKeluar + '</td><td>' + jamLabel + '</td><td>' + kategoriBadge + '</td><td class="num">' + prFormatRp(d.kontribusi) + '</td>';
+tb.appendChild(tr);
+}
+}
+$('payrollDetailModal').classList.remove('hidden');
 }
 
 function exportPayrollCSV(){
-  if (!__payrollData || !__payrollData.rows.length){ alert('Belum ada data. Hitung dulu.'); return; }
-  const headers = ['Nama','ID Karyawan','Base Harian','Hari Hadir','Hari Setengah','Jam Lembur','Upah Pokok','Upah Lembur','Total','Bank','Atas Nama','Nomor Rekening'];
-  const lines = [headers.join(',')];
-  for (const r of __payrollData.rows){
-    const cells = [
-      r.nama, r.idKaryawan, r.baseHarian, r.hariHadir, r.hariSetengah,
-      r.totalJamLembur.toFixed(2), r.upahPokok, r.upahLembur, r.total,
-      r.namaBank, r.atasNamaRek, r.nomorRekening
-    ].map(v => '"' + String(v).replace(/"/g, '""') + '"');
-    lines.push(cells.join(','));
-  }
-  const csv = '\ufeff' + lines.join('\n');
-  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'payroll-' + __payrollData.yyyymm + '.csv';
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+if (!__payrollData || !__payrollData.rows.length){ alert('Belum ada data. Hitung dulu.'); return; }
+const headers = ['Nama','ID Karyawan','Base Harian','Hari Hadir','Hari Parsial','Total Jam Kerja','Jam Lembur','Upah Pokok','Upah Lembur','Total','Bank','Atas Nama','Nomor Rekening'];
+const lines = [headers.join(',')];
+for (const r of __payrollData.rows){
+const cells = [
+r.nama, r.idKaryawan, r.baseHarian, r.hariHadir, r.hariParsial,
+r.totalJamKerja.toFixed(2), r.totalJamLembur.toFixed(2),
+Math.round(r.upahPokok), Math.round(r.upahLembur), Math.round(r.total),
+r.namaBank, r.atasNamaRek, r.nomorRekening
+].map(v => '"' + String(v).replace(/"/g, '""') + '"');
+lines.push(cells.join(','));
 }
-
+const csv = '\ufeff' + lines.join('\n');
+const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+const a = document.createElement('a');
+a.href = URL.createObjectURL(blob);
+a.download = 'payroll-' + __payrollData.yyyymm + '.csv';
+a.click();
+setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
 
 // Auto-wire payroll buttons + expose to window for debug
 window.loadPayroll = loadPayroll;
