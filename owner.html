@@ -315,15 +315,13 @@
         <summary>Rekening Bank</summary>
         <div><label>Nama Bank</label><input type="text" id="editNamaBank" placeholder="contoh: BCA, Mandiri, BRI"></div>
         <div><label>Atas Nama Rekening</label><input type="text" id="editAtasNamaRek" placeholder="Sesuai buku tabungan"></div>
-        <p class="muted" style="font-size:12px;margin:6px 0 0">Nomor rekening lengkap upload via foto buku tabungan di bawah — lebih aman.</p>
+        <div><label>Nomor Rekening</label><input type="text" inputmode="numeric" id="editNomorRekening" placeholder="contoh: 1234567890"></div>
       </details>
 
       <details class="kry-section">
         <summary>Upload Dokumen (Privat)</summary>
         <div><label>Foto KTP <span id="ktpStatus" class="muted"></span></label><input type="file" id="editKtpFile" accept="image/*"></div>
-        <div><label>Foto NPWP <span id="npwpStatus" class="muted"></span></label><input type="file" id="editNpwpFile" accept="image/*"></div>
-        <div><label>Foto Buku Tabungan <span id="bukuTabunganStatus" class="muted"></span></label><input type="file" id="editBukuTabunganFile" accept="image/*"></div>
-        <p class="muted" style="font-size:12px;margin:6px 0 0">File disimpan di Firebase Storage privat, hanya owner yang bisa akses.</p>
+        <p class="muted" style="margin:6px 0 0">File KTP disimpan di Firebase Storage privat, hanya owner yang bisa akses.</p>
       </details>
 
       <div class="form-actions" style="display:flex;gap:8px;margin-top:12px">
