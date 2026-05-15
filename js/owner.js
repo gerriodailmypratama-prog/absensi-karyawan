@@ -989,9 +989,9 @@ async function loadRekap(){
   tbody.innerHTML = '<tr><td colspan="9" class="muted center">Memuat data...</td></tr>';
   try {
     const qy = query(collection(db,'absensi'),
-      where('waktu','>=', Timestamp.fromDate(from)),
-      where('waktu','<=', Timestamp.fromDate(to)),
-      orderBy('waktu','asc'));
+      where('ts','>=', Timestamp.fromDate(from)),
+      where('ts','<=', Timestamp.fromDate(to)),
+      orderBy('ts','asc'));
     const snap = await getDocs(qy);
     const events = [];
     snap.forEach(d=>{
@@ -1001,7 +1001,7 @@ async function loadRekap(){
         uid: x.uid,
         nama: x.nama || '-',
         tipe: x.tipe,
-        waktu: x.waktu?.toDate ? x.waktu.toDate() : new Date(),
+        waktu: x.ts?.toDate ? x.waktu.toDate() : new Date(),
         inRadius: x.inRadius,
         terlambat: !!x.terlambat,
         jamKerja: x.jamKerja || 8
@@ -1155,4 +1155,3 @@ function exportRekapCSV(){
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
-
