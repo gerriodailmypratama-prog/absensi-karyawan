@@ -324,3 +324,55 @@ img.hadir-avatar,
 
 /* Modal sesi shift lama */
 #oldSessionModal .modal-box{max-width:420px}
+
+
+/* ===== Kehadiran Matrix (Hadirr-style) ===== */
+.kh-toolbar { display:flex; flex-direction:column; gap:10px; }
+.kh-date-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.kh-date-input { padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:14px; }
+.btn-sm { padding:6px 10px; font-size:13px; }
+.kh-week-nav { display:flex; gap:6px; flex-wrap:wrap; }
+.kh-day-btn { flex:1; min-width:80px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:8px; padding:8px 6px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px; transition:all .15s; }
+.kh-day-btn:hover { background:#e0f2fe; border-color:#0ea5e9; }
+.kh-day-btn.active { background:#facc15; border-color:#eab308; color:#1e293b; font-weight:600; }
+.kh-day-wd { font-size:11px; text-transform:uppercase; color:#475569; }
+.kh-day-btn.active .kh-day-wd { color:#1e293b; }
+.kh-day-num { font-size:14px; font-weight:600; }
+
+.kh-summary { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin:12px 0; }
+.kh-stat { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:10px; text-align:center; }
+.kh-stat b { display:block; font-size:20px; color:#0ea5e9; }
+.kh-stat small { color:#64748b; font-size:11px; }
+
+.kh-table-header { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+.kh-legend { font-size:12px; color:#64748b; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.gps-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:2px; vertical-align:middle; }
+.gps-in { background:#22c55e; }
+.gps-out { background:#facc15; }
+.gps-na { background:#94a3b8; }
+
+.kh-matrix-wrap { overflow-x:auto; }
+.kh-matrix { width:100%; border-collapse:separate; border-spacing:0; min-width:980px; font-size:13px; }
+.kh-matrix thead th { background:#f8fafc; border-bottom:2px solid #e2e8f0; padding:8px 6px; text-align:left; font-weight:600; color:#334155; position:sticky; top:0; z-index:2; }
+.kh-matrix tbody td { border-bottom:1px solid #f1f5f9; padding:6px; vertical-align:middle; }
+.kh-matrix tbody tr:hover { background:#fafafa; }
+.kh-matrix .col-nama { min-width:140px; font-weight:600; }
+.kh-matrix .col-aksi { min-width:140px; white-space:nowrap; }
+.kh-matrix input.kh-time { width:90px; padding:5px 6px; border:1px solid #cbd5e1; border-radius:5px; font-size:12px; font-family:inherit; }
+.kh-matrix input.kh-time:focus { outline:none; border-color:#0ea5e9; box-shadow:0 0 0 2px rgba(14,165,233,.15); }
+.kh-matrix input.kh-time.kh-edited { background:#fef9c3; border-color:#eab308; }
+
+.kh-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+.kh-working { background:#dbeafe; color:#1e40af; }
+.kh-break { background:#fed7aa; color:#9a3412; }
+.kh-pause { background:#e2e8f0; color:#475569; }
+.kh-finish { background:#dcfce7; color:#166534; }
+.kh-na { background:#f1f5f9; color:#94a3b8; }
+
+.kh-save-row, .kh-delete-row { margin-right:4px; }
+
+@media (max-width:768px){
+  .kh-summary { grid-template-columns:repeat(2,1fr); }
+  .kh-matrix { font-size:12px; }
+  .kh-matrix input.kh-time { width:70px; font-size:11px; }
+}
