@@ -481,3 +481,8 @@ input.kh-time.kh-save-err { background: #fee2e2 !important; border-color: #ef444
   white-space:nowrap;
   padding:4px 6px;
 }
+
+
+/* Force 24-hour time inputs (hide AM/PM segment if present) */
+input[type="time"]{ font-variant-numeric: tabular-nums; }
+input[type="time"]::-webkit-datetime-edit-ampm-field{ display:none !important; -webkit-appearance:none; width:0; padding:0; margin:0; }
