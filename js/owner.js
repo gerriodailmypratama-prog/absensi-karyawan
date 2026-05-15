@@ -1801,3 +1801,41 @@ function exportPayrollCSV(){
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
+
+
+// Auto-wire payroll buttons + expose to window for debug
+window.loadPayroll = loadPayroll;
+window.calcPayroll = calcPayroll;
+(function(){
+  function wirePayrollOnce(){
+    const btn = document.getElementById('btnPrRefresh');
+    const exp = document.getElementById('btnPrExportCSV');
+    const close = document.getElementById('btnPrDetailClose');
+    const mi = document.getElementById('prBulan');
+    if (!btn || btn.__wired) return;
+    btn.__wired = true;
+    btn.onclick = function(){ calcPayroll().catch(e => { console.error('calcPayroll error', e); alert('Error: ' + e.message); }); };
+    if (exp) exp.onclick = exportPayrollCSV;
+    if (close) close.onclick = function(){ document.getElementById('payrollDetailModal').classList.add('hidden'); };
+    if (mi && !mi.value){
+      const now = new Date();
+      mi.value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+      mi.onchange = btn.onclick;
+    }
+  }
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', wirePayrollOnce);
+  } else {
+    wirePayrollOnce();
+  }
+  document.addEventListener('click', function(e){
+    const t = e.target;
+    if (t && t.classList && t.classList.contains('nav-link') && t.dataset.page === 'payroll'){
+      setTimeout(wirePayrollOnce, 50);
+    }
+  }, true);
+  window.addEventListener('hashchange', function(){
+    if (location.hash === '#payroll') setTimeout(wirePayrollOnce, 100);
+  });
+  if (location.hash === '#payroll') setTimeout(wirePayrollOnce, 500);
+})();
