@@ -1789,6 +1789,8 @@ for (const entry of personMap){ entry[1].sort((a,b)=>a.ts - b.ts); }
 const sortedDateKeys = Array.from(personMap.keys()).sort();
 for (let _di=0; _di<sortedDateKeys.length; _di++){
 const dateStr = sortedDateKeys[_di]; const events = personMap.get(dateStr);
+  const dayHasNoBreak = events.some(e=> e.tipe === 'clock_out' && e.noBreak === true);
+  const dayRatePerJam = (dayHasNoBreak && jamKerja > 1) ? (baseHarian / (jamKerja - 1)) : ratePerJam;
 const ci = events.find(e=>e.tipe==='clock_in');
 // Skip orphan-only days (cuma clock_out tanpa clock_in)
 if (!ci){
@@ -1838,7 +1840,7 @@ if (durJam < 0) durJam = 0;
 const effJam = Math.min(durJam, jamKerja);
 let kategori = 'absen', kontribusi = 0;
 if (ci && co){
-kontribusi = effJam * ratePerJam;
+kontribusi = effJam * dayRatePerJam;
 if (durJam >= jamKerja * 0.75){ kategori = 'hadir'; hariHadir++; }
 else if (durJam > 0){ kategori = 'parsial'; hariParsial++; }
 else { kategori = 'short'; }
