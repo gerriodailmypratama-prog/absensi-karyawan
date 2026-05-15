@@ -1727,34 +1727,6 @@ const dateStr = _localDay(ts);
 if (!personMap.has(dateStr)) personMap.set(dateStr, []);
 personMap.get(dateStr).push({tipe: r.tipe, ts: ts, id: d.id});
 });
-// ===== Overnight rescue: orphan clock_out di hari D+1 dipindah ke hari D =====
-byPerson.forEach((personMap, key) => {
-  const dates = Array.from(personMap.keys()).sort();
-  for (let di=0; di<dates.length; di++){
-    const D = dates[di];
-    const evsD = personMap.get(D) || [];
-    const hasCiD = evsD.some(e=>e.tipe==='clock_in');
-    const hasCoD = evsD.some(e=>e.tipe==='clock_out');
-    if (!hasCiD || hasCoD) continue;
-    const Dnext = dates[di+1];
-    if (!Dnext) continue;
-    const dDate = new Date(D+'T00:00:00');
-    const nDate = new Date(Dnext+'T00:00:00');
-    const diffDays = Math.round((nDate - dDate) / 86400000);
-    if (diffDays !== 1) continue;
-    const evsN = personMap.get(Dnext) || [];
-    evsN.sort((a,b)=>a.ts - b.ts);
-    const firstCiN = evsN.find(e=>e.tipe==='clock_in');
-    const firstCoN = evsN.find(e=>e.tipe==='clock_out');
-    if (!firstCoN) continue;
-    if (firstCiN && firstCoN.ts.getTime() >= firstCiN.ts.getTime()) continue;
-    const idxRemove = evsN.indexOf(firstCoN);
-    if (idxRemove >= 0) evsN.splice(idxRemove, 1);
-    personMap.set(Dnext, evsN);
-    evsD.push(firstCoN);
-    personMap.set(D, evsD);
-  }
-});
 const rows = [];
 let totalBudget = 0, totalHari = 0, totalLemburJam = 0, totalJamKerjaAll = 0;
 for (const k of karyMap.values()){
@@ -1765,12 +1737,40 @@ const ratePerJam = jamKerja > 0 ? (baseHarian / jamKerja) : 0;
 const personMap = byPerson.get(k.uid) || byPerson.get(k.email) || new Map();
 let hariHadir = 0, hariParsial = 0, totalJamLembur = 0, totalJamKerja = 0, totalKontribusi = 0;
 const dailyDetails = [];
-for (const entry of personMap){
-const dateStr = entry[0]; const events = entry[1];
-events.sort((a,b)=>a.ts - b.ts);
+for (const entry of personMap){ entry[1].sort((a,b)=>a.ts - b.ts); }
+const sortedDateKeys = Array.from(personMap.keys()).sort();
+for (let _di=0; _di<sortedDateKeys.length; _di++){
+const dateStr = sortedDateKeys[_di]; const events = personMap.get(dateStr);
 const ci = events.find(e=>e.tipe==='clock_in');
+// Skip orphan-only days (cuma clock_out tanpa clock_in)
+if (!ci){
+  const onlyCo = events.length > 0 && events.every(e=>e.tipe==='clock_out');
+  if (onlyCo) continue;
+}
+let co = null;
+if (ci){
+  co = events.find(e=>e.tipe==='clock_out' && e.ts.getTime() >= ci.ts.getTime()) || null;
+  if (!co){
+    const Dnext = sortedDateKeys[_di+1];
+    if (Dnext){
+      const dDate = new Date(dateStr+'T00:00:00');
+      const nDate = new Date(Dnext+'T00:00:00');
+      const diffDays = Math.round((nDate - dDate) / 86400000);
+      if (diffDays === 1){
+        const nextEvts = personMap.get(Dnext) || [];
+        const nextCi = nextEvts.find(e=>e.tipe==='clock_in');
+        const nextCoCandidate = nextEvts.find(e=>e.tipe==='clock_out');
+        if (nextCoCandidate && (!nextCi || nextCoCandidate.ts.getTime() < nextCi.ts.getTime())){
+          co = nextCoCandidate;
+          const idxR = nextEvts.indexOf(nextCoCandidate);
+          if (idxR>=0) nextEvts.splice(idxR,1);
+          personMap.set(Dnext, nextEvts);
+        }
+      }
+    }
+  }
+}
 const coArr = events.filter(e=>e.tipe==='clock_out');
-const co = coArr.length ? coArr[coArr.length-1] : null;
 const oi = events.find(e=>e.tipe==='overtime_in');
 const ooArr = events.filter(e=>e.tipe==='overtime_out');
 const oo = ooArr.length ? ooArr[ooArr.length-1] : null;
