@@ -510,3 +510,40 @@ input.kh-time:focus, input.kh-edit-jam:focus, input.rd-edit-jam:focus{
 input.kh-time::placeholder, input.kh-edit-jam::placeholder, input.rd-edit-jam::placeholder{
   color: #94a3b8;
 }
+
+
+/* === Modal Edit Karyawan: collapsible sections === */
+.kry-section{
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  background: #f8fafc;
+}
+.kry-section > summary{
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  color: #0f172a;
+  padding: 4px 0;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.kry-section > summary::before{
+  content: ▸;
+  font-size: 11px;
+  color: #64748b;
+  transition: transform 0.15s ease;
+}
+.kry-section[open] > summary::before{
+  transform: rotate(90deg);
+}
+.kry-section > summary::-webkit-details-marker{ display: none; }
+.kry-section > div{ margin-top: 8px; }
+.kry-section input[type="file"]{
+  font-size: 12px;
+  padding: 6px;
+  background: #fff;
+}
