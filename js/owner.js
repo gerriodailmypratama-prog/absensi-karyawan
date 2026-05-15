@@ -21,14 +21,29 @@
   document.addEventListener('blur', function(e){
     const el = e.target;
     if (!el.matches || !el.matches('input.kh-time, input.kh-edit-jam, input.rd-edit-jam')) return;
-    const v = (el.value||'').trim();
+    let v = (el.value||'').trim();
     if (v === '') return;
-    if (!validHM(v)){
-      const orig = el.dataset.orig || el._origVal || '';
-      el.value = orig;
-      el.classList.add('kh-save-err');
-      setTimeout(()=>el.classList.remove('kh-save-err'), 1500);
+    let m = v.match(/^(\d):(\d{1,2})$/);
+    if (m) v = '0' + m[1] + ':' + (m[2].length === 1 ? '0' + m[2] : m[2]);
+    let m2 = v.match(/^(\d{2}):(\d)$/);
+    if (m2) v = m2[1] + ':0' + m2[2];
+    if (/^\d+$/.test(v)){
+      if (v.length === 1) v = '0' + v + ':00';
+      else if (v.length === 2) v = v + ':00';
+      else if (v.length === 3) v = '0' + v[0] + ':' + v.slice(1);
+      else if (v.length === 4) v = v.slice(0,2) + ':' + v.slice(2);
     }
+    if (validHM(v)){
+      if (el.value !== v){
+        el.value = v;
+        el.dispatchEvent(new Event('change', {bubbles: true}));
+      }
+      return;
+    }
+    const orig = el.dataset.orig || el._origVal || '';
+    el.value = orig;
+    el.classList.add('kh-save-err');
+    setTimeout(()=>el.classList.remove('kh-save-err'), 1500);
   }, true);
 })();
 
