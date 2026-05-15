@@ -382,6 +382,10 @@ $('btnSelfieShoot').onclick = async ()=>{
     extra.earlyReason = window.__earlyReason;
     window.__earlyReason = null;
   }
+  if (currentType === 'clock_out' && window.__noBreak){
+    extra.noBreak = true;
+    window.__noBreak = false;
+  }
   isSubmitting = true;
   try {
     await saveAttendance(Object.assign({ tipe: currentType, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad, fotoSelfie:selfieUrl }, extra));
@@ -641,6 +645,12 @@ $('btnBreakRangeOk').onclick = async ()=>{
   }));
   $('breakRangeModal').classList.add('hidden');
   await loadActiveSession(currentUser.uid);
+  proceedClockOut();
+};
+
+$('#btnBreakRangeNoBreak').onclick = () => {
+  $('#breakRangeModal').classList.add('hidden');
+  window.__noBreak = true;
   proceedClockOut();
 };
 
