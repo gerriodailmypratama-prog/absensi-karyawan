@@ -30,7 +30,8 @@
     <nav>
       <a href="#beranda" class="nav-link active" data-page="beranda">&#x1F4CA; Beranda</a>
       <a href="#kehadiran" class="nav-link" data-page="kehadiran">&#x1F5D3; Kehadiran Harian</a>
-      <a href="#karyawan" class="nav-link" data-page="karyawan">&#x1F465; Karyawan</a>
+      <a href="#rekap" class="nav-link" data-page="rekap">&#x1F4C8; Rekap Kehadiran</a>
+<a href="#karyawan" class="nav-link" data-page="karyawan">&#x1F465; Karyawan</a>
     </nav>
   </aside>
 
@@ -195,7 +196,59 @@
       </div>
     </section>
 
-    <!-- KARYAWAN -->
+    <!-- REKAP KEHADIRAN -->
+<section id="page-rekap" class="page">
+<h2 class="page-title">Rekap Kehadiran</h2>
+
+<div class="card rekap-toolbar">
+<div class="rekap-date-row">
+<div><label>Dari</label><input type="date" id="rekapFrom"></div>
+<div><label>Sampai</label><input type="date" id="rekapTo"></div>
+<div class="rekap-quick">
+<button id="btnRekapToday" class="btn btn-ghost btn-sm">Hari ini</button>
+<button id="btnRekapWeek" class="btn btn-ghost btn-sm">7 Hari</button>
+<button id="btnRekapMonth" class="btn btn-ghost btn-sm">Bulan ini</button>
+</div>
+<div class="rekap-actions">
+<button id="btnRekapLoad" class="btn btn-primary">Tampilkan</button>
+<button id="btnRekapExport" class="btn btn-success">Export CSV</button>
+</div>
+</div>
+<div class="rekap-search-row">
+<input type="search" id="rekapSearch" placeholder="Cari nama karyawan..." class="rekap-search">
+</div>
+</div>
+
+<div class="kh-summary" id="rekapSummary"></div>
+
+<div class="card">
+<div class="kh-table-header">
+<h3 id="rekapTitle">Ringkasan Kehadiran</h3>
+<p class="muted small">Agregasi per karyawan dalam rentang tanggal. Klik Export CSV untuk download.</p>
+</div>
+<div class="table-wrap">
+<table id="tblRekap" class="rekap-table">
+<thead>
+<tr>
+<th>No</th>
+<th>Nama</th>
+<th class="num">Hari Hadir</th>
+<th class="num">Jam Kerja</th>
+<th class="num">Jam Istirahat</th>
+<th class="num">Jam Lembur</th>
+<th class="num">Telat</th>
+<th class="num">Belum Lengkap</th>
+<th class="num">Total Event</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+<p id="rekapEmpty" class="muted center"></p>
+</div>
+</section>
+
+<!-- KARYAWAN -->
     <section id="page-karyawan" class="page">
       <h2 class="page-title">Karyawan</h2>
       <div class="card">
