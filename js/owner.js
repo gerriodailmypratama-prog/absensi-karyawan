@@ -181,7 +181,16 @@ async function renderBeranda(rows){
     const stat = { clock_in:0, clock_out:0, break_in:0, break_out:0, overtime_in:0, overtime_out:0 };
     let inRuko = 0, outRuko = 0;
 
+    // Hitung "hari ini" saja (events di-load window 48 jam untuk handle shift lintas hari,
+    // tapi statistik beranda harus strict tanggal hari ini)
+    const _today0 = new Date(); _today0.setHours(0,0,0,0);
+    const _todayMs = _today0.getTime();
+    function _isToday(r){
+        const ms = (r && r.ts && r.ts.toMillis) ? r.ts.toMillis() : 0;
+        return ms >= _todayMs;
+    }
     rows.forEach(r => {
+        if (!_isToday(r)) return;
         if (stat[r.tipe] !== undefined) stat[r.tipe]++;
         if (r.tipe === 'clock_in') {
             if (r.uid) clockInSet.add(r.uid);
@@ -750,9 +759,16 @@ async function renderHadirFloating(rows){
     const breakUids = [];
     const finishUids = [];
 
+    // Karyawan "Hadir hari ini" hanya jika punya event clock_in dengan timestamp >= hari ini 00:00
+    const _today0HF = new Date(); _today0HF.setHours(0,0,0,0);
+    const _todayMsHF = _today0HF.getTime();
     for (const [uid, arr] of byUid){
-        const hasClockIn = arr.some(r=>r.tipe==='clock_in');
-        if (!hasClockIn) continue;
+        const hasClockInToday = arr.some(r=>{
+            if (r.tipe!=='clock_in') return false;
+            const ms = (r.ts && r.ts.toMillis) ? r.ts.toMillis() : 0;
+            return ms >= _todayMsHF;
+        });
+        if (!hasClockInToday) continue;
         hadirUids.push(uid);
 
         // State machine: determine current state by LAST event
