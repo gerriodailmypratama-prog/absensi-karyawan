@@ -592,13 +592,12 @@ async function openEditKaryawan(uid){
         if ($('editMultiplierLembur')) $('editMultiplierLembur').value = d.multiplierLembur || 1.5;
         if ($('editNamaBank')) $('editNamaBank').value = d.namaBank || '';
         if ($('editAtasNamaRek')) $('editAtasNamaRek').value = d.atasNamaRek || '';
+        if ($('editNomorRekening')) $('editNomorRekening').value = d.nomorRekening || '';
         // Status upload dokumen
         const setStat = (id, url) => { const el = $(id); if (el) el.textContent = url ? '✓ sudah diupload' : '(belum)'; };
         setStat('ktpStatus', d.ktpUrl);
-        setStat('npwpStatus', d.npwpUrl);
-        setStat('bukuTabunganStatus', d.bukuTabunganUrl);
         // Reset file inputs
-        ['editKtpFile','editNpwpFile','editBukuTabunganFile'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
+        ['editKtpFile'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
         $('editKaryawanModal').classList.remove('hidden');
     } catch(e){ alert('Failed to load data: ' + e.message); }
 }
@@ -626,6 +625,7 @@ $('formEditKaryawan').onsubmit = async (e) => {
     const multiplierLembur = $('editMultiplierLembur') ? (parseFloat($('editMultiplierLembur').value) || 1.5) : 1.5;
     const namaBank = $('editNamaBank') ? $('editNamaBank').value.trim() : '';
     const atasNamaRek = $('editAtasNamaRek') ? $('editAtasNamaRek').value.trim() : '';
+    const nomorRekening = $('editNomorRekening') ? $('editNomorRekening').value.trim() : '';
     if (!nama) { alert('Nama wajib diisi.'); return; }
     const submitBtn = e.target.querySelector('button[type="submit"]');
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Menyimpan...'; }
@@ -633,17 +633,13 @@ $('formEditKaryawan').onsubmit = async (e) => {
         const tanggalJoinVal = $('editTanggalJoin') ? $('editTanggalJoin').value : '';
         const tjPayload = tanggalJoinVal ? Timestamp.fromDate(new Date(tanggalJoinVal)) : null;
         const ktpFile = $('editKtpFile') ? $('editKtpFile').files[0] : null;
-        const npwpFile = $('editNpwpFile') ? $('editNpwpFile').files[0] : null;
-        const bukuTabFile = $('editBukuTabunganFile') ? $('editBukuTabunganFile').files[0] : null;
         const payload = {
             nama, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload,
             jabatan, statusKaryawan, baseHarian, multiplierLembur,
-            namaBank, atasNamaRek,
+            namaBank, atasNamaRek, nomorRekening,
             updatedAt: serverTimestamp()
         };
         if (ktpFile){ try { payload.ktpUrl = await uploadKaryawanFile(uid,'ktp',ktpFile); } catch(ue){ console.error('upload ktp', ue); alert('Upload KTP gagal: '+ue.message); } }
-        if (npwpFile){ try { payload.npwpUrl = await uploadKaryawanFile(uid,'npwp',npwpFile); } catch(ue){ console.error('upload npwp', ue); alert('Upload NPWP gagal: '+ue.message); } }
-        if (bukuTabFile){ try { payload.bukuTabunganUrl = await uploadKaryawanFile(uid,'buku_tabungan',bukuTabFile); } catch(ue){ console.error('upload bktab', ue); alert('Upload Buku Tabungan gagal: '+ue.message); } }
         await setDoc(doc(db,'karyawan',uid), payload, {merge:true});
         $('editKaryawanModal').classList.add('hidden');
         loadKaryawanList();
