@@ -486,3 +486,27 @@ input.kh-time.kh-save-err { background: #fee2e2 !important; border-color: #ef444
 /* Force 24-hour time inputs (hide AM/PM segment if present) */
 input[type="time"]{ font-variant-numeric: tabular-nums; }
 input[type="time"]::-webkit-datetime-edit-ampm-field{ display:none !important; -webkit-appearance:none; width:0; padding:0; margin:0; }
+
+
+/* === 24-jam text input (manual entry HH:MM) === */
+input.kh-time, input.kh-edit-jam, input.rd-edit-jam{
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  width: 78px;
+  box-sizing: border-box;
+}
+input.kh-time:focus, input.kh-edit-jam:focus, input.rd-edit-jam:focus{
+  outline: none;
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 3px rgba(14,165,233,.15);
+}
+input.kh-time::placeholder, input.kh-edit-jam::placeholder, input.rd-edit-jam::placeholder{
+  color: #94a3b8;
+}
