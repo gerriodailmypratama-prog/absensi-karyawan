@@ -36,6 +36,7 @@ const OFFICE_RADIUS = (OFFICE_LOCATION && (OFFICE_LOCATION.radius || OFFICE_LOCA
 let currentUser=null, currentType=null, stream=null, coords=null;
 let cameraReady=false;
 let sessionCache = []; // semua event sesi shift aktif, ASC by ts
+let isSubmitting = false; // global lock untuk mencegah double-submit (race condition)
 let userProfile = { nama:'', jamKerja:8, foto:'' };
 
 function distanceMeters(lat1, lng1, lat2, lng2){
@@ -277,8 +278,8 @@ function updatePauseTilesUI(){
   const btnPauseOut = $('btnPauseOut');
   if (!btnPauseIn || !btnPauseOut) return;
   const paused = isCurrentlyPaused();
-  btnPauseIn.disabled = paused || !hasInSession('clock_in') || hasInSession('clock_out') || isCurrentlyOnBreak();
-  btnPauseOut.disabled = !paused;
+  btnPauseIn.disabled = isSubmitting || paused || !hasInSession('clock_in') || hasInSession('clock_out') || isCurrentlyOnBreak();
+  btnPauseOut.disabled = isSubmitting || !paused;
   btnPauseIn.style.opacity = btnPauseIn.disabled ? '0.45' : '1';
   btnPauseOut.style.opacity = btnPauseOut.disabled ? '0.45' : '1';
 }
@@ -352,8 +353,13 @@ $('btnSelfieShoot').onclick = async ()=>{
     extra.earlyReason = window.__earlyReason;
     window.__earlyReason = null;
   }
-  await saveAttendance(Object.assign({ tipe: currentType, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad, fotoSelfie:selfieUrl }, extra));
-  await loadActiveSession(currentUser.uid);
+  isSubmitting = true;
+  try {
+    await saveAttendance(Object.assign({ tipe: currentType, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad, fotoSelfie:selfieUrl }, extra));
+    await loadActiveSession(currentUser.uid);
+  } finally {
+    isSubmitting = false;
+  }
 };
 
 async function doNoSelfieAction(type, extra={}){
@@ -361,8 +367,13 @@ async function doNoSelfieAction(type, extra={}){
   if (!coords){ alert('Lokasi belum tersedia.'); return; }
   const d = distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
   const inRad = d <= OFFICE_RADIUS;
-  await saveAttendance(Object.assign({ tipe:type, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad }, extra));
-  await loadActiveSession(currentUser.uid);
+  isSubmitting = true;
+  try {
+    await saveAttendance(Object.assign({ tipe:type, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad }, extra));
+    await loadActiveSession(currentUser.uid);
+  } finally {
+    isSubmitting = false;
+  }
 }
 
 async function saveAttendance(payload){
@@ -444,6 +455,7 @@ function askConfirm(title, message, okLabel){
 }
 
 async function handleAction(type){
+  if (isSubmitting){ return; } // cegah double-tap race condition
   if (!userProfile || !userProfile.foto){
     showMandatoryAvatarModal();
     return;
@@ -494,14 +506,19 @@ $('btnOtOut').onclick     = () => handleAction('overtime_out');
 async function handleClockOut(){
   if (isCurrentlyOnBreak()){
     const bi = getLastInSession('break_in');
-    await saveAttendance({
-      tipe:'break_out',
-      lokasi: (bi && bi.lokasi) || null,
-      jarak: (bi && bi.jarak) || 0,
-      inRadius: (bi && bi.inRadius) || false,
-      autoCap: true
-    });
-    await loadActiveSession(currentUser.uid);
+    isSubmitting = true;
+    try {
+      await saveAttendance({
+        tipe:'break_out',
+        lokasi: (bi && bi.lokasi) || null,
+        jarak: (bi && bi.jarak) || 0,
+        inRadius: (bi && bi.inRadius) || false,
+        autoCap: true
+      });
+      await loadActiveSession(currentUser.uid);
+    } finally {
+      isSubmitting = false;
+    }
     $('forgotBreakOutModal').classList.remove('hidden');
     return;
   }
