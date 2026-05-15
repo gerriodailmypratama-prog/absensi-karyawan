@@ -20,6 +20,18 @@ async function saveSingleKehadiranCell(uid, inp){
             const dateBase = new Date(currentKhDate);
             const newTs = new Date(dateBase);
             newTs.setHours(hh||0, mm||0, 0, 0);
+            // Auto-shift +1 hari untuk shift overnight:
+            const OUT_PAIRS = { clock_out:'clock_in', break_out:'break_in', pause_out:'pause_in', overtime_out:'overtime_in' };
+            const inTipe = OUT_PAIRS[tipe];
+            if (inTipe){
+                const inEv = row.byTipe && row.byTipe[inTipe];
+                if (inEv && inEv.ts && inEv.ts.toDate){
+                    const inMs = inEv.ts.toDate().getTime();
+                    if (newTs.getTime() < inMs){
+                        newTs.setDate(newTs.getDate() + 1);
+                    }
+                }
+            }
             if(existing){
                 await updateDoc(doc(db,'absensi', existing._id), {
                     ts: Timestamp.fromDate(newTs),
@@ -819,6 +831,19 @@ function fmtHM(d){
   if (!d) return '';
   return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
 }
+// Format durasi antara dua event (handle overnight)
+function fmtDur(evIn, evOut){
+  if (!evIn || !evOut || !evIn.ts || !evOut.ts || !evIn.ts.toDate || !evOut.ts.toDate) return '0';
+  let ms = evOut.ts.toDate().getTime() - evIn.ts.toDate().getTime();
+  if (ms < 0) ms += 24*60*60*1000;
+  if (ms <= 0) return '0';
+  const totalMin = Math.floor(ms/60000);
+  const h = Math.floor(totalMin/60);
+  const m = totalMin % 60;
+  if (h === 0) return m + 'mn';
+  if (m === 0) return h + 'j';
+  return h + 'j ' + m + 'mn';
+}
 function pad2(n){ return String(n).padStart(2,'0'); }
 function dateToInputStr(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
 
@@ -893,13 +918,12 @@ function renderKhSummary(){
   const uids = Object.keys(khRowsCache);
   let working=0, onBreak=0, paused=0, finish=0;
   uids.forEach(u=>{
-    const ev = khRowsCache[u].events;
-    const last = ev[ev.length-1];
-    if (!last) return;
-    if (last.tipe==='clock_out' || last.tipe==='overtime_out') finish++;
-    else if (last.tipe==='break_in') onBreak++;
-    else if (last.tipe==='pause_in') paused++;
-    else working++;
+    const bt = khRowsCache[u].byTipe || {};
+    // Prioritas state: Finished > Break > Paused > Working
+    if (bt.clock_out || bt.overtime_out) finish++;
+    else if (bt.break_in && !bt.break_out) onBreak++;
+    else if (bt.pause_in && !bt.pause_out) paused++;
+    else if (bt.clock_in || bt.overtime_in) working++;
   });
   sum.innerHTML =
     '<div class="kh-stat"><b>'+uids.length+'</b><small>Hadir</small></div>'+
@@ -918,13 +942,14 @@ function gpsDotFor(row){
 }
 
 function statusBadgeFor(row){
-  const ev = row.events;
-  const last = ev[ev.length-1];
-  if (!last) return '<span class="kh-badge kh-na">-</span>';
-  if (last.tipe==='clock_out' || last.tipe==='overtime_out') return '<span class="kh-badge kh-finish">Finish</span>';
-  if (last.tipe==='break_in') return '<span class="kh-badge kh-break">Break</span>';
-  if (last.tipe==='pause_in') return '<span class="kh-badge kh-pause">Paused</span>';
-  return '<span class="kh-badge kh-working">Working</span>';
+  const bt = row.byTipe || {};
+  if (!Object.keys(bt).length) return '<span class="kh-badge kh-na">-</span>';
+  // Prioritas state (tidak bergantung urutan timestamp):
+  if (bt.clock_out || bt.overtime_out) return '<span class="kh-badge kh-finish">Finished</span>';
+  if (bt.break_in && !bt.break_out) return '<span class="kh-badge kh-break">Break</span>';
+  if (bt.pause_in && !bt.pause_out) return '<span class="kh-badge kh-pause">Paused</span>';
+  if (bt.clock_in || bt.overtime_in) return '<span class="kh-badge kh-working">Working</span>';
+  return '<span class="kh-badge kh-na">-</span>';
 }
 
 function renderKehadiranMatrix(){
@@ -947,11 +972,24 @@ function renderKehadiranMatrix(){
     tr.dataset.uid = uid;
     let cells = '<td class="col-nama">'+ gpsDotFor(row) +' '+ (row.nama||'-') +'</td>';
     cells += '<td>'+ statusBadgeFor(row) +'</td>';
+    // Pairs untuk akumulasi durasi: durasi disisipkan setelah kolom *_out pasangannya
+    const DUR_PAIRS = {
+      'clock_out':   { inTipe:'clock_in',    label:'Total Kerja' },
+      'break_out':   { inTipe:'break_in',    label:'Dur. Istirahat' },
+      'pause_out':   { inTipe:'pause_in',    label:'Dur. Pause' },
+      'overtime_out':{ inTipe:'overtime_in', label:'Dur. Lembur' }
+    };
     MATRIX_COLS.forEach(col=>{
       const ev = row.byTipe[col.tipe];
       const val = ev && ev.ts && ev.ts.toDate ? fmtHM(ev.ts.toDate()) : '';
       const editedFlag = ev && (ev.editedByOwner||ev.manualEdit) ? ' kh-edited' : '';
       cells += '<td><input type="time" class="kh-time'+editedFlag+'" data-tipe="'+col.tipe+'" value="'+val+'" data-orig="'+val+'"></td>';
+      const pair = DUR_PAIRS[col.tipe];
+      if (pair){
+        const evIn = row.byTipe[pair.inTipe];
+        const durTxt = (evIn && ev) ? fmtDur(evIn, ev) : '0';
+        cells += '<td class="kh-dur" title="'+pair.label+'">'+durTxt+'</td>';
+      }
     });
     cells += '<td class="col-aksi">'+
              '<button class="btn btn-sm btn-primary kh-save-row">Simpan</button>'+
