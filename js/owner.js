@@ -260,15 +260,75 @@ function renderTable(rows) {
         }
         const tr = document.createElement('tr');
         if (r.inRadius === false) tr.style.background = '#fef2f2';
-        tr.innerHTML = '<td>'+tanggal+'</td><td>'+jam+'</td><td>'+nama+'</td><td>'+tipeLabel+'</td><td>'+badge+'</td><td>'+loc+'</td><td>'+img+'</td>'+
-            '<td>'+
-              '<button class="btn-link btn-edit-absen" data-id="'+(r._id||'')+'" data-nama="'+nama+'" data-tipe="'+(r.tipe||'')+'" data-ts="'+(r.ts && r.ts.toDate ? r.ts.toDate().toISOString() : '')+'">Edit</button>'+
-              ' <button class="btn-link btn-hapus-absen" data-id="'+(r._id||'')+'" data-nama="'+nama+'" data-tipe="'+(r.tipe||'')+'" data-ts="'+(r.ts && r.ts.toDate ? r.ts.toDate().toISOString() : '')+'" style="color:#dc2626">Hapus</button>'+
-              '</td>';
+        const isoTs = r.ts && r.ts.toDate ? r.ts.toDate().toISOString() : '';
+        const jamHHMMSS = (r.ts && r.ts.toDate) ? (()=>{ const d=r.ts.toDate(); const hh=String(d.getHours()).padStart(2,'0'); const mi=String(d.getMinutes()).padStart(2,'0'); const ss=String(d.getSeconds()).padStart(2,'0'); return hh+':'+mi+':'+ss; })() : '';
+        const tanggalYMD = (r.ts && r.ts.toDate) ? (()=>{ const d=r.ts.toDate(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })() : '';
+        const tipeOpts = ['clock_in','clock_out','break_in','break_out','overtime_in','overtime_out']
+            .map(v=>'<option value="'+v+'"'+(v===(r.tipe||'')?' selected':'')+'>'+(TIPE[v]||v)+'</option>').join('');
+        tr.innerHTML = '<td><input type="date" class="kh-edit-tgl" data-id="'+(r._id||'')+'" value="'+tanggalYMD+'"></td>'+
+            '<td><input type="time" step="1" class="kh-edit-jam" data-id="'+(r._id||'')+'" value="'+jamHHMMSS+'"></td>'+
+            '<td>'+nama+'</td>'+
+            '<td><select class="kh-edit-tipe" data-id="'+(r._id||'')+'">'+tipeOpts+'</select></td>'+
+            '<td>'+badge+'</td><td>'+loc+'</td><td>'+img+'</td>'+
+            '<td class="col-aksi-kh">'+
+                '<button class="btn-link btn-hapus-absen" data-id="'+(r._id||'')+'" data-nama="'+nama+'" data-tipe="'+(r.tipe||'')+'" data-ts="'+isoTs+'" style="color:#dc2626">🗑️ Hapus</button>'+
+            '</td>';
         tb.appendChild(tr);
     });
-    document.querySelectorAll('.btn-edit-absen').forEach(b=>{
-        b.onclick = ()=> openEditAbsen(b.dataset.id, b.dataset.nama, b.dataset.tipe, b.dataset.ts);
+    // Inline edit: jam (waktu)
+    document.querySelectorAll('.kh-edit-jam').forEach(inp=>{
+        inp._origVal = inp.value;
+        inp.onchange = async ()=>{
+            const id = inp.dataset.id;
+            const tglInput = document.querySelector('.kh-edit-tgl[data-id="'+id+'"]');
+            const tglVal = tglInput ? tglInput.value : '';
+            const jamVal = inp.value;
+            if(!id || !tglVal || !jamVal){ alert('Tanggal/Jam tidak valid'); inp.value = inp._origVal; return; }
+            try{
+                const newDate = new Date(tglVal + 'T' + jamVal);
+                if(isNaN(newDate.getTime())){ alert('Format jam tidak valid'); inp.value = inp._origVal; return; }
+                inp.classList.add('kh-saving');
+                await updateDoc(doc(db,'absensi', id), { ts: Timestamp.fromDate(newDate), editedByOwner: true, editedAt: serverTimestamp() });
+                inp.classList.remove('kh-saving'); inp.classList.add('kh-saved');
+                setTimeout(()=>inp.classList.remove('kh-saved'), 1200);
+                inp._origVal = inp.value;
+                try{ const cidx = cachedRows.findIndex(r=>r._id===id); if(cidx>=0) cachedRows[cidx].ts = Timestamp.fromDate(newDate); }catch(e){}
+            }catch(err){
+                console.error('inline edit jam err', err);
+                inp.classList.remove('kh-saving');
+                alert('Gagal simpan jam: '+(err.message||err));
+                inp.value = inp._origVal;
+            }
+        };
+    });
+    document.querySelectorAll('.kh-edit-tgl').forEach(inp=>{
+        inp._origVal = inp.value;
+        inp.onchange = ()=>{
+            const id = inp.dataset.id;
+            const jamInput = document.querySelector('.kh-edit-jam[data-id="'+id+'"]');
+            if(jamInput) jamInput.dispatchEvent(new Event('change'));
+        };
+    });
+    document.querySelectorAll('.kh-edit-tipe').forEach(sel=>{
+        sel._origVal = sel.value;
+        sel.onchange = async ()=>{
+            const id = sel.dataset.id;
+            const newTipe = sel.value;
+            if(!id || !newTipe){ sel.value = sel._origVal; return; }
+            try{
+                sel.classList.add('kh-saving');
+                await updateDoc(doc(db,'absensi', id), { tipe: newTipe, editedByOwner: true, editedAt: serverTimestamp() });
+                sel.classList.remove('kh-saving'); sel.classList.add('kh-saved');
+                setTimeout(()=>sel.classList.remove('kh-saved'), 1200);
+                sel._origVal = sel.value;
+                try{ const cidx = cachedRows.findIndex(r=>r._id===id); if(cidx>=0) cachedRows[cidx].tipe = newTipe; }catch(e){}
+            }catch(err){
+                console.error('inline edit tipe err', err);
+                sel.classList.remove('kh-saving');
+                alert('Gagal simpan tipe: '+(err.message||err));
+                sel.value = sel._origVal;
+            }
+        };
     });
     document.querySelectorAll('.btn-hapus-absen').forEach(b=>{
         b.onclick = ()=> openDeleteAbsen(b.dataset.id, b.dataset.nama, b.dataset.tipe, b.dataset.ts);
@@ -558,7 +618,7 @@ function openDeleteAbsen(id, nama, tipe, tsIso){
     }catch(e){}
     _pendingDeleteAbsenId = id;
     $('deleteAbsenId').value = id;
-    $('deleteAbsenMsg').innerHTML = 'Yakin hapus absen <strong>' + tipeLabel + '</strong> milik <strong>' + (nama||'-') + '</strong> tanggal <strong>' + tglStr + '</strong>?';
+    $('deleteAbsenMsg').innerHTML = 'Yakin hapus event <strong>' + tipeLabel + '</strong> milik <strong>' + (nama||'-') + '</strong> pada ' + tglStr + '?<br><small style="color:#6b7280">Hanya event ini yang dihapus. Event lain (clock_in/out/break/lembur) milik karyawan ini tidak terpengaruh.</small>';
     $('deleteAbsenModal').classList.remove('hidden');
 }
 
