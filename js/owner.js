@@ -1,3 +1,63 @@
+
+// === Auto-save satu cell di matrix Kehadiran Harian (tanpa tombol Simpan) ===
+async function saveSingleKehadiranCell(uid, inp){
+    const row = khRowsCache[uid];
+    if(!row){ console.warn('saveSingleKehadiranCell: row tidak ditemukan', uid); return; }
+    const tipe = inp.dataset.tipe;
+    const newVal = (inp.value||'').trim();
+    const origVal = inp.dataset.orig || '';
+    if(newVal === origVal) return;
+    inp.classList.remove('kh-saved','kh-save-err');
+    inp.classList.add('kh-saving');
+    try{
+        const existing = row.byTipe && row.byTipe[tipe];
+        if(newVal === ''){
+            if(existing){
+                await deleteDoc(doc(db,'absensi', existing._id));
+            }
+        } else {
+            const [hh,mm] = newVal.split(':').map(Number);
+            const dateBase = new Date(currentKhDate);
+            const newTs = new Date(dateBase);
+            newTs.setHours(hh||0, mm||0, 0, 0);
+            if(existing){
+                await updateDoc(doc(db,'absensi', existing._id), {
+                    ts: Timestamp.fromDate(newTs),
+                    editedByOwner: true,
+                    manualEdit: true,
+                    editedAt: serverTimestamp()
+                });
+            } else {
+                await addDoc(collection(db,'absensi'), {
+                    uid: row.uid,
+                    email: row.email,
+                    nama: row.nama,
+                    tipe: tipe,
+                    ts: Timestamp.fromDate(newTs),
+                    manualEdit: true,
+                    editedByOwner: true,
+                    editedAt: serverTimestamp(),
+                    lokasi: null,
+                    jarak: null,
+                    inRadius: null
+                });
+            }
+        }
+        inp.classList.remove('kh-saving');
+        inp.classList.add('kh-saved');
+        inp.dataset.orig = newVal;
+        setTimeout(()=>inp.classList.remove('kh-saved'), 1500);
+        try{ await loadKehadiranMatrix(); }catch(e){ console.warn('reload matrix after save err', e); }
+    }catch(err){
+        console.error('saveSingleKehadiranCell err', err);
+        inp.classList.remove('kh-saving');
+        inp.classList.add('kh-save-err');
+        alert('Gagal simpan: '+(err.message||err));
+        inp.value = origVal;
+        setTimeout(()=>inp.classList.remove('kh-save-err'), 2500);
+    }
+}
+
 import { auth, db, OWNER_EMAILS, firebaseConfig } from './firebase-config.js';
 
 
@@ -901,11 +961,19 @@ function renderKehadiranMatrix(){
     tb.appendChild(tr);
   });
   tb.querySelectorAll('.kh-save-row').forEach(btn=>{
-    btn.onclick = (e)=>{ const tr = e.target.closest('tr'); saveKehadiranRow(tr.dataset.uid, tr); };
-  });
-  tb.querySelectorAll('.kh-delete-row').forEach(btn=>{
-    btn.onclick = (e)=>{ const tr = e.target.closest('tr'); deleteKehadiranRow(tr.dataset.uid); };
-  });
+            btn.onclick = (e)=>{ const tr = e.target.closest('tr'); saveKehadiranRow(tr.dataset.uid, tr); };
+        });
+        tb.querySelectorAll('.kh-delete-row').forEach(btn=>{
+            btn.onclick = (e)=>{ const tr = e.target.closest('tr'); deleteKehadiranRow(tr.dataset.uid); };
+        });
+        // === Auto-save per cell on change ===
+        tb.querySelectorAll('input.kh-time').forEach(inp=>{
+            inp.addEventListener('change', async ()=>{
+                const tr = inp.closest('tr');
+                if(!tr) return;
+                await saveSingleKehadiranCell(tr.dataset.uid, inp);
+            });
+        });
 }
 
 async function saveKehadiranRow(uid, tr){
