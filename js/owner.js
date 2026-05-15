@@ -67,7 +67,8 @@ function initBeranda(){
     const today = new Date();
     $('berandaDate').textContent = today.toLocaleDateString('en-US', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 
-    const start = new Date(); start.setHours(0,0,0,0);
+    // Window 48 jam ke belakang supaya shift lintas hari (mis. masuk sore, pulang dini hari) tidak hilang
+    const start = new Date(Date.now() - 48 * 60 * 60 * 1000);
     const end = new Date(); end.setHours(23,59,59,999);
     const q = query(
         collection(db, 'absensi'),
@@ -622,7 +623,12 @@ async function renderHadirFloating(rows){
         const lastEvent = arr[arr.length - 1];
         const lastType = lastEvent ? lastEvent.tipe : '';
         if (lastType === 'clock_out' || lastType === 'overtime_out'){
-            finishUids.push(uid);
+            // hanya tampilkan di 'Finish Working' jika clock_out terjadi dalam 6 jam terakhir
+            // supaya keesokan hari beranda bersih kembali
+            const lastMs = (lastEvent && lastEvent.ts && lastEvent.ts.toMillis) ? lastEvent.ts.toMillis() : 0;
+            if (Date.now() - lastMs <= 6 * 60 * 60 * 1000){
+                finishUids.push(uid);
+            }
         } else if (lastType === 'break_in'){
             breakUids.push(uid);
         } else {
