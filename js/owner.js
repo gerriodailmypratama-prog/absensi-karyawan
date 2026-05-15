@@ -1081,11 +1081,12 @@ async function loadKehadiranMatrix(){
       Object.keys(SHIFT_PAIRS).forEach(tOut=>{
         const tIn = SHIFT_PAIRS[tOut];
         const inEv = bt[tIn];
-        const inTs = (inEv && inEv.ts && inEv.ts.toDate) ? inEv.ts.toDate().getTime() : null;
+        if (!inEv) return; // no _in -> skip _out (orphan dari shift kemaren)
+        const inTs = (inEv.ts && inEv.ts.toDate) ? inEv.ts.toDate().getTime() : 0;
         for (const e of evs){
           if (e.tipe !== tOut) continue;
           const ts = (e.ts && e.ts.toDate) ? e.ts.toDate().getTime() : 0;
-          if (inTs === null || ts >= inTs){ bt[tOut] = e; break; }
+          if (ts >= inTs){ bt[tOut] = e; break; }
         }
       });
       byUid[u].byTipe = bt;
