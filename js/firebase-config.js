@@ -21,9 +21,12 @@ export const OWNER_EMAILS = [
 
 // Lokasi kantor/ruko (Ruko BSM A2/9, Pakulonan, Serpong Utara)
 // Hybrid geofence: absen tetap boleh, tapi diberi flag kalau di luar radius.
+// NOTE: 'radius' adalah field utama (dipakai karyawan.js). 'radiusMeters' di-alias
+// supaya kompatibel dengan kode lama yang mungkin masih referensi keduanya.
 export const OFFICE_LOCATION = {
     lat: -6.238929,
     lng: 106.6459816,
+    radius: 150,
     radiusMeters: 150
 };
 
