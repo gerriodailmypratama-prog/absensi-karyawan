@@ -104,7 +104,8 @@ async function saveSingleKehadiranCell(uid, inp){
     }
 }
 
-import { auth, db, OWNER_EMAILS, firebaseConfig } from './firebase-config.js';
+import { auth, db, storage, OWNER_EMAILS, firebaseConfig } from './firebase-config.js';
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
 
 
@@ -584,10 +585,34 @@ async function openEditKaryawan(uid){
             const tj = d.tanggalJoin ? (d.tanggalJoin.toDate ? d.tanggalJoin.toDate() : new Date(d.tanggalJoin)) : null;
             $('editTanggalJoin').value = tj ? tj.toISOString().substring(0,10) : '';
         }
+        // Field baru: payroll + data pribadi + bank
+        if ($('editJabatan')) $('editJabatan').value = d.jabatan || '';
+        if ($('editStatusKaryawan')) $('editStatusKaryawan').value = d.statusKaryawan || '';
+        if ($('editBaseHarian')) $('editBaseHarian').value = d.baseHarian || '';
+        if ($('editMultiplierLembur')) $('editMultiplierLembur').value = d.multiplierLembur || 1.5;
+        if ($('editNamaBank')) $('editNamaBank').value = d.namaBank || '';
+        if ($('editAtasNamaRek')) $('editAtasNamaRek').value = d.atasNamaRek || '';
+        // Status upload dokumen
+        const setStat = (id, url) => { const el = $(id); if (el) el.textContent = url ? '✓ sudah diupload' : '(belum)'; };
+        setStat('ktpStatus', d.ktpUrl);
+        setStat('npwpStatus', d.npwpUrl);
+        setStat('bukuTabunganStatus', d.bukuTabunganUrl);
+        // Reset file inputs
+        ['editKtpFile','editNpwpFile','editBukuTabunganFile'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
         $('editKaryawanModal').classList.remove('hidden');
     } catch(e){ alert('Failed to load data: ' + e.message); }
 }
 $('btnEditCancel').onclick = () => $('editKaryawanModal').classList.add('hidden');
+// Helper upload satu file ke Storage path karyawan-private/{uid}/{slot}.{ext}
+async function uploadKaryawanFile(uid, slot, file){
+    if (!file) return null;
+    const ext = (file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'');
+    const path = 'karyawan-private/' + uid + '/' + slot + '.' + (ext||'jpg');
+    const r = storageRef(storage, path);
+    await uploadBytes(r, file, { contentType: file.type || 'image/jpeg' });
+    return await getDownloadURL(r);
+}
+
 $('formEditKaryawan').onsubmit = async (e) => {
     e.preventDefault();
     const uid = $('editUid').value;
@@ -595,14 +620,35 @@ $('formEditKaryawan').onsubmit = async (e) => {
     const phone = $('editPhone').value.trim();
     const idKaryawan = $('editIdKaryawan').value.trim();
     const jamKerja = parseInt($('editJamKerja').value, 10) || 8;
-    if (!nama) { alert('Name is required.'); return; }
+    const jabatan = $('editJabatan') ? $('editJabatan').value.trim() : '';
+    const statusKaryawan = $('editStatusKaryawan') ? $('editStatusKaryawan').value : '';
+    const baseHarian = $('editBaseHarian') ? (parseInt($('editBaseHarian').value, 10) || 0) : 0;
+    const multiplierLembur = $('editMultiplierLembur') ? (parseFloat($('editMultiplierLembur').value) || 1.5) : 1.5;
+    const namaBank = $('editNamaBank') ? $('editNamaBank').value.trim() : '';
+    const atasNamaRek = $('editAtasNamaRek') ? $('editAtasNamaRek').value.trim() : '';
+    if (!nama) { alert('Nama wajib diisi.'); return; }
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Menyimpan...'; }
     try {
         const tanggalJoinVal = $('editTanggalJoin') ? $('editTanggalJoin').value : '';
         const tjPayload = tanggalJoinVal ? Timestamp.fromDate(new Date(tanggalJoinVal)) : null;
-        await setDoc(doc(db,'karyawan',uid), { nama, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload }, {merge:true});
+        const ktpFile = $('editKtpFile') ? $('editKtpFile').files[0] : null;
+        const npwpFile = $('editNpwpFile') ? $('editNpwpFile').files[0] : null;
+        const bukuTabFile = $('editBukuTabunganFile') ? $('editBukuTabunganFile').files[0] : null;
+        const payload = {
+            nama, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload,
+            jabatan, statusKaryawan, baseHarian, multiplierLembur,
+            namaBank, atasNamaRek,
+            updatedAt: serverTimestamp()
+        };
+        if (ktpFile){ try { payload.ktpUrl = await uploadKaryawanFile(uid,'ktp',ktpFile); } catch(ue){ console.error('upload ktp', ue); alert('Upload KTP gagal: '+ue.message); } }
+        if (npwpFile){ try { payload.npwpUrl = await uploadKaryawanFile(uid,'npwp',npwpFile); } catch(ue){ console.error('upload npwp', ue); alert('Upload NPWP gagal: '+ue.message); } }
+        if (bukuTabFile){ try { payload.bukuTabunganUrl = await uploadKaryawanFile(uid,'buku_tabungan',bukuTabFile); } catch(ue){ console.error('upload bktab', ue); alert('Upload Buku Tabungan gagal: '+ue.message); } }
+        await setDoc(doc(db,'karyawan',uid), payload, {merge:true});
         $('editKaryawanModal').classList.add('hidden');
         loadKaryawanList();
-    } catch(err){ alert('Failed to save: ' + err.message); }
+    } catch(err){ alert('Gagal simpan: ' + err.message); }
+    finally { if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Simpan'; } }
 };
 
 // ============== KARYAWAN SEDANG BEKERJA ==============
