@@ -288,16 +288,45 @@
 </div>
 
 <div id="editKaryawanModal" class="modal hidden">
-  <div class="modal-content card" style="max-width:480px">
+  <div class="modal-content card" style="max-width:560px;max-height:90vh;overflow-y:auto">
     <h3>Edit Karyawan</h3>
     <form id="formEditKaryawan" class="form-grid">
       <input type="hidden" id="editUid">
-      <div><label>Nama</label><input type="text" id="editNama" required></div>
-      <div><label>No. HP</label><input type="text" id="editPhone"></div>
-      <div><label>ID Karyawan</label><input type="text" id="editIdKaryawan"></div>
-      <div><label>Jam Kerja (jam)</label><input type="number" id="editJamKerja" min="1" max="24"></div>
-      <div><label>Tanggal Join</label><input type="date" id="editTanggalJoin"></div>
-      <div class="form-actions" style="display:flex;gap:8px">
+
+      <details open class="kry-section">
+        <summary>Data Pribadi</summary>
+        <div><label>Nama</label><input type="text" id="editNama" required></div>
+        <div><label>No. HP</label><input type="text" id="editPhone" inputmode="numeric"></div>
+        <div><label>ID Karyawan</label><input type="text" id="editIdKaryawan"></div>
+        <div><label>Jabatan</label><input type="text" id="editJabatan" placeholder="contoh: Staff Operasional"></div>
+        <div><label>Status</label><select id="editStatusKaryawan"><option value="">-</option><option value="tetap">Tetap</option><option value="kontrak">Kontrak</option><option value="freelance">Freelance</option><option value="magang">Magang</option></select></div>
+        <div><label>Tanggal Join</label><input type="date" id="editTanggalJoin"></div>
+      </details>
+
+      <details class="kry-section">
+        <summary>Payroll (Gaji Harian, Bayar Bulanan)</summary>
+        <div><label>Base Harian (Rp)</label><input type="number" id="editBaseHarian" min="0" step="1000" placeholder="150000"></div>
+        <div><label>Jam Kerja Standar / hari</label><input type="number" id="editJamKerja" min="1" max="24" value="8"></div>
+        <div><label>Multiplier Lembur</label><input type="number" id="editMultiplierLembur" min="1" max="5" step="0.1" value="1.5" placeholder="1.5"></div>
+        <p class="muted" style="font-size:12px;margin:6px 0 0">Total bulanan = base harian × hari hadir + lembur. Setengah hari otomatis 0.5 × base.</p>
+      </details>
+
+      <details class="kry-section">
+        <summary>Rekening Bank</summary>
+        <div><label>Nama Bank</label><input type="text" id="editNamaBank" placeholder="contoh: BCA, Mandiri, BRI"></div>
+        <div><label>Atas Nama Rekening</label><input type="text" id="editAtasNamaRek" placeholder="Sesuai buku tabungan"></div>
+        <p class="muted" style="font-size:12px;margin:6px 0 0">Nomor rekening lengkap upload via foto buku tabungan di bawah — lebih aman.</p>
+      </details>
+
+      <details class="kry-section">
+        <summary>Upload Dokumen (Privat)</summary>
+        <div><label>Foto KTP <span id="ktpStatus" class="muted"></span></label><input type="file" id="editKtpFile" accept="image/*"></div>
+        <div><label>Foto NPWP <span id="npwpStatus" class="muted"></span></label><input type="file" id="editNpwpFile" accept="image/*"></div>
+        <div><label>Foto Buku Tabungan <span id="bukuTabunganStatus" class="muted"></span></label><input type="file" id="editBukuTabunganFile" accept="image/*"></div>
+        <p class="muted" style="font-size:12px;margin:6px 0 0">File disimpan di Firebase Storage privat, hanya owner yang bisa akses.</p>
+      </details>
+
+      <div class="form-actions" style="display:flex;gap:8px;margin-top:12px">
         <button type="submit" class="btn btn-primary">Simpan</button>
         <button type="button" class="btn btn-secondary" id="btnEditCancel">Batal</button>
       </div>
