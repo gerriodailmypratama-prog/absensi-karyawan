@@ -408,3 +408,30 @@ img.hadir-avatar,
   .rekap-actions { margin-left:0; }
   .rekap-table { font-size:12px; min-width:680px; }
 }
+
+
+/* ===== Inline edit Kehadiran Harian ===== */
+.kh-edit-jam, .kh-edit-tipe, .kh-edit-tgl {
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 4px 6px;
+    font-size: 13px;
+    background: #fff;
+    color: #111827;
+    min-width: 0;
+    max-width: 100%;
+    transition: background .25s ease, border-color .25s ease;
+}
+.kh-edit-jam { width: 110px; font-variant-numeric: tabular-nums; }
+.kh-edit-tgl { width: 130px; }
+.kh-edit-tipe { width: auto; min-width: 110px; }
+.kh-edit-jam:focus, .kh-edit-tgl:focus, .kh-edit-tipe:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+}
+.kh-saving { background: #fef3c7 !important; border-color: #f59e0b !important; }
+.kh-saved { background: #d1fae5 !important; border-color: #10b981 !important; }
+.col-aksi-kh { white-space: nowrap; }
+.col-aksi-kh .btn-link { padding: 4px 8px; border-radius: 6px; background: #fee2e2; }
+.col-aksi-kh .btn-link:hover { background: #fecaca; }
