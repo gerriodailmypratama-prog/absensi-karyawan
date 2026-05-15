@@ -32,7 +32,7 @@
     <div class="clock" id="liveClock">--:--:--</div>
     <div class="muted" id="liveDate">-</div>
     <div id="workCountdown" class="work-countdown hidden">
-      <div class="wc-label">Sisa jam kerja hari ini</div>
+      <div class="wc-label">Sisa jam kerja</div>
       <div class="wc-time" id="wcTime">--:--:--</div>
       <div class="wc-sub" id="wcSub">Jam pulang: --:--</div>
     </div>
@@ -88,6 +88,27 @@
         <span class="tile-status" id="sBreakOut">-</span>
       </button>
 
+      <button id="btnPauseIn" class="action-tile tile-pause">
+        <span class="tile-icon">
+          <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="18" y="14" width="10" height="36" rx="2"/>
+            <rect x="36" y="14" width="10" height="36" rx="2"/>
+          </svg>
+        </span>
+        <span class="tile-label">Pause Kerja</span>
+        <span class="tile-status" id="sPauseIn">-</span>
+      </button>
+
+      <button id="btnPauseOut" class="action-tile tile-continue">
+        <span class="tile-icon">
+          <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 12 L50 32 L18 52 Z"/>
+          </svg>
+        </span>
+        <span class="tile-label">Lanjutkan Kerja</span>
+        <span class="tile-status" id="sPauseOut">-</span>
+      </button>
+
       <button id="btnOtIn" class="action-tile tile-ot">
         <span class="tile-icon">
           <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -100,11 +121,11 @@
         <span class="tile-status" id="sOtIn">-</span>
       </button>
 
-      <button id="btnOtOut" class="action-tile tile-ot-out">
+      <button id="btnOtOut" class="action-tile tile-ot">
         <span class="tile-icon">
           <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="32" cy="34" r="20"/>
-            <rect x="26" y="28" width="12" height="12" rx="1"/>
+            <path d="M32 22 L32 34 L42 34"/>
             <path d="M26 12 L38 12"/>
           </svg>
         </span>
@@ -177,16 +198,16 @@
   </div>
 </div>
 
-<div id="forgotClockOutModal" class="modal hidden">
+<div id="oldSessionModal" class="modal hidden">
   <div class="modal-box">
-    <h3 id="forgotTitle">Lupa Clock Out</h3>
-    <p id="forgotMsg" class="muted small"></p>
+    <h3>Sesi Shift Sebelumnya Belum Ditutup</h3>
+    <p id="oldSessionMsg" class="muted small"></p>
     <div class="row">
-      <button id="btnForgotClockOutOk" class="btn btn-primary">Mengerti</button>
+      <button id="btnOldSessionLater" class="btn btn-ghost">Nanti</button>
+      <button id="btnOldSessionClose" class="btn btn-primary">Tutup Sesi Sekarang</button>
     </div>
   </div>
 </div>
-
 
 <div id="mandatoryAvatarModal" class="modal hidden">
   <div class="modal-box">
