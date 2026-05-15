@@ -35,7 +35,27 @@ const OFFICE_RADIUS = (OFFICE_LOCATION && (OFFICE_LOCATION.radius || OFFICE_LOCA
 
 let currentUser=null, currentType=null, stream=null, coords=null;
 let cameraReady=false;
-let sessionCache = []; // semua event sesi shift aktif, ASC by ts
+let sessionCache = [];
+// === Fix C: Track last clock_out untuk cegah double-clockin ===
+let lastClockOutMs = 0;
+const CLOCKIN_HARD_LOCK_MS = 30 * 1000;       // 30 detik hard-disable setelah clock_out
+const CLOCKIN_SOFT_CONFIRM_MS = 5 * 60 * 1000; // 5 menit muncul konfirmasi
+let __clockInLockTimer = null;
+function updateClockInLock(){
+  const btnCi = document.getElementById('btnClockIn');
+  if (!btnCi) return;
+  const elapsed = Date.now() - lastClockOutMs;
+  if (lastClockOutMs > 0 && elapsed < CLOCKIN_HARD_LOCK_MS){
+    btnCi.disabled = true;
+    btnCi.style.opacity = '0.45';
+    btnCi.title = 'Tunggu ' + Math.ceil((CLOCKIN_HARD_LOCK_MS - elapsed)/1000) + ' detik (baru saja Clock Out)';
+    if (__clockInLockTimer) clearTimeout(__clockInLockTimer);
+    __clockInLockTimer = setTimeout(updateClockInLock, 1000);
+  } else {
+    btnCi.title = '';
+    if (typeof updatePauseTilesUI === 'function') updatePauseTilesUI();
+  }
+} // semua event sesi shift aktif, ASC by ts
 let isSubmitting = false; // global lock untuk mencegah double-submit (race condition)
 let userProfile = { nama:'', jamKerja:8, foto:'' };
 
@@ -252,6 +272,15 @@ async function loadActiveSession(uid){
       if (!hasCo){ openCiIdx = i; break; }
     }
   }
+  // Fix C: cari clock_out terakhir hari ini (untuk cooldown)
+  lastClockOutMs = 0;
+  for (let i = all.length - 1; i >= 0; i--){
+    if (all[i].tipe === 'clock_out' || all[i].tipe === 'overtime_out'){
+      const ts = all[i].ts && all[i].ts.toMillis ? all[i].ts.toMillis() : 0;
+      if (ts > lastClockOutMs) lastClockOutMs = ts;
+    }
+  }
+  setTimeout(updateClockInLock, 100);
   if (openCiIdx >= 0){
     sessionCache = all.slice(openCiIdx);
   } else {
@@ -479,6 +508,20 @@ async function handleAction(type){
   if (type === 'pause_out'){
     const ok = await askConfirm('Lanjutkan Kerja?', 'Timer jam kerja akan kembali berjalan.', 'Ya, Lanjutkan');
     if (!ok) return;
+  }
+  if (type === 'clock_in' && lastClockOutMs > 0){
+    const elapsed = Date.now() - lastClockOutMs;
+    if (elapsed < CLOCKIN_HARD_LOCK_MS){
+      alert('Anda baru saja Clock Out. Tunggu ' + Math.ceil((CLOCKIN_HARD_LOCK_MS - elapsed)/1000) + ' detik lagi sebelum Clock In ulang.');
+      return;
+    }
+    if (elapsed < CLOCKIN_SOFT_CONFIRM_MS){
+      const mins = Math.floor(elapsed/60000);
+      const secs = Math.floor((elapsed%60000)/1000);
+      const waktuStr = mins > 0 ? (mins + ' menit ' + secs + ' detik') : (secs + ' detik');
+      const ok = await askConfirm('Mulai Shift Baru?', 'Anda baru saja Clock Out ' + waktuStr + ' yang lalu. Tap "Ya, Mulai Shift" hanya kalau memang mau mulai shift baru. Kalau salah pencet, tap Batal.', 'Ya, Mulai Shift');
+      if (!ok) return;
+    }
   }
   if (type === 'clock_out'){
     const ok = await askConfirm('Clock Out Sekarang?', 'Apakah Anda yakin ingin Clock Out? Aksi ini menandakan Anda selesai bekerja untuk sesi shift ini.', 'Ya, Clock Out');
