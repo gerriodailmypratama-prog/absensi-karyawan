@@ -10,6 +10,8 @@ const TIPE = {
   clock_out:'Clock Out',
   break_in:'Istirahat',
   break_out:'Selesai Istirahat',
+  pause_in:'Pause Kerja',
+  pause_out:'Lanjut Kerja',
   overtime_in:'Mulai Lembur',
   overtime_out:'Selesai Lembur'
 };
@@ -18,15 +20,22 @@ const ST_ID = {
   clock_out:'sClockOut',
   break_in:'sBreakIn',
   break_out:'sBreakOut',
+  pause_in:'sPauseIn',
+  pause_out:'sPauseOut',
   overtime_in:'sOtIn',
   overtime_out:'sOtOut'
 };
-const NO_SELFIE_TYPES = new Set(['break_in','break_out','overtime_in']);
+const NO_SELFIE_TYPES = new Set(['break_in','break_out','overtime_in','pause_in','pause_out']);
 const BREAK_MAX_MS = 60 * 60 * 1000;
+// Window untuk load sesi shift aktif (cover shift lintas hari). 48 jam aman untuk shift sampai ~24-36 jam.
+const SESSION_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+// Helper aman untuk ambil radius office (kompat 'radius' & 'radiusMeters').
+const OFFICE_RADIUS = (OFFICE_LOCATION && (OFFICE_LOCATION.radius || OFFICE_LOCATION.radiusMeters)) || 150;
 
 let currentUser=null, currentType=null, stream=null, coords=null;
 let cameraReady=false;
-let todayCache = [];
+let sessionCache = []; // semua event sesi shift aktif, ASC by ts
 let userProfile = { nama:'', jamKerja:8, foto:'' };
 
 function distanceMeters(lat1, lng1, lat2, lng2){
@@ -61,20 +70,68 @@ function tickClock(){
 }
 setInterval(tickClock, 1000); tickClock();
 
+// === SESSION HELPERS ===
+function hasInSession(type){ return sessionCache.some(r => r.tipe === type); }
+function getFirstInSession(type){ return sessionCache.find(r => r.tipe === type) || null; }
+function getLastInSession(type){
+  for (let i = sessionCache.length - 1; i >= 0; i--){
+    if (sessionCache[i].tipe === type) return sessionCache[i];
+  }
+  return null;
+}
+// True bila ada pause_in tanpa pasangan pause_out setelahnya.
+function isCurrentlyPaused(){
+  let paused = false;
+  for (const r of sessionCache){
+    if (r.tipe === 'pause_in') paused = true;
+    else if (r.tipe === 'pause_out') paused = false;
+  }
+  return paused;
+}
+function isCurrentlyOnBreak(){
+  let onBreak = false;
+  for (const r of sessionCache){
+    if (r.tipe === 'break_in') onBreak = true;
+    else if (r.tipe === 'break_out') onBreak = false;
+  }
+  return onBreak;
+}
+// Hitung total paused ms (semua pasangan + pause aktif sampai now).
+function totalPausedMs(){
+  let total = 0;
+  let pauseStart = null;
+  for (const r of sessionCache){
+    const t = r.ts && r.ts.toDate ? r.ts.toDate().getTime() : null;
+    if (t === null) continue;
+    if (r.tipe === 'pause_in') pauseStart = t;
+    else if (r.tipe === 'pause_out' && pauseStart !== null){
+      total += (t - pauseStart);
+      pauseStart = null;
+    }
+  }
+  if (pauseStart !== null) total += (Date.now() - pauseStart);
+  return total;
+}
+
 function updateWorkCountdown(){
   const wc = $('workCountdown');
   if(!wc) return;
-  const clockInEntry = getTodayEntry('clock_in');
-  if (!clockInEntry || hasToday('clock_out')) {
+  const clockInEntry = getFirstInSession('clock_in');
+  if (!clockInEntry || hasInSession('clock_out')) {
     wc.classList.add('hidden'); return;
   }
   const clockInTime = clockInEntry.ts.toDate();
   const jamKerja = parseFloat(userProfile.jamKerja) || 8;
-  const endTime = new Date(clockInTime.getTime() + jamKerja * 3600 * 1000);
+  const paused = totalPausedMs();
+  const endTime = new Date(clockInTime.getTime() + jamKerja * 3600 * 1000 + paused);
   const now = new Date();
   const diff = endTime - now;
+  const paused_now = isCurrentlyPaused();
   wc.classList.remove('hidden');
-  $('wcSub').textContent = 'Jam pulang: ' + endTime.toLocaleTimeString('id-ID',{hour:'2-digit', minute:'2-digit', hour12:false}) + ' (' + jamKerja + ' jam dari Clock In)';
+  if (paused_now) wc.classList.add('paused'); else wc.classList.remove('paused');
+  const labelEl = wc.querySelector('.wc-label');
+  if (labelEl) labelEl.textContent = paused_now ? 'Sisa jam kerja (DIJEDA)' : 'Sisa jam kerja';
+  $('wcSub').textContent = 'Jam pulang (estimasi): ' + endTime.toLocaleTimeString('id-ID',{hour:'2-digit', minute:'2-digit', hour12:false});
   if (diff <= 0) {
     $('wcTime').textContent = 'Waktunya pulang!';
     wc.classList.add('done');
@@ -95,9 +152,10 @@ setInterval(updateWorkCountdown, 1000);
 // ===== Countdown Istirahat (60 menit dari tap Istirahat) =====
 function updateBreakCountdown(){
     let wc = document.getElementById('breakCountdown');
-    const bi = getTodayEntry('break_in');
-    const bo = getTodayEntry('break_out');
-    if (!bi || bo){ if (wc) wc.classList.add('hidden'); return; }
+    const bi = getLastInSession('break_in');
+    const bo = getLastInSession('break_out');
+    const onBreak = bi && (!bo || (bi.ts && bo.ts && bi.ts.toDate().getTime() > bo.ts.toDate().getTime()));
+    if (!onBreak){ if (wc) wc.classList.add('hidden'); return; }
     if (!wc){
         const c = document.createElement('div');
         c.id = 'breakCountdown';
@@ -166,46 +224,63 @@ async function loadUserProfile(uid){
   }catch(e){ console.warn('profile load err:', e); }
 }
 
-function startOfDay(d0){ const d=new Date(d0||Date.now()); d.setHours(0,0,0,0); return d; }
-function endOfDay(d0){ const d=new Date(d0||Date.now()); d.setHours(23,59,59,999); return d; }
 function timeToTodayDate(hhmm){
   const [h,m] = hhmm.split(':').map(Number);
   const d = new Date(); d.setHours(h, m||0, 0, 0);
   return d;
 }
 
-async function loadToday(uid){
-  todayCache = [];
+// ===== LOAD ACTIVE SESSION =====
+async function loadActiveSession(uid){
+  sessionCache = [];
+  const since = new Date(Date.now() - SESSION_WINDOW_MS);
   const q = query(collection(db,'absensi'),
     where('uid','==', uid),
-    where('ts','>=', Timestamp.fromDate(startOfDay())),
-    where('ts','<=', Timestamp.fromDate(endOfDay())),
+    where('ts','>=', Timestamp.fromDate(since)),
     orderBy('ts','asc'));
   const snap = await getDocs(q);
-  const _pad = n => String(n).padStart(2,'0');
-  const _today = new Date();
-  const todayStr = _today.getFullYear() + '-' + _pad(_today.getMonth()+1) + '-' + _pad(_today.getDate());
-  snap.forEach(d => {
-    const r = d.data();
-    if (r.tanggal && r.tanggal !== todayStr) return;
-    todayCache.push(r);
-  });
+  const all = [];
+  snap.forEach(d => { const r = d.data(); if (r.ts && r.ts.toDate) all.push(r); });
+  let openCiIdx = -1;
+  for (let i = all.length - 1; i >= 0; i--){
+    if (all[i].tipe === 'clock_in'){
+      let hasCo = false;
+      for (let j = i + 1; j < all.length; j++){
+        if (all[j].tipe === 'clock_out'){ hasCo = true; break; }
+      }
+      if (!hasCo){ openCiIdx = i; break; }
+    }
+  }
+  if (openCiIdx >= 0){
+    sessionCache = all.slice(openCiIdx);
+  } else {
+    sessionCache = [];
+  }
   renderStatuses();
   updateWorkCountdown();
-  if (hasToday('break_out')) window.__breakOverPrompted = false;
+  if (!isCurrentlyOnBreak()) window.__breakOverPrompted = false;
   updateBreakCountdown();
+  updatePauseTilesUI();
 }
-
-function hasToday(type){ return todayCache.some(r => r.tipe === type); }
-function getTodayEntry(type){ return todayCache.find(r => r.tipe === type) || null; }
 
 function renderStatuses(){
   Object.keys(ST_ID).forEach(k => {
     const el = $(ST_ID[k]); if (!el) return;
-    const e = getTodayEntry(k);
+    const e = getLastInSession(k);
     if (e && e.ts) el.textContent = fmtTime(e.ts.toDate());
     else el.textContent = '-';
   });
+}
+
+function updatePauseTilesUI(){
+  const btnPauseIn = $('btnPauseIn');
+  const btnPauseOut = $('btnPauseOut');
+  if (!btnPauseIn || !btnPauseOut) return;
+  const paused = isCurrentlyPaused();
+  btnPauseIn.disabled = paused || !hasInSession('clock_in') || hasInSession('clock_out') || isCurrentlyOnBreak();
+  btnPauseOut.disabled = !paused;
+  btnPauseIn.style.opacity = btnPauseIn.disabled ? '0.45' : '1';
+  btnPauseOut.style.opacity = btnPauseOut.disabled ? '0.45' : '1';
 }
 
 onAuthStateChanged(auth, async u => {
@@ -215,7 +290,7 @@ onAuthStateChanged(auth, async u => {
   }
   currentUser = u;
   await loadUserProfile(u.uid);
-  await loadToday(u.uid);
+  await loadActiveSession(u.uid);
   await checkForgottenClockOut(u.uid);
   refreshLocStatus();
 });
@@ -262,7 +337,7 @@ $('btnSelfieShoot').onclick = async ()=>{
   if (!coords) try{ await refreshLocStatus(); }catch(e){}
   if (!coords){ alert('Lokasi belum tersedia.'); return; }
   const d = distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
-  const inRad = d <= OFFICE_LOCATION.radius;
+  const inRad = d <= OFFICE_RADIUS;
   let selfieUrl = '';
   try{
     const path = 'selfie/' + currentUser.uid + '/' + Date.now() + '.jpg';
@@ -278,16 +353,16 @@ $('btnSelfieShoot').onclick = async ()=>{
     window.__earlyReason = null;
   }
   await saveAttendance(Object.assign({ tipe: currentType, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad, fotoSelfie:selfieUrl }, extra));
-  await loadToday(currentUser.uid);
+  await loadActiveSession(currentUser.uid);
 };
 
 async function doNoSelfieAction(type, extra={}){
   if (!coords) try{ await refreshLocStatus(); }catch(e){}
   if (!coords){ alert('Lokasi belum tersedia.'); return; }
   const d = distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
-  const inRad = d <= OFFICE_LOCATION.radius;
+  const inRad = d <= OFFICE_RADIUS;
   await saveAttendance(Object.assign({ tipe:type, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad }, extra));
-  await loadToday(currentUser.uid);
+  await loadActiveSession(currentUser.uid);
 }
 
 async function saveAttendance(payload){
@@ -302,34 +377,50 @@ async function saveAttendance(payload){
 }
 
 function validateSequence(type){
+  const hasCi = hasInSession('clock_in');
+  const hasCo = hasInSession('clock_out');
   if (type === 'clock_in'){
-    if (hasToday('clock_in')) return 'Anda sudah Clock In hari ini.';
+    if (hasCi && !hasCo) return 'Anda masih punya sesi shift aktif yang belum Clock Out.';
     return null;
   }
   if (type === 'break_in'){
-    if (!hasToday('clock_in')) return 'Anda harus Clock In dulu.';
-    if (hasToday('break_in')) return 'Anda sudah tap Istirahat.';
-    if (hasToday('clock_out')) return 'Anda sudah Clock Out.';
+    if (!hasCi) return 'Anda harus Clock In dulu.';
+    if (isCurrentlyOnBreak()) return 'Anda sudah tap Istirahat.';
+    if (isCurrentlyPaused()) return 'Anda sedang Pause Kerja. Tap Lanjutkan Kerja dulu.';
+    if (hasCo) return 'Anda sudah Clock Out.';
     return null;
   }
   if (type === 'break_out'){
-    if (!hasToday('break_in')) return 'Anda belum tap Istirahat.';
-    if (hasToday('break_out')) return 'Anda sudah tap Selesai Istirahat.';
-    if (hasToday('clock_out')) return 'Anda sudah Clock Out.';
+    if (!isCurrentlyOnBreak()) return 'Anda belum tap Istirahat.';
+    if (hasCo) return 'Anda sudah Clock Out.';
+    return null;
+  }
+  if (type === 'pause_in'){
+    if (!hasCi) return 'Anda harus Clock In dulu.';
+    if (isCurrentlyPaused()) return 'Anda sudah Pause Kerja.';
+    if (isCurrentlyOnBreak()) return 'Anda sedang Istirahat. Pause khusus untuk split jam kerja.';
+    if (hasCo) return 'Anda sudah Clock Out.';
+    return null;
+  }
+  if (type === 'pause_out'){
+    if (!isCurrentlyPaused()) return 'Anda tidak sedang Pause Kerja.';
+    if (hasCo) return 'Anda sudah Clock Out.';
     return null;
   }
   if (type === 'clock_out'){
-    if (hasToday('clock_out')) return 'Anda sudah Clock Out hari ini.';
+    if (!hasCi) return 'Anda belum Clock In.';
+    if (hasCo) return 'Anda sudah Clock Out hari ini.';
+    if (isCurrentlyPaused()) return 'Anda sedang Pause. Tap Lanjutkan Kerja dulu sebelum Clock Out.';
     return null;
   }
   if (type === 'overtime_in'){
-    if (!hasToday('clock_out')) return 'Lembur hanya setelah Clock Out.';
-    if (hasToday('overtime_in')) return 'Anda sudah Mulai Lembur.';
+    if (!hasCo) return 'Lembur hanya setelah Clock Out.';
+    if (hasInSession('overtime_in')) return 'Anda sudah Mulai Lembur.';
     return null;
   }
   if (type === 'overtime_out'){
-    if (!hasToday('overtime_in')) return 'Anda belum Mulai Lembur.';
-    if (hasToday('overtime_out')) return 'Anda sudah Selesai Lembur.';
+    if (!hasInSession('overtime_in')) return 'Anda belum Mulai Lembur.';
+    if (hasInSession('overtime_out')) return 'Anda sudah Selesai Lembur.';
     return null;
   }
   return null;
@@ -369,8 +460,16 @@ async function handleAction(type){
     const ok = await askConfirm('Selesai Istirahat?', 'Apakah Anda yakin sudah selesai Istirahat dan siap kembali bekerja?', 'Ya, Selesai Istirahat');
     if (!ok) return;
   }
+  if (type === 'pause_in'){
+    const ok = await askConfirm('Pause Kerja?', 'Sisa jam kerja akan dibekukan sampai Anda tap Lanjutkan Kerja. Pause untuk split jam kerja (bukan istirahat).', 'Ya, Pause');
+    if (!ok) return;
+  }
+  if (type === 'pause_out'){
+    const ok = await askConfirm('Lanjutkan Kerja?', 'Timer jam kerja akan kembali berjalan.', 'Ya, Lanjutkan');
+    if (!ok) return;
+  }
   if (type === 'clock_out'){
-    const ok = await askConfirm('Clock Out Sekarang?', 'Apakah Anda yakin ingin Clock Out? Aksi ini menandakan Anda selesai bekerja hari ini.', 'Ya, Clock Out');
+    const ok = await askConfirm('Clock Out Sekarang?', 'Apakah Anda yakin ingin Clock Out? Aksi ini menandakan Anda selesai bekerja untuk sesi shift ini.', 'Ya, Clock Out');
     if (!ok) return;
   }
 
@@ -383,28 +482,30 @@ async function handleAction(type){
   openSelfie(type);
 }
 
-$('btnClockIn').onclick  = () => handleAction('clock_in');
-$('btnClockOut').onclick = () => handleAction('clock_out');
-$('btnBreakIn').onclick  = () => handleAction('break_in');
-$('btnBreakOut').onclick = () => handleAction('break_out');
-$('btnOtIn').onclick     = () => handleAction('overtime_in');
-$('btnOtOut').onclick    = () => handleAction('overtime_out');
+$('btnClockIn').onclick   = () => handleAction('clock_in');
+$('btnClockOut').onclick  = () => handleAction('clock_out');
+$('btnBreakIn').onclick   = () => handleAction('break_in');
+$('btnBreakOut').onclick  = () => handleAction('break_out');
+$('btnPauseIn').onclick   = () => handleAction('pause_in');
+$('btnPauseOut').onclick  = () => handleAction('pause_out');
+$('btnOtIn').onclick      = () => handleAction('overtime_in');
+$('btnOtOut').onclick     = () => handleAction('overtime_out');
 
 async function handleClockOut(){
-  if (hasToday('break_in') && !hasToday('break_out')){
-    const bi = getTodayEntry('break_in');
+  if (isCurrentlyOnBreak()){
+    const bi = getLastInSession('break_in');
     await saveAttendance({
       tipe:'break_out',
-      lokasi: bi.lokasi || null,
-      jarak: bi.jarak || 0,
-      inRadius: bi.inRadius || false,
+      lokasi: (bi && bi.lokasi) || null,
+      jarak: (bi && bi.jarak) || 0,
+      inRadius: (bi && bi.inRadius) || false,
       autoCap: true
     });
-    await loadToday(currentUser.uid);
+    await loadActiveSession(currentUser.uid);
     $('forgotBreakOutModal').classList.remove('hidden');
     return;
   }
-  if (!hasToday('break_in')){
+  if (!hasInSession('break_in')){
     openBreakRangeModal();
     return;
   }
@@ -412,11 +513,12 @@ async function handleClockOut(){
 }
 
 function proceedClockOut(){
-  const clockInEntry = getTodayEntry('clock_in');
+  const clockInEntry = getFirstInSession('clock_in');
   if (clockInEntry && clockInEntry.ts && clockInEntry.ts.toDate){
     const clockInTime = clockInEntry.ts.toDate();
     const jamKerja = parseFloat(userProfile.jamKerja) || 8;
-    const endTime = new Date(clockInTime.getTime() + jamKerja * 3600 * 1000);
+    const paused = totalPausedMs();
+    const endTime = new Date(clockInTime.getTime() + jamKerja * 3600 * 1000 + paused);
     const now = new Date();
     if (now < endTime){
       $('earlyModal').classList.remove('hidden');
@@ -458,7 +560,7 @@ $('btnBreakRangeOk').onclick = async ()=>{
     alert('Durasi istirahat dipotong maksimal 1 jam. Selesai jadi: ' + fmtTime(ed));
   }
   const d = coords ? distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng) : 0;
-  const inRad = coords ? d <= OFFICE_LOCATION.radius : false;
+  const inRad = coords ? d <= OFFICE_RADIUS : false;
   const namaForSave = userProfile.nama || (currentUser.email||'').split('@')[0];
   const base = {
     uid: currentUser.uid,
@@ -478,110 +580,44 @@ $('btnBreakRangeOk').onclick = async ()=>{
     ts: Timestamp.fromDate(ed)
   }));
   $('breakRangeModal').classList.add('hidden');
-  await loadToday(currentUser.uid);
+  await loadActiveSession(currentUser.uid);
   proceedClockOut();
 };
 
+// ===== SOFT FORGOTTEN CLOCK OUT =====
 async function checkForgottenClockOut(uid){
   try{
-    const since = new Date(); since.setDate(since.getDate()-7); since.setHours(0,0,0,0);
-    const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-    const yesterdayEnd = new Date(todayStart.getTime() - 1);
-
-    const q = query(collection(db,'absensi'),
-      where('uid','==', uid),
-      where('ts','>=', Timestamp.fromDate(since)),
-      where('ts','<=', Timestamp.fromDate(yesterdayEnd)),
-      orderBy('ts','asc'));
-    const snap = await getDocs(q);
-    const byDay = new Map();
-    snap.forEach(d=>{
-      const r = d.data();
-      if (!r.ts || !r.ts.toDate) return;
-      const tgl = r.tanggal || (function(){
-        const dd = r.ts.toDate();
-        const _pad = n => String(n).padStart(2,'0');
-        return dd.getFullYear()+'-'+_pad(dd.getMonth()+1)+'-'+_pad(dd.getDate());
-      })();
-      if (!byDay.has(tgl)) byDay.set(tgl, []);
-      byDay.get(tgl).push(r);
-    });
-
-    let target = null;
-    for (const [day, rows] of byDay){
-      const ci = rows.find(r=>r.tipe==='clock_in');
-      const co = rows.find(r=>r.tipe==='clock_out');
-      if (!ci) continue;
-      if (!co){
-        target = { day, ci, co: null, mode: 'CREATE' };
-        break;
+    const ciNow = getFirstInSession('clock_in');
+    if (ciNow && ciNow.ts && ciNow.ts.toDate){
+      const ageMs = Date.now() - ciNow.ts.toDate().getTime();
+      if (ageMs < 24 * 60 * 60 * 1000){
+        return;
       }
-      if (co && co.autoClockOut === true){
-        target = { day, ci, co, mode: 'INFO' };
-        break;
-      }
+      const ci = ciNow;
+      const last = sessionCache[sessionCache.length - 1];
+      const lastTime = (last && last.ts && last.ts.toDate) ? last.ts.toDate() : ci.ts.toDate();
+      const sessionKey = 'oldSessionShown_' + uid + '_' + ci.ts.toDate().toISOString();
+      if (sessionStorage.getItem(sessionKey) === '1') return;
+
+      const ciStr = ci.ts.toDate().toLocaleString('id-ID',{weekday:'long',day:'2-digit',month:'long',hour:'2-digit',minute:'2-digit',hour12:false});
+      const lastStr = lastTime.toLocaleString('id-ID',{weekday:'long',day:'2-digit',month:'long',hour:'2-digit',minute:'2-digit',hour12:false});
+      $('oldSessionMsg').textContent =
+        'Sistem mendeteksi Anda Clock In pada ' + ciStr + ' dan belum Clock Out. ' +
+        'Aktivitas terakhir tercatat ' + lastStr + '. ' +
+        'Tutup sesi sekarang (Clock Out sekarang) atau tutup nanti?';
+      $('oldSessionModal').classList.remove('hidden');
+      $('btnOldSessionLater').onclick = ()=>{
+        try{ sessionStorage.setItem(sessionKey, '1'); }catch(e){}
+        $('oldSessionModal').classList.add('hidden');
+      };
+      $('btnOldSessionClose').onclick = async ()=>{
+        try{ sessionStorage.setItem(sessionKey, '1'); }catch(e){}
+        $('oldSessionModal').classList.add('hidden');
+        try{ await handleAction('clock_out'); }catch(e){ console.warn('manual close session err', e); }
+      };
     }
-    if (!target) return;
-
-    const clockInTime = target.ci.ts.toDate();
-    const jamKerja = parseFloat(userProfile && userProfile.jamKerja) || 8;
-    const autoCutTime = target.co ? target.co.ts.toDate() : new Date(clockInTime.getTime() + jamKerja * 60 * 60 * 1000);
-    const pad = n => String(n).padStart(2,'0');
-    const tanggalKemarin = target.day || (autoCutTime.getFullYear()+'-'+pad(autoCutTime.getMonth()+1)+'-'+pad(autoCutTime.getDate()));
-
-    const sessionKey = 'lupaShown_'+uid+'_'+tanggalKemarin;
-    if (sessionStorage.getItem(sessionKey) === '1') return;
-
-    if (target.mode === 'CREATE'){
-      $('forgotTitle').textContent = 'Lupa Clock Out';
-      $('forgotMsg').textContent =
-        'Anda lupa Clock Out pada ' + clockInTime.toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}) +
-        '. Sistem otomatis mencatat Clock Out pada ' + autoCutTime.toLocaleDateString('id-ID',{day:'2-digit',month:'long'}) +
-        ' jam ' + autoCutTime.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',hour12:false}) +
-        ' (sesuai jam kerja ' + jamKerja + ' jam). Hubungi atasan jika perlu koreksi.';
-    } else {
-      $('forgotTitle').textContent = 'Pemberitahuan: Lupa Clock Out';
-      $('forgotMsg').textContent =
-        'Anda lupa Clock Out pada ' + clockInTime.toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}) +
-        '. Sistem sudah otomatis mencatat Clock Out pada jam ' + autoCutTime.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',hour12:false}) +
-        ' (sesuai jam kerja ' + jamKerja + ' jam). Hubungi atasan jika perlu koreksi.';
-    }
-    $('forgotClockOutModal').classList.remove('hidden');
-
-    $('btnForgotClockOutOk').onclick = async () => {
-      if ($('btnForgotClockOutOk').dataset.processing === '1') return;
-      $('btnForgotClockOutOk').dataset.processing = '1';
-      try{ sessionStorage.setItem(sessionKey, '1'); }catch(e){}
-      try{
-        if (target.mode === 'CREATE'){
-          const namaForSave = userProfile.nama || (currentUser.email||'').split('@')[0];
-          await addDoc(collection(db,'absensi'), {
-            uid: currentUser.uid,
-            email: currentUser.email,
-            nama: namaForSave,
-            tipe: 'clock_out',
-            lokasi: target.ci.lokasi || null,
-            jarak: target.ci.jarak || 0,
-            inRadius: target.ci.inRadius || false,
-            autoCutByForgot: true,
-            lupaClockOut: true,
-            autoClockOut: true,
-            editNote: 'Auto Clock Out (lupa) dihitung ' + jamKerja + ' jam setelah Clock In ' + clockInTime.toLocaleString('id-ID'),
-            tanggal: tanggalKemarin,
-            ts: Timestamp.fromDate(autoCutTime)
-          });
-        }
-      }catch(err){
-        console.warn('addDoc auto-clockOut error', err);
-        try{ sessionStorage.removeItem(sessionKey); }catch(e){}
-        alert('Gagal mencatat auto Clock Out: ' + (err && err.message ? err.message : err));
-      }
-      $('btnForgotClockOutOk').dataset.processing = '';
-      $('forgotClockOutModal').classList.add('hidden');
-    };
   }catch(e){ console.warn('checkForgottenClockOut err:', e); }
 }
-
 
 $('avatarWrap').onclick = () => $('avatarInput').click();
 $('avatarInput').onchange = async (ev) => {
@@ -631,21 +667,16 @@ function resizeImage(file, maxSize){
   });
 }
 
-
 // === Auto-refresh absen state agar sinkron dengan owner side ===
 async function refreshAbsenState(){
   try{
     if(!currentUser || !currentUser.uid) return;
-    await loadToday(currentUser.uid);
-    renderStatuses();
-    updateWorkCountdown();
-    if(typeof updateBreakCountdown==='function') updateBreakCountdown();
+    await loadActiveSession(currentUser.uid);
   }catch(err){ console.warn('refreshAbsenState error', err); }
 }
 setInterval(refreshAbsenState, 30000);
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshAbsenState(); });
 window.addEventListener('focus', refreshAbsenState);
-
 
 function showMandatoryAvatarModal(){
   try{
