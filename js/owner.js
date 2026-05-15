@@ -32,6 +32,7 @@ onAuthStateChanged(auth, user => {
     initSidebar();
     initBeranda();
     initKehadiranMatrix();
+        try{ initRekap(); }catch(e){ console.error('initRekap failed', e); }
     try{ loadData(); }catch(e){ console.warn('init loadData err', e); }
 });
 
@@ -56,6 +57,7 @@ function initSidebar(){
         if (target) target.classList.add('active');
         links.forEach(l => l.classList.toggle('active', l.dataset.page === page));
         if (page === 'kehadiran') loadKehadiranMatrix();
+        if (page === 'rekap') { try{ loadRekap(); }catch(e){ console.error(e); } }
         if (page === 'karyawan') loadKaryawanList();
         if (window.innerWidth <= 768) document.body.classList.remove('sidebar-open');
     }
@@ -914,4 +916,242 @@ async function deleteKehadiranRow(uid){
   }
   alert('Selesai. Dihapus: '+ok+', Gagal: '+err);
   await loadKehadiranMatrix();
+}
+
+
+/* ===========================================================
+   REKAP KEHADIRAN (Hadirr-style) — date range summary per user
+   =========================================================== */
+let rekapRangeFrom = null;
+let rekapRangeTo = null;
+let rekapDataCache = [];
+
+function initRekap(){
+  const elFrom = document.getElementById('rekapFrom');
+  const elTo   = document.getElementById('rekapTo');
+  const elSearch = document.getElementById('rekapSearch');
+  const elLoad = document.getElementById('btnRekapLoad');
+  const elExport = document.getElementById('btnRekapExport');
+  const elQuickMonth = document.getElementById('btnRekapMonth');
+  const elQuickWeek  = document.getElementById('btnRekapWeek');
+  const elQuickToday = document.getElementById('btnRekapToday');
+  if (!elFrom || !elTo) return;
+  const today = new Date();
+  const from30 = new Date(today); from30.setDate(from30.getDate()-29);
+  if (!elFrom.value) elFrom.value = ymdR(from30);
+  if (!elTo.value)   elTo.value   = ymdR(today);
+  if (elLoad)   elLoad.onclick   = ()=>loadRekap();
+  if (elExport) elExport.onclick = ()=>exportRekapCSV();
+  if (elSearch) elSearch.oninput = ()=>renderRekap();
+  if (elQuickMonth) elQuickMonth.onclick = ()=>{
+    const t = new Date(); const a = new Date(t.getFullYear(),t.getMonth(),1);
+    elFrom.value = ymdR(a); elTo.value = ymdR(t); loadRekap();
+  };
+  if (elQuickWeek) elQuickWeek.onclick = ()=>{
+    const t = new Date(); const a = new Date(t); a.setDate(a.getDate()-6);
+    elFrom.value = ymdR(a); elTo.value = ymdR(t); loadRekap();
+  };
+  if (elQuickToday) elQuickToday.onclick = ()=>{
+    const t = new Date(); elFrom.value = ymdR(t); elTo.value = ymdR(t); loadRekap();
+  };
+}
+
+function ymdR(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const dd= String(d.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+dd;
+}
+
+function fmtHMr(totalMs){
+  if (!totalMs || totalMs < 0) return '0';
+  const totalMin = Math.floor(totalMs/60000);
+  const h = Math.floor(totalMin/60);
+  const m = totalMin % 60;
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
+
+async function loadRekap(){
+  const elFrom = document.getElementById('rekapFrom');
+  const elTo   = document.getElementById('rekapTo');
+  const elTitle= document.getElementById('rekapTitle');
+  const tbody  = document.querySelector('#tblRekap tbody');
+  const empty  = document.getElementById('rekapEmpty');
+  if (!elFrom || !elTo || !tbody) return;
+  const fromStr = elFrom.value;
+  const toStr   = elTo.value;
+  if (!fromStr || !toStr){ alert('Pilih rentang tanggal'); return; }
+  const from = new Date(fromStr+'T00:00:00');
+  const to   = new Date(toStr+'T23:59:59');
+  if (from > to){ alert('Tanggal "Dari" harus sebelum "Sampai"'); return; }
+  rekapRangeFrom = from; rekapRangeTo = to;
+  if (elTitle) elTitle.textContent = 'Ringkasan Kehadiran: ' + fromStr + ' s/d ' + toStr;
+  tbody.innerHTML = '<tr><td colspan="9" class="muted center">Memuat data...</td></tr>';
+  try {
+    const qy = query(collection(db,'absensi'),
+      where('waktu','>=', Timestamp.fromDate(from)),
+      where('waktu','<=', Timestamp.fromDate(to)),
+      orderBy('waktu','asc'));
+    const snap = await getDocs(qy);
+    const events = [];
+    snap.forEach(d=>{
+      const x = d.data();
+      events.push({
+        id: d.id,
+        uid: x.uid,
+        nama: x.nama || '-',
+        tipe: x.tipe,
+        waktu: x.waktu?.toDate ? x.waktu.toDate() : new Date(),
+        inRadius: x.inRadius,
+        terlambat: !!x.terlambat,
+        jamKerja: x.jamKerja || 8
+      });
+    });
+    const byUserDay = {};
+    const userMeta = {};
+    for (const e of events){
+      const dk = ymdR(e.waktu);
+      if (!byUserDay[e.uid]) byUserDay[e.uid] = {};
+      if (!byUserDay[e.uid][dk]) byUserDay[e.uid][dk] = [];
+      byUserDay[e.uid][dk].push(e);
+      if (!userMeta[e.uid]) userMeta[e.uid] = { nama: e.nama, jamKerja: e.jamKerja };
+    }
+    const rows = [];
+    for (const uid of Object.keys(byUserDay)){
+      const meta = userMeta[uid];
+      let hariHadir = 0, jamKerjaMs = 0, jamIstirahatMs = 0, jamLemburMs = 0;
+      let terlambat = 0, belumLengkap = 0, totalEvents = 0;
+      for (const dk of Object.keys(byUserDay[uid])){
+        const dayEvents = byUserDay[uid][dk].sort((a,b)=>a.waktu-b.waktu);
+        totalEvents += dayEvents.length;
+        const byTipe = {};
+        for (const ev of dayEvents){
+          if (!byTipe[ev.tipe]) byTipe[ev.tipe] = [];
+          byTipe[ev.tipe].push(ev);
+        }
+        const hasCI = byTipe.clock_in && byTipe.clock_in.length;
+        const hasCO = byTipe.clock_out && byTipe.clock_out.length;
+        if (hasCI) hariHadir++;
+        if (hasCI && byTipe.clock_in[0].terlambat) terlambat++;
+        if (hasCI && hasCO){
+          const ci = byTipe.clock_in[0].waktu;
+          const co = byTipe.clock_out[byTipe.clock_out.length-1].waktu;
+          let work = co - ci;
+          const bIn = byTipe.break_in || [];
+          const bOut = byTipe.break_out || [];
+          let breakSum = 0;
+          for (let i=0;i<bIn.length;i++){
+            const s = bIn[i].waktu; const e = bOut[i] ? bOut[i].waktu : null;
+            if (s && e && e>s){ breakSum += (e-s); }
+          }
+          jamIstirahatMs += breakSum;
+          work -= breakSum;
+          const pIn = byTipe.pause_in || [];
+          const pOut = byTipe.pause_out || [];
+          let pauseSum = 0;
+          for (let i=0;i<pIn.length;i++){
+            const s = pIn[i].waktu; const e = pOut[i] ? pOut[i].waktu : null;
+            if (s && e && e>s){ pauseSum += (e-s); }
+          }
+          work -= pauseSum;
+          if (work > 0) jamKerjaMs += work;
+        } else if (hasCI && !hasCO){
+          belumLengkap++;
+        }
+        const otIn = byTipe.overtime_in || [];
+        const otOut = byTipe.overtime_out || [];
+        for (let i=0;i<otIn.length;i++){
+          const s = otIn[i].waktu; const e = otOut[i] ? otOut[i].waktu : null;
+          if (s && e && e>s) jamLemburMs += (e-s);
+        }
+      }
+      rows.push({ uid, nama: meta.nama, hariHadir, jamKerjaMs, jamIstirahatMs, jamLemburMs, terlambat, belumLengkap, totalEvents });
+    }
+    rows.sort((a,b)=>a.nama.localeCompare(b.nama));
+    rekapDataCache = rows;
+    renderRekap();
+    renderRekapSummary();
+  } catch(e){
+    console.error('loadRekap error', e);
+    tbody.innerHTML = '<tr><td colspan="9" class="muted center" style="color:#dc2626">Gagal memuat data: '+(e.message||e)+'</td></tr>';
+  }
+}
+
+function renderRekapSummary(){
+  const el = document.getElementById('rekapSummary');
+  if (!el) return;
+  const rows = rekapDataCache;
+  const totalKaryawan = rows.length;
+  let totalHari = 0, totalKerja = 0, totalIstirahat = 0, totalLembur = 0, totalTelat = 0;
+  for (const r of rows){
+    totalHari += r.hariHadir;
+    totalKerja += r.jamKerjaMs;
+    totalIstirahat += r.jamIstirahatMs;
+    totalLembur += r.jamLemburMs;
+    totalTelat += r.terlambat;
+  }
+  el.innerHTML =
+    '<div class="kh-stat"><div class="muted small">Karyawan</div><div class="stat-num">'+totalKaryawan+'</div></div>'+
+    '<div class="kh-stat"><div class="muted small">Total Hari Hadir</div><div class="stat-num">'+totalHari+'</div></div>'+
+    '<div class="kh-stat"><div class="muted small">Total Jam Kerja</div><div class="stat-num">'+fmtHMr(totalKerja)+'</div></div>'+
+    '<div class="kh-stat"><div class="muted small">Total Istirahat</div><div class="stat-num">'+fmtHMr(totalIstirahat)+'</div></div>'+
+    '<div class="kh-stat"><div class="muted small">Total Lembur</div><div class="stat-num">'+fmtHMr(totalLembur)+'</div></div>'+
+    '<div class="kh-stat"><div class="muted small">Telat (hari)</div><div class="stat-num">'+totalTelat+'</div></div>';
+}
+
+function renderRekap(){
+  const tbody = document.querySelector('#tblRekap tbody');
+  const empty = document.getElementById('rekapEmpty');
+  const search = (document.getElementById('rekapSearch')?.value || '').toLowerCase().trim();
+  if (!tbody) return;
+  const rows = rekapDataCache.filter(r => !search || r.nama.toLowerCase().includes(search));
+  if (rows.length === 0){
+    tbody.innerHTML = '';
+    if (empty) empty.textContent = 'Tidak ada data pada rentang ini.';
+    return;
+  }
+  if (empty) empty.textContent = '';
+  tbody.innerHTML = rows.map((r,i)=>
+    '<tr>'+
+      '<td>'+(i+1)+'</td>'+
+      '<td>'+r.nama+'</td>'+
+      '<td class="num">'+r.hariHadir+'</td>'+
+      '<td class="num">'+fmtHMr(r.jamKerjaMs)+'</td>'+
+      '<td class="num">'+fmtHMr(r.jamIstirahatMs)+'</td>'+
+      '<td class="num">'+fmtHMr(r.jamLemburMs)+'</td>'+
+      '<td class="num">'+r.terlambat+'</td>'+
+      '<td class="num">'+r.belumLengkap+'</td>'+
+      '<td class="num">'+r.totalEvents+'</td>'+
+    '</tr>'
+  ).join('');
+}
+
+function exportRekapCSV(){
+  if (!rekapDataCache.length){ alert('Belum ada data untuk diekspor. Klik Tampilkan terlebih dahulu.'); return; }
+  const elFrom = document.getElementById('rekapFrom');
+  const elTo   = document.getElementById('rekapTo');
+  const headers = ['No','Nama','Hari Hadir','Jam Kerja','Jam Istirahat','Jam Lembur','Terlambat (Hari)','Belum Lengkap','Total Event'];
+  const lines = [headers.join(',')];
+  rekapDataCache.forEach((r,i)=>{
+    const cells = [
+      i+1,
+      '"'+r.nama.replace(/"/g,'""')+'"',
+      r.hariHadir,
+      fmtHMr(r.jamKerjaMs),
+      fmtHMr(r.jamIstirahatMs),
+      fmtHMr(r.jamLemburMs),
+      r.terlambat,
+      r.belumLengkap,
+      r.totalEvents
+    ];
+    lines.push(cells.join(','));
+  });
+  const csv = '\uFEFF' + lines.join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'rekap-kehadiran_'+(elFrom?.value||'')+'_'+(elTo?.value||'')+'.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
