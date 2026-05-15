@@ -1735,7 +1735,16 @@ totalLemburJam += totalJamLembur;
 totalJamKerjaAll += totalJamKerja;
 }
 rows.sort((a,b)=>(a.nama||'').localeCompare(b.nama||''));
-__payrollData = function renderPayrollTable(){
+__payrollData = {yyyymm: yyyymm, label: label, rows: rows};
+renderPayrollTable();
+$('prTotalKaryawan').textContent = rows.length;
+$('prTotalBudget').textContent = prFormatRp(totalBudget);
+$('prTotalHari').textContent = totalHari.toFixed(1);
+$('prTotalLembur').textContent = totalLemburJam.toFixed(1) + ' jam';
+$('prLastCalc').textContent = 'Dihitung ' + new Date().toLocaleTimeString('id-ID') + ' \u2014 Bulan: ' + label;
+}
+
+function renderPayrollTable(){
 const tbody = document.querySelector('#tblPayroll tbody');
 if (!tbody || !__payrollData) return;
 tbody.innerHTML = '';
