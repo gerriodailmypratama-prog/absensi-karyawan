@@ -608,13 +608,12 @@ $('btnForgotBreakOk').onclick = ()=>{
 
 async function openBreakRangeModal(){
   $('breakStartInput').value = '12:00';
-  $('breakEndInput').value   = '13:00';
   $('breakRangeModal').classList.remove('hidden');
 }
 
 $('btnBreakRangeOk').onclick = async ()=>{
   const s = $('breakStartInput').value;
-  const e = $('breakEndInput').value;
+const [h,m]=s.split(':');const eh=String((parseInt(h)+1)%24).padStart(2,'0');const e=eh+':'+m;
   if (!s || !e){ alert('Mohon isi kedua waktu.'); return; }
   const sd = timeToTodayDate(s);
   let ed = timeToTodayDate(e);
