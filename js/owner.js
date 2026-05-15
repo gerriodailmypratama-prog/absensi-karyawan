@@ -1030,9 +1030,10 @@ async function loadKehadiranMatrix(){
     }
     const start = new Date(d); start.setHours(0,0,0,0);
     const end   = new Date(d); end.setHours(23,59,59,999);
+    const lookAhead = new Date(d); lookAhead.setDate(lookAhead.getDate()+1); lookAhead.setHours(11,59,59,999);
     const q = query(collection(db,'absensi'),
       where('ts','>=', Timestamp.fromDate(start)),
-      where('ts','<=', Timestamp.fromDate(end)),
+      where('ts','<=', Timestamp.fromDate(lookAhead)),
       orderBy('ts','asc'));
     // 1) Load semua karyawan terdaftar sebagai master list (semua harus muncul, hadir/belum)
     const byUid = {};
@@ -1053,6 +1054,7 @@ async function loadKehadiranMatrix(){
     } catch(e){ console.warn('load karyawan master gagal:', e); }
     // 2) Merge events absensi tanggal terpilih ke master list
     const snap = await getDocs(q);
+    const _endMs = end.getTime();
     snap.forEach(docSnap => {
       const r = Object.assign({ _id:docSnap.id }, docSnap.data());
       const uid = r.uid || r.email || '';
@@ -1060,8 +1062,53 @@ async function loadKehadiranMatrix(){
       if (!byUid[uid]) byUid[uid] = { uid, nama:r.nama||(r.email||'').split('@')[0]||'-', email:r.email||'', events:[], byTipe:{} };
       if (!byUid[uid].nama || byUid[uid].nama==='-') byUid[uid].nama = r.nama || byUid[uid].nama;
       if (!byUid[uid].email) byUid[uid].email = r.email || '';
-      byUid[uid].events.push(r);
-      if (!byUid[uid].byTipe[r.tipe]) byUid[uid].byTipe[r.tipe] = r;
+      const rTs = r.ts && r.ts.toDate ? r.ts.toDate().getTime() : 0;
+      if (rTs > _endMs){
+        byUid[uid]._nextDayEvents = byUid[uid]._nextDayEvents || [];
+        byUid[uid]._nextDayEvents.push(r);
+      } else {
+        byUid[uid].events.push(r);
+        if (!byUid[uid].byTipe[r.tipe]) byUid[uid].byTipe[r.tipe] = r;
+      }
+    });
+    // Look-ahead: clock_out (atau _out lain) di awal besok yang muncul SEBELUM _in besok pertama -> klaim sebagai overnight shift hari ini
+    Object.keys(byUid).forEach(u=>{
+      const next = byUid[u]._nextDayEvents || [];
+      if (!next.length){ delete byUid[u]._nextDayEvents; return; }
+      next.sort((a,b)=>{
+        const ta = a.ts && a.ts.toDate ? a.ts.toDate().getTime() : 0;
+        const tb = b.ts && b.ts.toDate ? b.ts.toDate().getTime() : 0;
+        return ta - tb;
+      });
+      const OUT_IN = { clock_out:'clock_in', break_out:'break_in', pause_out:'pause_in', overtime_out:'overtime_in' };
+      const firstInTs = {};
+      for (const e of next){
+        if (!e.tipe.endsWith('_in')) continue;
+        if (firstInTs[e.tipe] === undefined){
+          firstInTs[e.tipe] = e.ts && e.ts.toDate ? e.ts.toDate().getTime() : 0;
+        }
+      }
+      for (const e of next){
+        if (!e.tipe.endsWith('_out')) continue;
+        const inTipe = OUT_IN[e.tipe];
+        const inTsNext = firstInTs[inTipe];
+        const eTs = e.ts && e.ts.toDate ? e.ts.toDate().getTime() : 0;
+        if (inTsNext === undefined || eTs < inTsNext){
+          byUid[u].events.push(e);
+          const existing = byUid[u].byTipe[e.tipe];
+          if (!existing){
+            byUid[u].byTipe[e.tipe] = e;
+          } else {
+            const inEvToday = byUid[u].byTipe[inTipe];
+            if (inEvToday && inEvToday.ts && inEvToday.ts.toDate){
+              const inMs = inEvToday.ts.toDate().getTime();
+              const existingTs = existing.ts && existing.ts.toDate ? existing.ts.toDate().getTime() : 0;
+              if (existingTs < inMs) byUid[u].byTipe[e.tipe] = e;
+            }
+          }
+        }
+      }
+      delete byUid[u]._nextDayEvents;
     });
     // ===== Normalize byTipe untuk shift overnight =====
     // clock_out yang muncul SEBELUM clock_in pertama = orphan (sisa shift kemaren) -> skip.
