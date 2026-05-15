@@ -16,7 +16,8 @@ export const firebaseConfig = {
 
 // Email OWNER (Dashboard owner access)
 export const OWNER_EMAILS = [
-    "gerriomail@gmail.com"
+    "gerriomail@gmail.com",
+        "steffieerzamia@gmail.com"
   ];
 
 // Lokasi kantor/ruko (Ruko BSM A2/9, Pakulonan, Serpong Utara)
