@@ -9,7 +9,7 @@ import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.
 import { getAuth, createUserWithEmailAndPassword, signOut as authSignOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const $ = id => document.getElementById(id);
-const TIPE = { clock_in:'Clock In', clock_out:'Clock Out', break_in:'Break', break_out:'After Break', overtime_in:'Overtime In', overtime_out:'Overtime Out' };
+const TIPE = { clock_in:'Clock In', clock_out:'Clock Out', break_in:'Istirahat', break_out:'Selesai Istirahat', pause_in:'Pause Kerja', pause_out:'Lanjut Kerja', overtime_in:'Mulai Lembur', overtime_out:'Selesai Lembur' };
 let cachedRows = [];
 let chartHadir = null, chartLokasi = null;
 let unsubToday = null;
@@ -31,6 +31,8 @@ onAuthStateChanged(auth, user => {
     $('dateTo').value = localDateStr(today);
     initSidebar();
     initBeranda();
+    initKehadiranMatrix();
+    try{ loadData(); }catch(e){ console.warn('init loadData err', e); }
 });
 
 $('btnLogout').onclick = () => signOut(auth).then(() => location.href = 'index.html').catch(()=>location.href='index.html');
@@ -53,7 +55,7 @@ function initSidebar(){
         const target = document.getElementById('page-' + page);
         if (target) target.classList.add('active');
         links.forEach(l => l.classList.toggle('active', l.dataset.page === page));
-        if (page === 'kehadiran' && cachedRows.length === 0) loadData();
+        if (page === 'kehadiran') loadKehadiranMatrix();
         if (page === 'karyawan') loadKaryawanList();
         if (window.innerWidth <= 768) document.body.classList.remove('sidebar-open');
     }
@@ -673,4 +675,243 @@ async function renderHadirFloating(rows){
     await paint('workingAvatars', 'workingCount', workingUids);
     await paint('breakAvatars', 'breakCount', breakUids);
     await paint('finishAvatars', 'finishCount', finishUids);
+}
+
+
+// ===== KEHADIRAN MATRIX (Hadirr-style) =====
+const MATRIX_COLS = [
+  { tipe:'clock_in',     label:'Jam Masuk' },
+  { tipe:'clock_out',    label:'Jam Keluar' },
+  { tipe:'break_in',     label:'Istirahat' },
+  { tipe:'break_out',    label:'Selesai Istirahat' },
+  { tipe:'pause_in',     label:'Pause' },
+  { tipe:'pause_out',    label:'Lanjut' },
+  { tipe:'overtime_in',  label:'Lembur Masuk' },
+  { tipe:'overtime_out', label:'Lembur Keluar' }
+];
+
+let currentKhDate = new Date();
+let khRowsCache = {};
+
+function fmtHM(d){
+  if (!d) return '';
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+function pad2(n){ return String(n).padStart(2,'0'); }
+function dateToInputStr(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+
+function buildWeekNav(refDate){
+  const wrap = $('khWeekNav'); if (!wrap) return;
+  wrap.innerHTML = '';
+  const d = new Date(refDate);
+  const day = d.getDay();
+  const diffToMon = (day === 0 ? -6 : 1 - day);
+  const monday = new Date(d); monday.setDate(d.getDate() + diffToMon);
+  for (let i=0; i<7; i++){
+    const dd = new Date(monday); dd.setDate(monday.getDate() + i);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'kh-day-btn' + (dateToInputStr(dd)===dateToInputStr(refDate) ? ' active':'');
+    const wdNames = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+    btn.innerHTML = '<span class="kh-day-wd">'+wdNames[dd.getDay()]+'</span><span class="kh-day-num">'+dd.getDate()+'/'+(dd.getMonth()+1)+'</span>';
+    btn.onclick = ()=>{ currentKhDate = dd; $('khDate').value = dateToInputStr(dd); loadKehadiranMatrix(); };
+    wrap.appendChild(btn);
+  }
+}
+
+function initKehadiranMatrix(){
+  const inp = $('khDate'); if (!inp) return;
+  inp.value = dateToInputStr(currentKhDate);
+  inp.onchange = ()=>{
+    const v = inp.value;
+    if (!v) return;
+    const [y,m,dd] = v.split('-').map(Number);
+    currentKhDate = new Date(y, m-1, dd);
+    loadKehadiranMatrix();
+  };
+  const prev = $('khPrevDay'); if (prev) prev.onclick = ()=>{ const d=new Date(currentKhDate); d.setDate(d.getDate()-1); currentKhDate=d; inp.value=dateToInputStr(d); loadKehadiranMatrix(); };
+  const next = $('khNextDay'); if (next) next.onclick = ()=>{ const d=new Date(currentKhDate); d.setDate(d.getDate()+1); currentKhDate=d; inp.value=dateToInputStr(d); loadKehadiranMatrix(); };
+  const tdy  = $('khToday');   if (tdy)  tdy.onclick = ()=>{ currentKhDate=new Date(); inp.value=dateToInputStr(currentKhDate); loadKehadiranMatrix(); };
+}
+
+async function loadKehadiranMatrix(){
+  try {
+    const d = new Date(currentKhDate);
+    buildWeekNav(d);
+    const titleEl = $('khTitle');
+    if (titleEl){
+      titleEl.textContent = 'Kehadiran Harian | ' + d.toLocaleDateString('id-ID',{weekday:'long', day:'2-digit', month:'long', year:'numeric'});
+    }
+    const start = new Date(d); start.setHours(0,0,0,0);
+    const end   = new Date(d); end.setHours(23,59,59,999);
+    const q = query(collection(db,'absensi'),
+      where('ts','>=', Timestamp.fromDate(start)),
+      where('ts','<=', Timestamp.fromDate(end)),
+      orderBy('ts','asc'));
+    const snap = await getDocs(q);
+    const byUid = {};
+    snap.forEach(docSnap => {
+      const r = Object.assign({ _id:docSnap.id }, docSnap.data());
+      const uid = r.uid || r.email || '';
+      if (!byUid[uid]) byUid[uid] = { uid, nama:r.nama||(r.email||'').split('@')[0]||'-', email:r.email||'', events:[], byTipe:{} };
+      byUid[uid].events.push(r);
+      if (!byUid[uid].byTipe[r.tipe]) byUid[uid].byTipe[r.tipe] = r;
+    });
+    khRowsCache = byUid;
+    renderKehadiranMatrix();
+    renderKhSummary();
+  } catch(err){
+    console.error('loadKehadiranMatrix error:', err);
+    alert('Gagal load kehadiran: ' + (err.message||err));
+  }
+}
+
+function renderKhSummary(){
+  const sum = $('khSummary'); if (!sum) return;
+  const uids = Object.keys(khRowsCache);
+  let working=0, onBreak=0, paused=0, finish=0;
+  uids.forEach(u=>{
+    const ev = khRowsCache[u].events;
+    const last = ev[ev.length-1];
+    if (!last) return;
+    if (last.tipe==='clock_out' || last.tipe==='overtime_out') finish++;
+    else if (last.tipe==='break_in') onBreak++;
+    else if (last.tipe==='pause_in') paused++;
+    else working++;
+  });
+  sum.innerHTML =
+    '<div class="kh-stat"><b>'+uids.length+'</b><small>Hadir</small></div>'+
+    '<div class="kh-stat"><b>'+working+'</b><small>On Working</small></div>'+
+    '<div class="kh-stat"><b>'+onBreak+'</b><small>On Break</small></div>'+
+    '<div class="kh-stat"><b>'+paused+'</b><small>Paused</small></div>'+
+    '<div class="kh-stat"><b>'+finish+'</b><small>Finish</small></div>';
+}
+
+function gpsDotFor(row){
+  const ci = row.byTipe['clock_in'];
+  if (!ci || ci.inRadius === undefined || ci.inRadius === null) return '<span class="gps-dot gps-na" title="GPS tidak terdeteksi"></span>';
+  return ci.inRadius
+    ? '<span class="gps-dot gps-in" title="GPS dalam jangkauan ('+ (ci.jarak||0) +'m)"></span>'
+    : '<span class="gps-dot gps-out" title="GPS di luar jangkauan ('+ (ci.jarak||0) +'m)"></span>';
+}
+
+function statusBadgeFor(row){
+  const ev = row.events;
+  const last = ev[ev.length-1];
+  if (!last) return '<span class="kh-badge kh-na">-</span>';
+  if (last.tipe==='clock_out' || last.tipe==='overtime_out') return '<span class="kh-badge kh-finish">Finish</span>';
+  if (last.tipe==='break_in') return '<span class="kh-badge kh-break">Break</span>';
+  if (last.tipe==='pause_in') return '<span class="kh-badge kh-pause">Paused</span>';
+  return '<span class="kh-badge kh-working">Working</span>';
+}
+
+function renderKehadiranMatrix(){
+  const tb = document.querySelector('#tblKehadiranMatrix tbody');
+  if (!tb) return;
+  tb.innerHTML = '';
+  const uids = Object.keys(khRowsCache).sort((a,b)=>{
+    const na = (khRowsCache[a].nama||'').toLowerCase();
+    const nb = (khRowsCache[b].nama||'').toLowerCase();
+    return na.localeCompare(nb);
+  });
+  if (!uids.length){
+    $('khEmpty').textContent = 'Belum ada record absensi pada tanggal ini.';
+    return;
+  }
+  $('khEmpty').textContent = '';
+  uids.forEach(uid=>{
+    const row = khRowsCache[uid];
+    const tr = document.createElement('tr');
+    tr.dataset.uid = uid;
+    let cells = '<td class="col-nama">'+ gpsDotFor(row) +' '+ (row.nama||'-') +'</td>';
+    cells += '<td>'+ statusBadgeFor(row) +'</td>';
+    MATRIX_COLS.forEach(col=>{
+      const ev = row.byTipe[col.tipe];
+      const val = ev && ev.ts && ev.ts.toDate ? fmtHM(ev.ts.toDate()) : '';
+      const editedFlag = ev && (ev.editedByOwner||ev.manualEdit) ? ' kh-edited' : '';
+      cells += '<td><input type="time" class="kh-time'+editedFlag+'" data-tipe="'+col.tipe+'" value="'+val+'" data-orig="'+val+'"></td>';
+    });
+    cells += '<td class="col-aksi">'+
+             '<button class="btn btn-sm btn-primary kh-save-row">Simpan</button>'+
+             '<button class="btn btn-sm btn-ghost kh-delete-row" title="Hapus semua record karyawan ini di tanggal ini">Hapus</button>'+
+             '</td>';
+    tr.innerHTML = cells;
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll('.kh-save-row').forEach(btn=>{
+    btn.onclick = (e)=>{ const tr = e.target.closest('tr'); saveKehadiranRow(tr.dataset.uid, tr); };
+  });
+  tb.querySelectorAll('.kh-delete-row').forEach(btn=>{
+    btn.onclick = (e)=>{ const tr = e.target.closest('tr'); deleteKehadiranRow(tr.dataset.uid); };
+  });
+}
+
+async function saveKehadiranRow(uid, tr){
+  const row = khRowsCache[uid];
+  if (!row){ alert('Data karyawan tidak ditemukan.'); return; }
+  const inputs = tr.querySelectorAll('input.kh-time');
+  const changes = [];
+  inputs.forEach(inp=>{
+    const tipe = inp.dataset.tipe;
+    const newVal = (inp.value||'').trim();
+    const origVal = inp.dataset.orig || '';
+    if (newVal === origVal) return;
+    changes.push({ tipe, newVal, origVal });
+  });
+  if (!changes.length){ alert('Tidak ada perubahan.'); return; }
+  if (!confirm('Simpan '+changes.length+' perubahan untuk '+(row.nama||uid)+'?')) return;
+  const dateBase = new Date(currentKhDate);
+  let okCount = 0, errCount = 0;
+  for (const ch of changes){
+    try{
+      const existing = row.byTipe[ch.tipe];
+      if (ch.newVal === '' && existing){
+        await deleteDoc(doc(db,'absensi', existing._id));
+        okCount++;
+      } else if (ch.newVal !== ''){
+        const [hh,mm] = ch.newVal.split(':').map(Number);
+        const newTs = new Date(dateBase); newTs.setHours(hh, mm, 0, 0);
+        if (existing){
+          await updateDoc(doc(db,'absensi', existing._id), {
+            ts: Timestamp.fromDate(newTs),
+            editedByOwner: true,
+            manualEdit: true,
+            editedAt: serverTimestamp()
+          });
+        } else {
+          await addDoc(collection(db,'absensi'), {
+            uid: row.uid,
+            email: row.email,
+            nama: row.nama,
+            tipe: ch.tipe,
+            ts: Timestamp.fromDate(newTs),
+            manualEdit: true,
+            editedByOwner: true,
+            editedAt: serverTimestamp(),
+            lokasi: null,
+            jarak: null,
+            inRadius: null
+          });
+        }
+        okCount++;
+      }
+    }catch(e){
+      console.error('save change err', ch, e);
+      errCount++;
+    }
+  }
+  alert('Selesai. Berhasil: '+okCount+', Gagal: '+errCount);
+  await loadKehadiranMatrix();
+}
+
+async function deleteKehadiranRow(uid){
+  const row = khRowsCache[uid];
+  if (!row){ return; }
+  if (!confirm('Hapus SEMUA record absensi milik '+(row.nama||uid)+' pada tanggal ini? Aksi ini tidak bisa di-undo.')) return;
+  let ok=0,err=0;
+  for (const ev of row.events){
+    try{ await deleteDoc(doc(db,'absensi', ev._id)); ok++; }catch(e){err++;}
+  }
+  alert('Selesai. Dihapus: '+ok+', Gagal: '+err);
+  await loadKehadiranMatrix();
 }
