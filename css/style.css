@@ -308,3 +308,19 @@ img.hadir-avatar,
     .brand-logo { font-size: 16px; letter-spacing: 1.5px; }
     .brand-logo-accent { font-size: 14px; letter-spacing: 2px; padding: 1px 6px; }
 }
+
+
+/* ===== Pause / Continue tiles (split jam kerja) ===== */
+.tile-pause{color:#475569}
+.tile-pause:hover{border-color:#475569}
+.tile-continue{color:#16a34a}
+.tile-continue:hover{border-color:#16a34a}
+.action-tile:disabled{cursor:not-allowed;pointer-events:none}
+
+/* Work countdown saat sedang Pause */
+.work-countdown.paused{background:#f1f5f9;border-color:#cbd5e1}
+.work-countdown.paused .wc-time{color:#475569}
+.work-countdown.paused .wc-label{color:#475569;font-weight:600}
+
+/* Modal sesi shift lama */
+#oldSessionModal .modal-box{max-width:420px}
