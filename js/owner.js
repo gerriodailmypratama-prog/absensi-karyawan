@@ -847,20 +847,31 @@ async function renderHadirFloating(rows){
         if (!hasClockInToday) continue;
         hadirUids.push(uid);
 
-        // State machine: determine current state by LAST event
-        const lastEvent = arr[arr.length - 1];
-        const lastType = lastEvent ? lastEvent.tipe : '';
-        if (lastType === 'clock_out' || lastType === 'overtime_out'){
+        // State machine: prioritas presence-based (selaras dengan Kehadiran Matrix)
+        // Cari clock_out & clock_in terakhir; jika clock_out terakhir lebih baru dari clock_in terakhir => Finished
+        let lastClockOutMs = 0;
+        let lastClockInMs = 0;
+        let lastBreakInMs = 0;
+        let lastBreakOutMs = 0;
+        for (const r of arr){
+            const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0;
+            if (r.tipe === 'clock_out' || r.tipe === 'overtime_out'){
+                if (ms > lastClockOutMs) lastClockOutMs = ms;
+            }
+            if (r.tipe === 'clock_in' || r.tipe === 'overtime_in'){
+                if (ms > lastClockInMs) lastClockInMs = ms;
+            }
+            if (r.tipe === 'break_in' && ms > lastBreakInMs) lastBreakInMs = ms;
+            if (r.tipe === 'break_out' && ms > lastBreakOutMs) lastBreakOutMs = ms;
+        }
+        if (lastClockOutMs > 0 && lastClockOutMs >= lastClockInMs){
             // hanya tampilkan di 'Finish Working' jika clock_out terjadi dalam 6 jam terakhir
-            // supaya keesokan hari beranda bersih kembali
-            const lastMs = (lastEvent && lastEvent.ts && lastEvent.ts.toMillis) ? lastEvent.ts.toMillis() : 0;
-            if (Date.now() - lastMs <= 6 * 60 * 60 * 1000){
+            if (Date.now() - lastClockOutMs <= 6 * 60 * 60 * 1000){
                 finishUids.push(uid);
             }
-        } else if (lastType === 'break_in'){
+        } else if (lastBreakInMs > 0 && lastBreakInMs > lastBreakOutMs){
             breakUids.push(uid);
         } else {
-            // clock_in, break_out, overtime_in => On Working
             workingUids.push(uid);
         }
     }
@@ -1574,3 +1585,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const modal = document.getElementById('rekapDetailModal');
     if(modal) modal.addEventListener('click', (e)=>{ if(e.target===modal) closeRekapDetail(); });
 });
+
+
+// Click logo brand untuk refresh halaman
+(function(){
+  const lg = document.getElementById('brandLogo');
+  if (lg) lg.addEventListener('click', () => { window.location.reload(); });
+})();
