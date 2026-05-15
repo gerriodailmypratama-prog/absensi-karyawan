@@ -376,3 +376,35 @@ img.hadir-avatar,
   .kh-matrix { font-size:12px; }
   .kh-matrix input.kh-time { width:70px; font-size:11px; }
 }
+
+
+/* === REKAP KEHADIRAN === */
+.rekap-toolbar { display:flex; flex-direction:column; gap:12px; }
+.rekap-date-row {
+  display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;
+}
+.rekap-date-row > div { display:flex; flex-direction:column; gap:4px; }
+.rekap-date-row label { font-size:12px; color:#64748b; }
+.rekap-date-row input[type="date"] {
+  padding:6px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:13px;
+}
+.rekap-quick { flex-direction:row !important; gap:6px; }
+.rekap-actions { flex-direction:row !important; gap:8px; margin-left:auto; }
+.rekap-search-row { display:flex; gap:8px; }
+.rekap-search {
+  flex:1; max-width:360px; padding:8px 12px;
+  border:1px solid #cbd5e1; border-radius:8px; font-size:13px;
+}
+.rekap-table { width:100%; border-collapse:collapse; min-width:760px; }
+.rekap-table th, .rekap-table td {
+  padding:10px 12px; border-bottom:1px solid #e2e8f0; text-align:left; font-size:13px;
+}
+.rekap-table th { background:#f1f5f9; font-weight:600; color:#334155; position:sticky; top:0; z-index:1; }
+.rekap-table td.num, .rekap-table th.num { text-align:center; font-variant-numeric:tabular-nums; }
+.rekap-table tbody tr:hover { background:#f8fafc; }
+
+@media (max-width:768px){
+  .rekap-date-row { flex-direction:column; align-items:stretch; }
+  .rekap-actions { margin-left:0; }
+  .rekap-table { font-size:12px; min-width:680px; }
+}
