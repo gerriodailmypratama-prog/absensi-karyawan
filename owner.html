@@ -99,19 +99,9 @@
         <p id="emptyToday" class="muted center"></p>
       </div>
 
-      <div class="card" id="workingNowCard">
-        <h3>Karyawan Sedang Bekerja</h3>
-        <p class="muted" id="workingNowSubtitle">Status terakhir: Clock In atau OT In (belum Clock Out)</p>
-        <div id="workingNowList" class="working-list"></div>
-        <p id="emptyWorking" class="muted center"></p>
-      </div>
-    </section>
-
-    <!-- KEHADIRAN HARIAN -->
-    <section id="page-kehadiran" class="page">
-      <h2 class="page-title">Kehadiran Harian</h2>
-      <div class="card">
-        <h3>Filter</h3>
+      <div class="card" id="berandaLogCard">
+        <h3>Data Absensi</h3>
+        <p class="muted small">Filter & lihat semua catatan absensi (raw events). Untuk edit jam, gunakan menu Kehadiran Harian.</p>
         <div class="filter-row">
           <div><label>Dari</label><input type="date" id="dateFrom"></div>
           <div><label>Sampai</label><input type="date" id="dateTo"></div>
@@ -123,8 +113,12 @@
               <option value="">Semua</option>
               <option value="clock_in">Clock In</option>
               <option value="clock_out">Clock Out</option>
-              <option value="overtime_in">Overtime In</option>
-              <option value="overtime_out">Overtime Out</option>
+              <option value="break_in">Istirahat</option>
+              <option value="break_out">Selesai Istirahat</option>
+              <option value="pause_in">Pause Kerja</option>
+              <option value="pause_out">Lanjut Kerja</option>
+              <option value="overtime_in">Mulai Lembur</option>
+              <option value="overtime_out">Selesai Lembur</option>
             </select>
           </div>
           <div><label>Status Lokasi</label>
@@ -139,13 +133,8 @@
             <button id="btnExport" class="btn btn-success">Export CSV</button>
           </div>
         </div>
-      </div>
-
-      <div class="stats" id="stats"></div>
-
-      <div class="card">
-        <h3>Data Absensi</h3>
-        <div class="table-wrap">
+        <div class="stats" id="stats" style="margin-top:12px"></div>
+        <div class="table-wrap" style="margin-top:12px">
           <table id="tblAbsen">
             <thead>
               <tr><th>Tanggal</th><th>Jam</th><th>Nama</th><th>Tipe</th><th>Status</th><th>Lokasi</th><th>Foto</th><th>Aksi</th></tr>
@@ -154,6 +143,55 @@
           </table>
         </div>
         <p id="emptyMsg" class="muted center"></p>
+      </div>
+    </section>
+
+    <!-- KEHADIRAN HARIAN (Matrix per Karyawan) -->
+    <section id="page-kehadiran" class="page">
+      <h2 class="page-title">Kehadiran Harian</h2>
+
+      <div class="card kh-toolbar">
+        <div class="kh-date-row">
+          <input type="date" id="khDate" class="kh-date-input">
+          <button id="khPrevDay" class="btn btn-ghost btn-sm" title="Hari sebelumnya">&lsaquo;</button>
+          <button id="khNextDay" class="btn btn-ghost btn-sm" title="Hari berikutnya">&rsaquo;</button>
+          <button id="khToday" class="btn btn-ghost btn-sm">Hari ini</button>
+        </div>
+        <div id="khWeekNav" class="kh-week-nav"></div>
+      </div>
+
+      <div class="kh-summary" id="khSummary"></div>
+
+      <div class="card">
+        <div class="kh-table-header">
+          <h3 id="khTitle">Kehadiran Harian</h3>
+          <div class="kh-legend">
+            <span class="gps-dot gps-in"></span> GPS dalam jangkauan
+            <span class="gps-dot gps-out"></span> GPS di luar
+            <span class="gps-dot gps-na"></span> Tidak terdeteksi
+          </div>
+        </div>
+        <div class="table-wrap kh-matrix-wrap">
+          <table id="tblKehadiranMatrix" class="kh-matrix">
+            <thead>
+              <tr>
+                <th class="col-nama">Nama</th>
+                <th>Status</th>
+                <th>Jam Masuk</th>
+                <th>Jam Keluar</th>
+                <th>Istirahat</th>
+                <th>Selesai Istirahat</th>
+                <th>Pause</th>
+                <th>Lanjut</th>
+                <th>Lembur Masuk</th>
+                <th>Lembur Keluar</th>
+                <th class="col-aksi">Aksi</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="khEmpty" class="muted center"></p>
       </div>
     </section>
 
@@ -222,6 +260,8 @@
           <option value="clock_out">Clock Out</option>
           <option value="break_in">Istirahat</option>
           <option value="break_out">Selesai Istirahat</option>
+          <option value="pause_in">Pause Kerja</option>
+          <option value="pause_out">Lanjut Kerja</option>
           <option value="overtime_in">Mulai Lembur</option>
           <option value="overtime_out">Selesai Lembur</option>
         </select>
