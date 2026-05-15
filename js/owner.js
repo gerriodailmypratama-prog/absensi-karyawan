@@ -982,6 +982,7 @@ async function deleteKehadiranRow(uid){
 /* ===========================================================
    REKAP KEHADIRAN (Hadirr-style) — date range summary per user
    =========================================================== */
+let rekapEventsCache = [];
 let rekapRangeFrom = null;
 let rekapRangeTo = null;
 let rekapDataCache = [];
@@ -1046,7 +1047,7 @@ async function loadRekap(){
   if (from > to){ alert('Tanggal "Dari" harus sebelum "Sampai"'); return; }
   rekapRangeFrom = from; rekapRangeTo = to;
   if (elTitle) elTitle.textContent = 'Ringkasan Kehadiran: ' + fromStr + ' s/d ' + toStr;
-  tbody.innerHTML = '<tr><td colspan="9" class="muted center">Memuat data...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="10" class="muted center">Memuat data...</td></tr>';
   try {
     const qy = query(collection(db,'absensi'),
       where('ts','>=', Timestamp.fromDate(from)),
@@ -1128,6 +1129,7 @@ async function loadRekap(){
       rows.push({ uid, nama: meta.nama, hariHadir, jamKerjaMs, jamIstirahatMs, jamLemburMs, terlambat, belumLengkap, totalEvents });
     }
     rows.sort((a,b)=>a.nama.localeCompare(b.nama));
+    rekapEventsCache = events;
     rekapDataCache = rows;
     renderRekap();
     renderRekapSummary();
@@ -1172,18 +1174,26 @@ function renderRekap(){
   }
   if (empty) empty.textContent = '';
   tbody.innerHTML = rows.map((r,i)=>
-    '<tr>'+
-      '<td>'+(i+1)+'</td>'+
-      '<td>'+r.nama+'</td>'+
-      '<td class="num">'+r.hariHadir+'</td>'+
-      '<td class="num">'+fmtHMr(r.jamKerjaMs)+'</td>'+
-      '<td class="num">'+fmtHMr(r.jamIstirahatMs)+'</td>'+
-      '<td class="num">'+fmtHMr(r.jamLemburMs)+'</td>'+
-      '<td class="num">'+r.terlambat+'</td>'+
-      '<td class="num">'+r.belumLengkap+'</td>'+
-      '<td class="num">'+r.totalEvents+'</td>'+
-    '</tr>'
-  ).join('');
+      '<tr data-uid="'+(r.uid||'')+'" data-nama="'+((r.nama||'').replace(/"/g,'&quot;'))+'" class="rekap-row-clickable">'+
+        '<td>'+(i+1)+'</td>'+
+        '<td>'+r.nama+'</td>'+
+        '<td class="num">'+r.hariHadir+'</td>'+
+        '<td class="num">'+fmtHMr(r.jamKerjaMs)+'</td>'+
+        '<td class="num">'+fmtHMr(r.jamIstirahatMs)+'</td>'+
+        '<td class="num">'+fmtHMr(r.jamLemburMs)+'</td>'+
+        '<td class="num">'+r.terlambat+'</td>'+
+        '<td class="num">'+r.belumLengkap+'</td>'+
+        '<td class="num">'+r.totalEvents+'</td>'+
+        '<td><button class="btn btn-sm btn-primary btn-rekap-detail" data-uid="'+(r.uid||'')+'" data-nama="'+((r.nama||'').replace(/"/g,'&quot;'))+'">Detail</button></td>'+
+      '</tr>'
+    ).join('');
+    tbody.querySelectorAll('.btn-rekap-detail').forEach(b=>{
+      b.onclick = (e)=>{ e.stopPropagation(); openRekapDetail(b.dataset.uid, b.dataset.nama); };
+    });
+    tbody.querySelectorAll('tr.rekap-row-clickable').forEach(tr=>{
+      tr.style.cursor='pointer';
+      tr.onclick = ()=> openRekapDetail(tr.dataset.uid, tr.dataset.nama);
+    });
 }
 
 function exportRekapCSV(){
@@ -1215,3 +1225,131 @@ function exportRekapCSV(){
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
+
+
+// ===== Rekap Detail Modal (drill-down per karyawan) =====
+function openRekapDetail(uid, nama){
+    const modal = document.getElementById('rekapDetailModal');
+    const title = document.getElementById('rekapDetailTitle');
+    const tbody = document.querySelector('#tblRekapDetail tbody');
+    const empty = document.getElementById('rekapDetailEmpty');
+    if(!modal || !tbody) return;
+    if(title){
+        const from = document.getElementById('rekapFrom')?.value || '';
+        const to = document.getElementById('rekapTo')?.value || '';
+        title.textContent = 'Detail Kehadiran: ' + (nama||'-') + ' (' + from + ' s/d ' + to + ')';
+    }
+    const events = (rekapEventsCache||[]).filter(e=>e.uid===uid).sort((a,b)=>{
+        const ta = a.waktu instanceof Date ? a.waktu.getTime() : 0;
+        const tb = b.waktu instanceof Date ? b.waktu.getTime() : 0;
+        return ta - tb;
+    });
+    if(events.length===0){
+        tbody.innerHTML = '';
+        if(empty) empty.textContent = 'Tidak ada event untuk karyawan ini pada rentang tanggal.';
+    } else {
+        if(empty) empty.textContent = '';
+        const TIPE_LOCAL = { clock_in:'Clock In', clock_out:'Clock Out', break_in:'Istirahat', break_out:'Selesai Istirahat', overtime_in:'Mulai Lembur', overtime_out:'Selesai Lembur' };
+        tbody.innerHTML = events.map(ev=>{
+            const d = ev.waktu;
+            const tgl = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+            const jam = String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
+            const opts = ['clock_in','clock_out','break_in','break_out','overtime_in','overtime_out']
+                .map(v=>'<option value="'+v+'"'+(v===(ev.tipe||'')?' selected':'')+'>'+(TIPE_LOCAL[v]||v)+'</option>').join('');
+            const status = ev.inRadius===true ? '<span class="badge-loc badge-in">In Office</span>' : (ev.inRadius===false ? '<span class="badge-loc badge-out">Out of Radius</span>' : '<span class="muted small">-</span>');
+            return '<tr data-id="'+ev.id+'">'+
+                '<td><input type="date" class="rd-edit-tgl" data-id="'+ev.id+'" value="'+tgl+'"></td>'+
+                '<td><input type="time" step="1" class="rd-edit-jam" data-id="'+ev.id+'" value="'+jam+'"></td>'+
+                '<td><select class="rd-edit-tipe" data-id="'+ev.id+'">'+opts+'</select></td>'+
+                '<td>'+status+'</td>'+
+                '<td><button class="btn-link rd-hapus" data-id="'+ev.id+'" data-nama="'+(nama||'').replace(/"/g,'&quot;')+'" data-tipe="'+(ev.tipe||'')+'" style="color:#dc2626">🗑️ Hapus</button></td>'+
+            '</tr>';
+        }).join('');
+        tbody.querySelectorAll('.rd-edit-jam').forEach(inp=>{
+            inp._origVal = inp.value;
+            inp.onchange = async ()=>{
+                const id = inp.dataset.id;
+                const tglInput = tbody.querySelector('.rd-edit-tgl[data-id="'+id+'"]');
+                const tglVal = tglInput ? tglInput.value : '';
+                const jamVal = inp.value;
+                if(!id || !tglVal || !jamVal){ alert('Tanggal/Jam tidak valid'); inp.value = inp._origVal; return; }
+                try{
+                    const newDate = new Date(tglVal + 'T' + jamVal);
+                    if(isNaN(newDate.getTime())){ alert('Format jam tidak valid'); inp.value = inp._origVal; return; }
+                    inp.classList.add('kh-saving');
+                    await updateDoc(doc(db,'absensi', id), { ts: Timestamp.fromDate(newDate), editedByOwner: true, editedAt: serverTimestamp() });
+                    inp.classList.remove('kh-saving'); inp.classList.add('kh-saved');
+                    setTimeout(()=>inp.classList.remove('kh-saved'), 1200);
+                    inp._origVal = inp.value;
+                    const cev = rekapEventsCache.find(e=>e.id===id); if(cev) cev.waktu = newDate;
+                }catch(err){
+                    console.error('rd edit jam err', err);
+                    inp.classList.remove('kh-saving');
+                    alert('Gagal simpan jam: '+(err.message||err));
+                    inp.value = inp._origVal;
+                }
+            };
+        });
+        tbody.querySelectorAll('.rd-edit-tgl').forEach(inp=>{
+            inp._origVal = inp.value;
+            inp.onchange = ()=>{
+                const id = inp.dataset.id;
+                const j = tbody.querySelector('.rd-edit-jam[data-id="'+id+'"]');
+                if(j) j.dispatchEvent(new Event('change'));
+            };
+        });
+        tbody.querySelectorAll('.rd-edit-tipe').forEach(sel=>{
+            sel._origVal = sel.value;
+            sel.onchange = async ()=>{
+                const id = sel.dataset.id;
+                const newTipe = sel.value;
+                if(!id || !newTipe){ sel.value = sel._origVal; return; }
+                try{
+                    sel.classList.add('kh-saving');
+                    await updateDoc(doc(db,'absensi', id), { tipe: newTipe, editedByOwner: true, editedAt: serverTimestamp() });
+                    sel.classList.remove('kh-saving'); sel.classList.add('kh-saved');
+                    setTimeout(()=>sel.classList.remove('kh-saved'), 1200);
+                    sel._origVal = sel.value;
+                    const cev = rekapEventsCache.find(e=>e.id===id); if(cev) cev.tipe = newTipe;
+                }catch(err){
+                    console.error('rd edit tipe err', err);
+                    sel.classList.remove('kh-saving');
+                    alert('Gagal simpan tipe: '+(err.message||err));
+                    sel.value = sel._origVal;
+                }
+            };
+        });
+        tbody.querySelectorAll('.rd-hapus').forEach(b=>{
+            b.onclick = async ()=>{
+                const id = b.dataset.id;
+                const nama = b.dataset.nama;
+                const tipe = b.dataset.tipe;
+                const TIPE_LBL = { clock_in:'Clock In', clock_out:'Clock Out', break_in:'Istirahat', break_out:'Selesai Istirahat', overtime_in:'Mulai Lembur', overtime_out:'Selesai Lembur' };
+                const lbl = TIPE_LBL[tipe] || tipe;
+                if(!confirm('Hapus event '+lbl+' milik '+nama+'?\n\nHanya event ini yang dihapus. Event lain tidak terpengaruh.')) return;
+                try{
+                    b.disabled = true; b.textContent = '...';
+                    await deleteDoc(doc(db,'absensi', id));
+                    const i = rekapEventsCache.findIndex(e=>e.id===id);
+                    if(i>=0) rekapEventsCache.splice(i,1);
+                    b.closest('tr').remove();
+                    try{ if(typeof loadRekap==='function') loadRekap(); }catch(e){}
+                }catch(err){
+                    console.error('rd hapus err', err);
+                    alert('Gagal hapus: '+(err.message||err));
+                    b.disabled = false; b.textContent = '🗑️ Hapus';
+                }
+            };
+        });
+    }
+    modal.classList.remove('hidden');
+}
+function closeRekapDetail(){
+    document.getElementById('rekapDetailModal')?.classList.add('hidden');
+}
+document.addEventListener('DOMContentLoaded', ()=>{
+    const closeBtn = document.getElementById('btnRekapDetailClose');
+    if(closeBtn) closeBtn.onclick = closeRekapDetail;
+    const modal = document.getElementById('rekapDetailModal');
+    if(modal) modal.addEventListener('click', (e)=>{ if(e.target===modal) closeRekapDetail(); });
+});
