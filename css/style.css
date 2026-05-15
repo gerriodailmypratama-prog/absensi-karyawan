@@ -435,3 +435,24 @@ img.hadir-avatar,
 .col-aksi-kh { white-space: nowrap; }
 .col-aksi-kh .btn-link { padding: 4px 8px; border-radius: 6px; background: #fee2e2; }
 .col-aksi-kh .btn-link:hover { background: #fecaca; }
+
+
+/* ===== Rekap Detail Modal ===== */
+.rekap-row-clickable:hover { background: #eff6ff; }
+.btn-rekap-detail { white-space: nowrap; }
+#rekapDetailModal.modal { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: flex-start; justify-content: center; z-index: 9999; padding: 20px 12px; overflow-y: auto; }
+#rekapDetailModal.hidden { display: none; }
+#rekapDetailModal .modal-content.rekap-detail-content { background: #fff; border-radius: 12px; padding: 16px; width: 100%; max-width: 720px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 50px rgba(0,0,0,.2); }
+#rekapDetailModal .modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+#rekapDetailModal .modal-head h3 { margin: 0; font-size: 16px; }
+#rekapDetailModal .modal-close { background: transparent; border: none; font-size: 22px; cursor: pointer; color: #64748b; padding: 0 6px; line-height: 1; }
+.rekap-detail-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rekap-detail-table th, .rekap-detail-table td { padding: 6px 4px; text-align: left; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
+.rekap-detail-table th { background: #f9fafb; font-weight: 600; }
+.rd-edit-jam, .rd-edit-tipe, .rd-edit-tgl { border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 6px; font-size: 13px; background: #fff; color: #111827; transition: background .25s ease, border-color .25s ease; }
+.rd-edit-jam { width: 110px; font-variant-numeric: tabular-nums; }
+.rd-edit-tgl { width: 130px; }
+.rd-edit-tipe { min-width: 110px; }
+.rd-edit-jam:focus, .rd-edit-tgl:focus, .rd-edit-tipe:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+.rd-hapus { padding: 4px 8px; border-radius: 6px; background: #fee2e2; }
+.rd-hapus:hover { background: #fecaca; }
