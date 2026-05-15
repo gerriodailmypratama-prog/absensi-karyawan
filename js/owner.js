@@ -911,12 +911,32 @@ async function loadKehadiranMatrix(){
       where('ts','>=', Timestamp.fromDate(start)),
       where('ts','<=', Timestamp.fromDate(end)),
       orderBy('ts','asc'));
-    const snap = await getDocs(q);
+    // 1) Load semua karyawan terdaftar sebagai master list (semua harus muncul, hadir/belum)
     const byUid = {};
+    try {
+      const kSnap = await getDocs(collection(db,'karyawan'));
+      kSnap.forEach(docSnap => {
+        const k = docSnap.data() || {};
+        const uid = docSnap.id || k.uid || k.email || '';
+        if (!uid) return;
+        byUid[uid] = {
+          uid,
+          nama: k.nama || (k.email||'').split('@')[0] || '-',
+          email: k.email || '',
+          events: [],
+          byTipe: {}
+        };
+      });
+    } catch(e){ console.warn('load karyawan master gagal:', e); }
+    // 2) Merge events absensi tanggal terpilih ke master list
+    const snap = await getDocs(q);
     snap.forEach(docSnap => {
       const r = Object.assign({ _id:docSnap.id }, docSnap.data());
       const uid = r.uid || r.email || '';
+      if (!uid) return;
       if (!byUid[uid]) byUid[uid] = { uid, nama:r.nama||(r.email||'').split('@')[0]||'-', email:r.email||'', events:[], byTipe:{} };
+      if (!byUid[uid].nama || byUid[uid].nama==='-') byUid[uid].nama = r.nama || byUid[uid].nama;
+      if (!byUid[uid].email) byUid[uid].email = r.email || '';
       byUid[uid].events.push(r);
       if (!byUid[uid].byTipe[r.tipe]) byUid[uid].byTipe[r.tipe] = r;
     });
@@ -932,21 +952,24 @@ async function loadKehadiranMatrix(){
 function renderKhSummary(){
   const sum = $('khSummary'); if (!sum) return;
   const uids = Object.keys(khRowsCache);
-  let working=0, onBreak=0, paused=0, finish=0;
+  let working=0, onBreak=0, paused=0, finish=0, belum=0, hadir=0;
   uids.forEach(u=>{
     const bt = khRowsCache[u].byTipe || {};
-    // Prioritas state: Finished > Break > Paused > Working
+    const hasAny = Object.keys(bt).length > 0;
+    if (!hasAny){ belum++; return; }
+    hadir++;
     if (bt.clock_out || bt.overtime_out) finish++;
     else if (bt.break_in && !bt.break_out) onBreak++;
     else if (bt.pause_in && !bt.pause_out) paused++;
     else if (bt.clock_in || bt.overtime_in) working++;
   });
   sum.innerHTML =
-    '<div class="kh-stat"><b>'+uids.length+'</b><small>Hadir</small></div>'+
+    '<div class="kh-stat"><b>'+hadir+'</b><small>Hadir</small></div>'+
     '<div class="kh-stat"><b>'+working+'</b><small>On Working</small></div>'+
     '<div class="kh-stat"><b>'+onBreak+'</b><small>On Break</small></div>'+
     '<div class="kh-stat"><b>'+paused+'</b><small>Paused</small></div>'+
-    '<div class="kh-stat"><b>'+finish+'</b><small>Finish</small></div>';
+    '<div class="kh-stat"><b>'+finish+'</b><small>Finish</small></div>'+
+    '<div class="kh-stat"><b>'+belum+'</b><small>Belum Hadir</small></div>';
 }
 
 function gpsDotFor(row){
@@ -959,13 +982,13 @@ function gpsDotFor(row){
 
 function statusBadgeFor(row){
   const bt = row.byTipe || {};
-  if (!Object.keys(bt).length) return '<span class="kh-badge kh-na">-</span>';
+  if (!Object.keys(bt).length) return '<span class="kh-badge kh-belum">Belum Hadir</span>';
   // Prioritas state (tidak bergantung urutan timestamp):
   if (bt.clock_out || bt.overtime_out) return '<span class="kh-badge kh-finish">Finished</span>';
   if (bt.break_in && !bt.break_out) return '<span class="kh-badge kh-break">Break</span>';
   if (bt.pause_in && !bt.pause_out) return '<span class="kh-badge kh-pause">Paused</span>';
   if (bt.clock_in || bt.overtime_in) return '<span class="kh-badge kh-working">Working</span>';
-  return '<span class="kh-badge kh-na">-</span>';
+  return '<span class="kh-badge kh-belum">Belum Hadir</span>';
 }
 
 function renderKehadiranMatrix(){
