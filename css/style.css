@@ -456,3 +456,10 @@ img.hadir-avatar,
 .rd-edit-jam:focus, .rd-edit-tgl:focus, .rd-edit-tipe:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
 .rd-hapus { padding: 4px 8px; border-radius: 6px; background: #fee2e2; }
 .rd-hapus:hover { background: #fecaca; }
+
+
+/* ===== Matrix Kehadiran Harian — auto-save feedback ===== */
+input.kh-time { transition: background .25s ease, border-color .25s ease; }
+input.kh-time.kh-saving { background: #fef3c7 !important; border-color: #f59e0b !important; }
+input.kh-time.kh-saved { background: #d1fae5 !important; border-color: #10b981 !important; }
+input.kh-time.kh-save-err { background: #fee2e2 !important; border-color: #ef4444 !important; }
