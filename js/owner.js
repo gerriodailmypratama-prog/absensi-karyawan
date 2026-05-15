@@ -1063,6 +1063,33 @@ async function loadKehadiranMatrix(){
       byUid[uid].events.push(r);
       if (!byUid[uid].byTipe[r.tipe]) byUid[uid].byTipe[r.tipe] = r;
     });
+    // ===== Normalize byTipe untuk shift overnight =====
+    // clock_out yang muncul SEBELUM clock_in pertama = orphan (sisa shift kemaren) -> skip.
+    // Pilih _out yang waktunya >= pasangan _in nya.
+    const SHIFT_PAIRS = { clock_out:'clock_in', break_out:'break_in', pause_out:'pause_in', overtime_out:'overtime_in' };
+    Object.keys(byUid).forEach(u=>{
+      const evs = (byUid[u].events||[]).slice().sort((a,b)=>{
+        const ta = (a.ts && a.ts.toDate) ? a.ts.toDate().getTime() : 0;
+        const tb = (b.ts && b.ts.toDate) ? b.ts.toDate().getTime() : 0;
+        return ta - tb;
+      });
+      const bt = {};
+      ['clock_in','break_in','pause_in','overtime_in'].forEach(tIn=>{
+        const ev = evs.find(e=>e.tipe===tIn);
+        if (ev) bt[tIn] = ev;
+      });
+      Object.keys(SHIFT_PAIRS).forEach(tOut=>{
+        const tIn = SHIFT_PAIRS[tOut];
+        const inEv = bt[tIn];
+        const inTs = (inEv && inEv.ts && inEv.ts.toDate) ? inEv.ts.toDate().getTime() : null;
+        for (const e of evs){
+          if (e.tipe !== tOut) continue;
+          const ts = (e.ts && e.ts.toDate) ? e.ts.toDate().getTime() : 0;
+          if (inTs === null || ts >= inTs){ bt[tOut] = e; break; }
+        }
+      });
+      byUid[u].byTipe = bt;
+    });
     khRowsCache = byUid;
     renderKehadiranMatrix();
     renderKhSummary();
@@ -1683,6 +1710,12 @@ orderBy('ts', 'asc')
 );
 const snap = await getDocs(q);
 const byPerson = new Map();
+function _localDay(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+dd;
+}
 snap.forEach(d => {
 const r = d.data();
 const key = r.uid || r.email;
@@ -1690,9 +1723,37 @@ if (!key) return;
 if (!byPerson.has(key)) byPerson.set(key, new Map());
 const personMap = byPerson.get(key);
 const ts = r.ts && r.ts.toDate ? r.ts.toDate() : new Date();
-const dateStr = ts.toISOString().substring(0,10);
+const dateStr = _localDay(ts);
 if (!personMap.has(dateStr)) personMap.set(dateStr, []);
 personMap.get(dateStr).push({tipe: r.tipe, ts: ts, id: d.id});
+});
+// ===== Overnight rescue: orphan clock_out di hari D+1 dipindah ke hari D =====
+byPerson.forEach((personMap, key) => {
+  const dates = Array.from(personMap.keys()).sort();
+  for (let di=0; di<dates.length; di++){
+    const D = dates[di];
+    const evsD = personMap.get(D) || [];
+    const hasCiD = evsD.some(e=>e.tipe==='clock_in');
+    const hasCoD = evsD.some(e=>e.tipe==='clock_out');
+    if (!hasCiD || hasCoD) continue;
+    const Dnext = dates[di+1];
+    if (!Dnext) continue;
+    const dDate = new Date(D+'T00:00:00');
+    const nDate = new Date(Dnext+'T00:00:00');
+    const diffDays = Math.round((nDate - dDate) / 86400000);
+    if (diffDays !== 1) continue;
+    const evsN = personMap.get(Dnext) || [];
+    evsN.sort((a,b)=>a.ts - b.ts);
+    const firstCiN = evsN.find(e=>e.tipe==='clock_in');
+    const firstCoN = evsN.find(e=>e.tipe==='clock_out');
+    if (!firstCoN) continue;
+    if (firstCiN && firstCoN.ts.getTime() >= firstCiN.ts.getTime()) continue;
+    const idxRemove = evsN.indexOf(firstCoN);
+    if (idxRemove >= 0) evsN.splice(idxRemove, 1);
+    personMap.set(Dnext, evsN);
+    evsD.push(firstCoN);
+    personMap.set(D, evsD);
+  }
 });
 const rows = [];
 let totalBudget = 0, totalHari = 0, totalLemburJam = 0, totalJamKerjaAll = 0;
