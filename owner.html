@@ -350,5 +350,26 @@
 </div>
 
 <script type="module" src="js/owner.js"></script>
+
+<!-- ===== Modal Detail Rekap (drill-down per karyawan) ===== -->
+<div id="rekapDetailModal" class="modal hidden">
+  <div class="modal-content rekap-detail-content">
+    <div class="modal-head">
+      <h3 id="rekapDetailTitle">Detail Kehadiran</h3>
+      <button class="modal-close" id="btnRekapDetailClose" aria-label="Tutup">×</button>
+    </div>
+    <p class="muted small" id="rekapDetailSub">Klik jam / tipe untuk edit langsung. Perubahan tersimpan otomatis.</p>
+    <div class="table-wrap">
+      <table id="tblRekapDetail" class="rekap-detail-table">
+        <thead><tr>
+          <th>Tanggal</th><th>Jam</th><th>Tipe</th><th>Status</th><th>Aksi</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p id="rekapDetailEmpty" class="muted center"></p>
+  </div>
+</div>
+
 </body>
 </html>
