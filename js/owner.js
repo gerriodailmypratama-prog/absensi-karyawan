@@ -4,7 +4,7 @@
   if (window.__time24Installed) return; window.__time24Installed = true;
   function autoFormat(v){
     v = (v||'').replace(/[^0-9]/g,'').slice(0,4);
-    if (v.length >= 3) return v.slice(0,2) + ':' + v.slice(2);
+    if (v.length === 4) return v.slice(0,2) + ':' + v.slice(2);
     return v;
   }
   function validHM(v){ return /^([01]\d|2[0-3]):[0-5]\d$/.test(v); }
@@ -65,7 +65,27 @@ async function saveSingleKehadiranCell(uid, inp){
                 await deleteDoc(doc(db,'absensi', existing._id));
             }
         } else {
-            const [hh,mm] = newVal.split(':').map(Number);
+            // Normalisasi format: pad single-digit hour/minute, atau 3-4 digit raw
+        let _nv = newVal;
+        let _m1 = _nv.match(/^(\d):(\d{1,2})$/);
+        if (_m1) _nv = '0' + _m1[1] + ':' + (_m1[2].length===1 ? '0'+_m1[2] : _m1[2]);
+        let _m2 = _nv.match(/^(\d{2}):(\d)$/);
+        if (_m2) _nv = _m2[1] + ':0' + _m2[2];
+        if (/^\d+$/.test(_nv)){
+          if (_nv.length === 1) _nv = '0' + _nv + ':00';
+          else if (_nv.length === 2) _nv = _nv + ':00';
+          else if (_nv.length === 3) _nv = '0' + _nv[0] + ':' + _nv.slice(1);
+          else if (_nv.length === 4) _nv = _nv.slice(0,2) + ':' + _nv.slice(2);
+        }
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(_nv)){
+          inp.classList.remove('kh-saving');
+          inp.classList.add('kh-save-err');
+          setTimeout(()=>inp.classList.remove('kh-save-err'), 1500);
+          inp.value = origVal;
+          return;
+        }
+        inp.value = _nv;
+        const [hh,mm] = _nv.split(':').map(Number);
             const dateBase = new Date(currentKhDate);
             const newTs = new Date(dateBase);
             newTs.setHours(hh||0, mm||0, 0, 0);
