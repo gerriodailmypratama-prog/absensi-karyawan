@@ -32,6 +32,7 @@
       <a href="#kehadiran" class="nav-link" data-page="kehadiran">&#x1F5D3; Kehadiran Harian</a>
       <a href="#rekap" class="nav-link" data-page="rekap">&#x1F4C8; Rekap Kehadiran</a>
 <a href="#karyawan" class="nav-link" data-page="karyawan">&#x1F465; Karyawan</a>
+<a href="#payroll" class="nav-link" data-page="payroll">&#x1F4B0; Payroll</a>
     </nav>
   </aside>
 
@@ -284,6 +285,61 @@
         <p id="emptyKaryawan" class="muted center"></p>
       </div>
     </section>
+<section id="page-payroll" class="page">
+  <div class="page-head">
+    <h2>&#x1F4B0; Payroll</h2>
+    <p class="muted small">Estimasi gaji berjalan berdasarkan kehadiran. Tipe: harian, dibayar bulanan.</p>
+  </div>
+
+  <div class="card" style="margin-bottom:12px">
+    <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:end">
+      <div>
+        <label for="prBulan" class="muted small">Bulan</label><br>
+        <input type="month" id="prBulan" style="font-size:14px; padding:6px 8px">
+      </div>
+      <button id="btnPrRefresh" class="btn btn-primary">Hitung Ulang</button>
+      <button id="btnPrExportCSV" class="btn btn-secondary">Export CSV</button>
+      <div class="muted small" id="prLastCalc" style="margin-left:auto"></div>
+    </div>
+  </div>
+
+  <div class="payroll-summary" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:10px; margin-bottom:14px">
+    <div class="card pr-stat"><b id="prTotalKaryawan">0</b><small>Total Karyawan</small></div>
+    <div class="card pr-stat"><b id="prTotalBudget">Rp 0</b><small>Total Budget Bulan Ini</small></div>
+    <div class="card pr-stat"><b id="prTotalHari">0</b><small>Total Hari Hadir</small></div>
+    <div class="card pr-stat"><b id="prTotalLembur">0 jam</b><small>Total Jam Lembur</small></div>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table id="tblPayroll" class="table">
+        <thead><tr>
+          <th>Nama</th><th>Base/hari</th><th>Hari Hadir</th><th>Hari &frac12;</th><th>Jam Lembur</th>
+          <th>Upah Pokok</th><th>Upah Lembur</th><th>Total</th><th>Status</th><th>Aksi</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <p id="prEmpty" class="muted small center" style="padding:18px">Belum ada data. Pilih bulan lalu tap Hitung Ulang.</p>
+    </div>
+  </div>
+</section>
+
+<div id="payrollDetailModal" class="modal hidden">
+  <div class="modal-content card" style="max-width:640px; width:90%">
+    <div class="modal-head">
+      <h3 id="prDetailTitle">Detail Payroll</h3>
+      <button class="modal-close" id="btnPrDetailClose">&times;</button>
+    </div>
+    <p class="muted small" id="prDetailSub"></p>
+    <div class="table-wrap">
+      <table id="tblPayrollDetail" class="table table-sm">
+        <thead><tr><th>Tanggal</th><th>Masuk</th><th>Keluar</th><th>Total Kerja</th><th>Kategori</th><th>Kontribusi</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
   </main>
 </div>
 
