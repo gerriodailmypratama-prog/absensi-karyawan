@@ -328,13 +328,25 @@ onAuthStateChanged(auth, async u => {
 $('btnLogout').onclick = () => signOut(auth).then(()=>location.replace('index.html')).catch(()=>location.replace('index.html'));
 
 async function refreshLocStatus(){
-  return new Promise(resolve => {
-    if (!navigator.geolocation){ coords=null; resolve(); return; }
-    navigator.geolocation.getCurrentPosition(p => {
-      coords = { lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy };
-      resolve();
-    }, err => { coords=null; resolve(); }, { enableHighAccuracy:true, timeout:8000, maximumAge:0 });
+  if (!navigator.geolocation){ coords = null; return; }
+
+  const getPos = (opts) => new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }),
+      _ => resolve(null),
+      opts
+    );
   });
+
+  // 1) Coba high-accuracy dulu (cepat 5s)
+  let result = await getPos({ enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
+
+  // 2) Kalau gagal, fallback low-accuracy (10s, boleh cache 30s)
+  if (!result) {
+    result = await getPos({ enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 });
+  }
+
+  coords = result;
 }
 
 async function openSelfie(type){
@@ -342,11 +354,60 @@ async function openSelfie(type){
   $('selfieTitle').textContent = 'Ambil Selfie - ' + (TIPE[type]||type);
   $('selfieModal').classList.remove('hidden');
   $('selfieCanvas').classList.add('hidden');
-  try{
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode:'user' }, audio:false });
-    const v = $('selfieVideo'); v.srcObject = stream; cameraReady = true;
-  }catch(e){
-    alert('Tidak bisa akses kamera: ' + e.message);
+  cameraReady = false;
+
+  // 1) Prefetch lokasi DULU sebelum minta kamera
+  if (!coords) { try { await refreshLocStatus(); } catch(e){} }
+  if (!coords) {
+    alert('Lokasi belum terdeteksi. Aktifkan GPS / izinkan akses lokasi, lalu coba lagi.');
+    closeSelfie();
+    return;
+  }
+
+  // 2) Disable tombol shoot sampai kamera siap
+  const btnShoot = $('btnSelfieShoot');
+  if (btnShoot) { btnShoot.disabled = true; btnShoot.textContent = 'Menyiapkan kamera...'; }
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'user' },
+        width:  { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: false
+    });
+
+    const v = $('selfieVideo');
+    v.setAttribute('playsinline', '');
+    v.muted = true;
+    v.srcObject = stream;
+
+    // Paksa play
+    try { await v.play(); } catch(_) {}
+
+    // Tunggu metadata supaya videoWidth/Height valid (max 8s)
+    await new Promise((res, rej) => {
+      if (v.videoWidth > 0 && v.videoHeight > 0) return res();
+      const to = setTimeout(() => rej(new Error('Camera not ready (timeout)')), 8000);
+      const done = () => { clearTimeout(to); v.removeEventListener('loadedmetadata', done); res(); };
+      v.addEventListener('loadedmetadata', done);
+    });
+
+    cameraReady = true;
+    if (btnShoot) { btnShoot.disabled = false; btnShoot.textContent = 'Ambil Foto'; }
+  } catch(e) {
+    let pesan = 'Tidak bisa akses kamera: ' + (e.message || e.name || 'unknown');
+    if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+      pesan = 'Izin kamera ditolak. Buka pengaturan browser, izinkan kamera untuk site ini, lalu refresh.';
+    } else if (e.name === 'NotFoundError' || e.name === 'DevicesNotFoundError') {
+      pesan = 'Kamera tidak ditemukan di device ini.';
+    } else if (e.name === 'NotReadableError' || e.name === 'TrackStartError') {
+      pesan = 'Kamera sedang dipakai aplikasi lain. Tutup app lain yang pakai kamera, lalu coba lagi.';
+    } else if (e.name === 'OverconstrainedError') {
+      pesan = 'Kamera tidak mendukung resolusi yang diminta. Hubungi admin.';
+    }
+    alert(pesan);
     closeSelfie();
   }
 }
@@ -358,24 +419,53 @@ function closeSelfie(){
 $('btnSelfieCancel').onclick = closeSelfie;
 $('btnSelfieShoot').onclick = async ()=>{
   if (!cameraReady) return;
+  if (isSubmitting) return;
   const v = $('selfieVideo');
   const c = $('selfieCanvas');
-  c.width = v.videoWidth; c.height = v.videoHeight;
+
+  if (!v.videoWidth || !v.videoHeight) {
+    alert('Kamera belum siap. Tunggu sebentar lalu klik lagi.');
+    return;
+  }
+
+  const btnShoot = $('btnSelfieShoot');
+  btnShoot.disabled = true;
+  btnShoot.textContent = 'Memproses...';
+
+  c.width = v.videoWidth;
+  c.height = v.videoHeight;
   c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+
   const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.85));
+  if (!blob || blob.size < 1000) {
+    btnShoot.disabled = false;
+    btnShoot.textContent = 'Ambil Foto';
+    alert('Gagal capture foto (blank). Coba ulangi.');
+    return;
+  }
+
   closeSelfie();
+
   if (!coords) try{ await refreshLocStatus(); }catch(e){}
   if (!coords){ alert('Lokasi belum tersedia.'); return; }
   const d = distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
   const inRad = d <= OFFICE_RADIUS;
   let selfieUrl = '';
+
+  showSavingOverlay('Mengunggah foto & menyimpan absen...');
+
   try{
-    const path = 'selfie/' + currentUser.uid + '/' + Date.now() + '.jpg';
+    const rand = Math.random().toString(36).slice(2,8);
+    const path = 'selfie/' + currentUser.uid + '/' + Date.now() + '_' + rand + '.jpg';
     const r = ref(storage, path);
     await uploadBytes(r, blob);
     selfieUrl = await getDownloadURL(r);
   }catch(e){
     console.warn('Selfie upload gagal:', e.message);
+    hideSavingOverlay();
+    const lanjut = confirm('Upload foto gagal (' + (e.message||'network') + '). Tetap lanjutkan absen tanpa foto?');
+    if (!lanjut) return;
+    showSavingOverlay('Menyimpan absen...');
   }
   const extra = {};
   if (currentType === 'clock_out' && window.__earlyReason){
@@ -390,10 +480,34 @@ $('btnSelfieShoot').onclick = async ()=>{
   try {
     await saveAttendance(Object.assign({ tipe: currentType, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad, fotoSelfie:selfieUrl }, extra));
     await loadActiveSession(currentUser.uid);
+  } catch(e){
+    alert('Gagal menyimpan absen: ' + (e.message||'unknown') + '. Coba lagi.');
   } finally {
     isSubmitting = false;
+    hideSavingOverlay();
   }
 };
+
+// Helper overlay loading untuk camera flow
+function showSavingOverlay(text){
+  let o = document.getElementById('__savingOverlay');
+  if (!o){
+    o = document.createElement('div');
+    o.id = '__savingOverlay';
+    o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;text-align:center;padding:24px;';
+    o.innerHTML = '<div><div class="__spin" style="width:48px;height:48px;border:4px solid #fff;border-top-color:transparent;border-radius:50%;margin:0 auto 16px;animation:__spin 1s linear infinite"></div><div id="__savingText"></div></div>';
+    const st = document.createElement('style');
+    st.textContent = '@keyframes __spin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(st);
+    document.body.appendChild(o);
+  }
+  document.getElementById('__savingText').textContent = text || 'Menyimpan...';
+  o.style.display = 'flex';
+}
+function hideSavingOverlay(){
+  const o = document.getElementById('__savingOverlay');
+  if (o) o.style.display = 'none';
+}
 
 async function doNoSelfieAction(type, extra={}){
   if (!coords) try{ await refreshLocStatus(); }catch(e){}
