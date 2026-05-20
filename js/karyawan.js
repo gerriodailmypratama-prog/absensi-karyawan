@@ -943,9 +943,4 @@ function showMandatoryAvatarModal(){
     if (m) m.classList.remove('hidden');
   }catch(e){}
 }
-(function(){
-  try{
-    const b = document.getElementById('btnUploadAvatarNow');
-    if (b) b.onclick = ()=>{ try{ $('avatarInput').click(); }catch(e){} };
-  }catch(e){}
-})();
+/* Removed: btnUploadAvatarNow.onclick handler — now uses <label for="avatarInput"> native HTML pattern */
