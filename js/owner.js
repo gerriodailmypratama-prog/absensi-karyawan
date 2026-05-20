@@ -423,7 +423,7 @@ function renderTable(rows) {
             '<td><select class="kh-edit-tipe" data-id="'+(r._id||'')+'">'+tipeOpts+'</select></td>'+
             '<td>'+badge+'</td><td>'+loc+'</td><td>'+img+'</td>'+
             '<td class="col-aksi-kh">'+
-                '<button class="btn-link btn-hapus-absen" data-id="'+(r._id||'')+'" data-nama="'+nama+'" data-tipe="'+(r.tipe||'')+'" data-ts="'+isoTs+'" style="color:#dc2626">🗑️ Hapus</button>'+
+                '<button class="btn-link btn-hapus-absen" data-id="'+(r._id||'')+'" data-nama="'+nama+'" data-tipe="'+(r.tipe||'')+'" data-ts="'+isoTs+'" style="color:#dc2626">ðï¸ Hapus</button>'+
             '</td>';
         tb.appendChild(tr);
     });
@@ -630,7 +630,7 @@ async function openEditKaryawan(uid){
         if ($('editAtasNamaRek')) $('editAtasNamaRek').value = d.atasNamaRek || '';
         if ($('editNomorRekening')) $('editNomorRekening').value = d.nomorRekening || '';
         // Status upload dokumen
-        const setStat = (id, url) => { const el = $(id); if (el) el.textContent = url ? '✓ sudah diupload' : '(belum)'; };
+        const setStat = (id, url) => { const el = $(id); if (el) el.textContent = url ? 'â sudah diupload' : '(belum)'; };
         setStat('ktpStatus', d.ktpUrl);
         // Reset file inputs
         ['editKtpFile'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
@@ -1323,7 +1323,7 @@ async function deleteKehadiranRow(uid){
 
 
 /* ===========================================================
-   REKAP KEHADIRAN (Hadirr-style) — date range summary per user
+   REKAP KEHADIRAN (Hadirr-style) â date range summary per user
    =========================================================== */
 let rekapEventsCache = [];
 let rekapRangeFrom = null;
@@ -1605,7 +1605,8 @@ function openRekapDetail(uid, nama){
                 '<td><input type="text" inputmode="numeric" maxlength="5" placeholder="--:--" class="rd-edit-jam" data-id="'+ev.id+'" value="'+(jam||'').slice(0,5)+'"></td>'+
                 '<td><select class="rd-edit-tipe" data-id="'+ev.id+'">'+opts+'</select></td>'+
                 '<td>'+status+'</td>'+
-                '<td><button class="btn-link rd-hapus" data-id="'+ev.id+'" data-nama="'+(nama||'').replace(/"/g,'&quot;')+'" data-tipe="'+(ev.tipe||'')+'" style="color:#dc2626">🗑️ Hapus</button></td>'+
+                ''<td>'+((ev.tipe==='overtime_out')?('<span class="rd-review-status" data-id="'+ev.id+'" style="display:inline-block;padding:2px 6px;border-radius:4px;font-size:11px;margin-right:4px;background:'+((ev.reviewStatus==='approved')?'#dcfce7;color:#166534':((ev.reviewStatus==='rejected')?'#fee2e2;color:#991b1b':'#fef3c7;color:#92400e'))+'">'+((ev.reviewStatus==='approved')?'✓ Approved':((ev.reviewStatus==='rejected')?'✗ Rejected':'⏳ Pending'))+'</span><button class="btn-link rd-approve-ot" data-id="'+ev.id+'" style="color:#16a34a;margin-right:4px">Approve</button><button class="btn-link rd-reject-ot" data-id="'+ev.id+'" style="color:#dc2626">Reject</button>'):'')+'</td>'+
+            <td><button class="btn-link rd-hapus" data-id="'+ev.id+'" data-nama="'+(nama||'').replace(/"/g,'&quot;')+'" data-tipe="'+(ev.tipe||'')+'" style="color:#dc2626">ðï¸ Hapus</button></td>'+
             '</tr>';
         }).join('');
         tbody.querySelectorAll('.rd-edit-jam').forEach(inp=>{
@@ -1680,11 +1681,40 @@ function openRekapDetail(uid, nama){
                 }catch(err){
                     console.error('rd hapus err', err);
                     alert('Gagal hapus: '+(err.message||err));
-                    b.disabled = false; b.textContent = '🗑️ Hapus';
+                    b.disabled = false; b.textContent = 'ðï¸ Hapus';
                 }
             };
         });
     }
+    // PATCH: Handlers approve/reject Clock Out Lembur
+    const _otReviewHandler = (cls, newStatus)=>{
+      tbody.querySelectorAll('.'+cls).forEach(b=>{
+        b.onclick = async ()=>{
+          const id = b.dataset.id;
+          if(!id) return;
+          b.disabled = true;
+          try{
+            await updateDoc(doc(db,'absensi', id), { reviewStatus: newStatus, reviewedBy: (auth.currentUser&&auth.currentUser.email)||null, reviewedAt: serverTimestamp() });
+            const idx = rekapEventsCache.findIndex(e=>e.id===id);
+            if(idx>=0) rekapEventsCache[idx].reviewStatus = newStatus;
+            const span = tbody.querySelector('.rd-review-status[data-id="'+id+'"]');
+            if(span){
+              if(newStatus==='approved'){ span.style.background='#dcfce7'; span.style.color='#166534'; span.textContent='✓ Approved'; }
+              else if(newStatus==='rejected'){ span.style.background='#fee2e2'; span.style.color='#991b1b'; span.textContent='✗ Rejected'; }
+              else { span.style.background='#fef3c7'; span.style.color='#92400e'; span.textContent='⏳ Pending'; }
+            }
+            try{ if(typeof loadRekap==='function') loadRekap(); }catch(e){}
+          }catch(err){
+            console.error('rd review err', err);
+            alert('Gagal update status review: '+(err.message||err));
+          }finally{
+            b.disabled = false;
+          }
+        };
+      });
+    };
+    _otReviewHandler('rd-approve-ot','approved');
+    _otReviewHandler('rd-reject-ot','rejected');
     modal.classList.remove('hidden');
 }
 function closeRekapDetail(){
@@ -1706,7 +1736,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
 
 // ============================================================
-// PAYROLL MODULE — gaji harian, dibayar bulanan
+// PAYROLL MODULE â gaji harian, dibayar bulanan
 // ============================================================
 let __payrollData = null;
 
@@ -1850,7 +1880,7 @@ kategori = 'tidak-clockout'; kontribusi = 0;
 totalJamKerja += effJam;
 totalKontribusi += kontribusi;
 let lemburJam = 0;
-if (oi && oo){ lemburJam = Math.max(0, (oo.ts - oi.ts) / 3600000); totalJamLembur += lemburJam; }
+if (oi && oo && oo.reviewStatus !== 'rejected'){ lemburJam = Math.max(0, (oo.ts - oi.ts) / 3600000); totalJamLembur += lemburJam; }
 dailyDetails.push({
 date: dateStr,
 jamMasuk: ci ? ci.ts.toTimeString().substring(0,5) : '--',
