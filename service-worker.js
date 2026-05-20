@@ -1,17 +1,17 @@
-const CACHE = 'absensi-v25';const ASSETS = [    './','./index.html','./karyawan.html','./owner.html',
+const CACHE = 'absensi-v26';const ASSETS = [    './','./index.html','./karyawan.html','./owner.html',
     './css/style.css','./manifest.json','./icon.svg'
 ];
 
 self.addEventListener('install', e => {
     e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS).catch(()=>null)));
-    // Do NOT call skipWaiting - let user finish current session before activating new SW
+    self.skipWaiting(); // force activate new SW immediately (avatar fix needs deploy now)
 });
 
 self.addEventListener('activate', e => {
     e.waitUntil(caches.keys().then(keys =>
         Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
     ));
-    // Do NOT call clients.claim - new SW takes over only on next page navigation
+    self.clients.claim(); // take over all open clients immediately
 });
 
 self.addEventListener('fetch', e => {
