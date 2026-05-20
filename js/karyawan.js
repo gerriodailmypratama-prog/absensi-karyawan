@@ -878,38 +878,34 @@ async function checkForgottenClockOut(uid){
   }catch(e){ console.warn('checkForgottenClockOut err:', e); }
 }
 
-$('avatarWrap').onclick = () => { try{ $('avatarInput').click(); }catch(e){} };
-$('avatarInput').onchange = async (ev) => {
-  const f = ev.target.files[0]; if (!f) return;
-  if(!currentUser || !currentUser.uid){ alert('Belum login. Refresh halaman.'); return; }
-  // Cari label/button apapun yang nampak ke user
-  const lbl = document.querySelector('label[for="avatarInput"]');
-  const btn = document.getElementById('btnUploadAvatarNow');
-  const target = lbl || btn;
+// Avatar upload â event delegation pattern (defensive, attach via DOM listener)
+const __avatarUploadHandler = async (ev) => {
+  const inp = ev.target;
+  if(!inp || inp.id !== 'avatarInput') return;
+  const f = inp.files && inp.files[0];
+  alert('[Avatar] onchange fired. file=' + (f ? f.name + ' (' + Math.round(f.size/1024) + 'KB)' : 'NONE'));
+  if (!f) return;
+  if(!currentUser || !currentUser.uid){ alert('[Avatar] Belum login. currentUser=' + currentUser); return; }
+  const target = document.getElementById('btnUploadAvatarNow') || document.querySelector('label[for="avatarInput"]');
   const origText = target ? target.textContent : '';
   if(target){ target.textContent = 'Mengupload...'; target.style.opacity='0.6'; target.style.pointerEvents='none'; }
   try{
-    // Step 1: resize ke base64
     let dataUrl;
     try{ dataUrl = await resizeImage(f, 400); }
     catch(rzErr){ throw new Error('Resize gagal: '+(rzErr&&rzErr.message||rzErr)); }
     if(!dataUrl || !dataUrl.startsWith('data:')) throw new Error('Resize hasil tidak valid');
-    // Step 2: SKIP Firebase Storage (bypass rules/CORS), simpan base64 langsung ke Firestore
+    alert('[Avatar] Resize OK. base64 length=' + dataUrl.length);
     const namaNow = (userProfile && userProfile.nama) || (currentUser.displayName) || (currentUser.email && currentUser.email.split('@')[0]) || '';
-    // Step 3: persist ke Firestore profil (dengan timeout 15 detik)
     const withTimeout = (p,ms,label)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timeout '+label+' ('+ms+'ms)')),ms))]);
     try{
       await withTimeout(setDoc(doc(db,'profil', currentUser.uid), { foto: dataUrl, nama: namaNow, email: currentUser.email||'', updatedAt: serverTimestamp() }, { merge:true }), 15000, 'profil');
     }catch(profilErr){ throw new Error('Simpan profil gagal: '+(profilErr&&profilErr.message||profilErr)); }
-    // Step 4: persist ke karyawan (best-effort, jangan fatal)
     try{
       await withTimeout(setDoc(doc(db,'karyawan', currentUser.uid), { foto: dataUrl, nama: namaNow, email: currentUser.email||'', updatedAt: serverTimestamp() }, { merge:true }), 15000, 'karyawan');
     }catch(karyErr){ console.warn('setDoc karyawan err:', karyErr && karyErr.message); }
-    // Step 5: update UI
     if(userProfile){ userProfile.foto = dataUrl; userProfile.nama = userProfile.nama || namaNow; }
-    $('avatarImg').src = dataUrl;
-    $('avatarImg').style.display = 'block';
-    $('avatarPlaceholder').style.display = 'none';
+    const aImg=$('avatarImg'); if(aImg){ aImg.src = dataUrl; aImg.style.display = 'block'; }
+    const aPh=$('avatarPlaceholder'); if(aPh) aPh.style.display = 'none';
     const mAvatar = $('mandatoryAvatarModal'); if(mAvatar) mAvatar.classList.add('hidden');
     alert('Foto berhasil disimpan!');
   }catch(e){
@@ -917,9 +913,14 @@ $('avatarInput').onchange = async (ev) => {
     alert('Gagal simpan foto: ' + ((e && e.message) || 'unknown error'));
   }finally{
     if(target){ target.textContent = origText || 'Pilih Foto / Selfie Sekarang'; target.style.opacity=''; target.style.pointerEvents=''; }
-    try{ ev.target.value = ''; }catch(e){}
+    try{ inp.value = ''; }catch(e){}
   }
 };
+document.addEventListener('change', __avatarUploadHandler, true);
+const __wrapEl = document.getElementById('avatarWrap');
+if(__wrapEl){ __wrapEl.addEventListener('click', () => { try{ const inp=document.getElementById('avatarInput'); if(inp) inp.click(); }catch(e){} }); }
+console.log('[Avatar] event delegation handler installed');
+
 
 function resizeImage(file, maxSize){
   return new Promise((resolve, reject)=>{
