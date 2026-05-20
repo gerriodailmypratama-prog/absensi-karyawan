@@ -882,41 +882,41 @@ $('avatarWrap').onclick = () => { try{ $('avatarInput').click(); }catch(e){} };
 $('avatarInput').onchange = async (ev) => {
   const f = ev.target.files[0]; if (!f) return;
   if(!currentUser || !currentUser.uid){ alert('Belum login. Refresh halaman.'); return; }
+  // Cari label/button apapun yang nampak ke user
+  const lbl = document.querySelector('label[for="avatarInput"]');
   const btn = document.getElementById('btnUploadAvatarNow');
-  const origText = btn ? btn.textContent : '';
-  if(btn){ btn.textContent = 'Mengupload...'; btn.style.opacity='0.6'; btn.style.pointerEvents='none'; }
+  const target = lbl || btn;
+  const origText = target ? target.textContent : '';
+  if(target){ target.textContent = 'Mengupload...'; target.style.opacity='0.6'; target.style.pointerEvents='none'; }
   try{
-    const dataUrl = await resizeImage(f, 400);
-    let url = dataUrl;
-    let storageOk = false;
-    try{
-      const path = 'profil/' + currentUser.uid + '/avatar.jpg';
-      const r2 = ref(storage, path);
-      await uploadString(r2, dataUrl, 'data_url');
-      url = await getDownloadURL(r2);
-      storageOk = true;
-      console.log('Avatar uploaded to Storage:', url);
-    }catch(storageErr){
-      console.warn('Storage upload gagal, fallback ke base64 inline:', storageErr && storageErr.message);
-    }
+    // Step 1: resize ke base64
+    let dataUrl;
+    try{ dataUrl = await resizeImage(f, 400); }
+    catch(rzErr){ throw new Error('Resize gagal: '+(rzErr&&rzErr.message||rzErr)); }
+    if(!dataUrl || !dataUrl.startsWith('data:')) throw new Error('Resize hasil tidak valid');
+    // Step 2: SKIP Firebase Storage (bypass rules/CORS), simpan base64 langsung ke Firestore
     const namaNow = (userProfile && userProfile.nama) || (currentUser.displayName) || (currentUser.email && currentUser.email.split('@')[0]) || '';
+    // Step 3: persist ke Firestore profil (dengan timeout 15 detik)
+    const withTimeout = (p,ms,label)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timeout '+label+' ('+ms+'ms)')),ms))]);
     try{
-      await setDoc(doc(db,'profil', currentUser.uid), { foto: url, nama: namaNow, email: currentUser.email||'', updatedAt: serverTimestamp() }, { merge:true });
-    }catch(profilErr){ console.warn('setDoc profil err:', profilErr && profilErr.message); }
+      await withTimeout(setDoc(doc(db,'profil', currentUser.uid), { foto: dataUrl, nama: namaNow, email: currentUser.email||'', updatedAt: serverTimestamp() }, { merge:true }), 15000, 'profil');
+    }catch(profilErr){ throw new Error('Simpan profil gagal: '+(profilErr&&profilErr.message||profilErr)); }
+    // Step 4: persist ke karyawan (best-effort, jangan fatal)
     try{
-      await setDoc(doc(db,'karyawan', currentUser.uid), { foto: url, nama: namaNow, email: currentUser.email||'', updatedAt: serverTimestamp() }, { merge:true });
-    }catch(karyawanErr){ console.warn('setDoc karyawan err:', karyawanErr && karyawanErr.message); }
-    if(userProfile){ userProfile.foto = url; userProfile.nama = userProfile.nama || namaNow; }
-    $('avatarImg').src = url;
+      await withTimeout(setDoc(doc(db,'karyawan', currentUser.uid), { foto: dataUrl, nama: namaNow, email: currentUser.email||'', updatedAt: serverTimestamp() }, { merge:true }), 15000, 'karyawan');
+    }catch(karyErr){ console.warn('setDoc karyawan err:', karyErr && karyErr.message); }
+    // Step 5: update UI
+    if(userProfile){ userProfile.foto = dataUrl; userProfile.nama = userProfile.nama || namaNow; }
+    $('avatarImg').src = dataUrl;
     $('avatarImg').style.display = 'block';
     $('avatarPlaceholder').style.display = 'none';
     const mAvatar = $('mandatoryAvatarModal'); if(mAvatar) mAvatar.classList.add('hidden');
-    if(!storageOk){ console.warn('Foto disimpan sebagai base64 inline (Storage gagal). Cek Firebase Storage rules untuk path profil/{uid}/avatar.jpg'); }
+    alert('Foto berhasil disimpan!');
   }catch(e){
     console.error('Gagal simpan foto:', e);
-    alert('Gagal simpan foto: ' + ((e && e.message) || 'unknown error') + '\n\nDetail: lihat console browser (F12).');
+    alert('Gagal simpan foto: ' + ((e && e.message) || 'unknown error'));
   }finally{
-    if(btn){ btn.textContent = origText || 'Pilih Foto / Selfie Sekarang'; btn.style.opacity=''; btn.style.pointerEvents=''; }
+    if(target){ target.textContent = origText || 'Pilih Foto / Selfie Sekarang'; target.style.opacity=''; target.style.pointerEvents=''; }
     try{ ev.target.value = ''; }catch(e){}
   }
 };
