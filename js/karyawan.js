@@ -878,29 +878,46 @@ async function checkForgottenClockOut(uid){
   }catch(e){ console.warn('checkForgottenClockOut err:', e); }
 }
 
-$('avatarWrap').onclick = () => $('avatarInput').click();
+$('avatarWrap').onclick = () => { try{ $('avatarInput').click(); }catch(e){} };
 $('avatarInput').onchange = async (ev) => {
   const f = ev.target.files[0]; if (!f) return;
+  if(!currentUser || !currentUser.uid){ alert('Belum login. Refresh halaman.'); return; }
+  const btn = document.getElementById('btnUploadAvatarNow');
+  const origText = btn ? btn.textContent : '';
+  if(btn){ btn.textContent = 'Mengupload...'; btn.style.opacity='0.6'; btn.style.pointerEvents='none'; }
   try{
     const dataUrl = await resizeImage(f, 400);
     let url = dataUrl;
+    let storageOk = false;
     try{
       const path = 'profil/' + currentUser.uid + '/avatar.jpg';
-      const r = ref(storage, path);
-      await uploadString(r, dataUrl, 'data_url');
-      url = await getDownloadURL(r);
-      console.log('Avatar uploaded to Storage');
+      const r2 = ref(storage, path);
+      await uploadString(r2, dataUrl, 'data_url');
+      url = await getDownloadURL(r2);
+      storageOk = true;
+      console.log('Avatar uploaded to Storage:', url);
     }catch(storageErr){
-      console.warn('Storage upload gagal, pakai base64 inline:', storageErr.message);
+      console.warn('Storage upload gagal, fallback ke base64 inline:', storageErr && storageErr.message);
     }
-    await setDoc(doc(db,'profil', currentUser.uid), { foto: url, nama: userProfile.nama || '' }, { merge:true });
-    userProfile.foto = url;
+    const namaNow = (userProfile && userProfile.nama) || (currentUser.displayName) || (currentUser.email && currentUser.email.split('@')[0]) || '';
+    try{
+      await setDoc(doc(db,'profil', currentUser.uid), { foto: url, nama: namaNow, email: currentUser.email||'', updatedAt: serverTimestamp() }, { merge:true });
+    }catch(profilErr){ console.warn('setDoc profil err:', profilErr && profilErr.message); }
+    try{
+      await setDoc(doc(db,'karyawan', currentUser.uid), { foto: url, nama: namaNow, email: currentUser.email||'', updatedAt: serverTimestamp() }, { merge:true });
+    }catch(karyawanErr){ console.warn('setDoc karyawan err:', karyawanErr && karyawanErr.message); }
+    if(userProfile){ userProfile.foto = url; userProfile.nama = userProfile.nama || namaNow; }
     $('avatarImg').src = url;
     $('avatarImg').style.display = 'block';
     $('avatarPlaceholder').style.display = 'none';
-    $('mandatoryAvatarModal').classList.add('hidden');
+    const mAvatar = $('mandatoryAvatarModal'); if(mAvatar) mAvatar.classList.add('hidden');
+    if(!storageOk){ console.warn('Foto disimpan sebagai base64 inline (Storage gagal). Cek Firebase Storage rules untuk path profil/{uid}/avatar.jpg'); }
   }catch(e){
-    alert('Gagal simpan foto: ' + e.message);
+    console.error('Gagal simpan foto:', e);
+    alert('Gagal simpan foto: ' + ((e && e.message) || 'unknown error') + '\n\nDetail: lihat console browser (F12).');
+  }finally{
+    if(btn){ btn.textContent = origText || 'Pilih Foto / Selfie Sekarang'; btn.style.opacity=''; btn.style.pointerEvents=''; }
+    try{ ev.target.value = ''; }catch(e){}
   }
 };
 
@@ -943,4 +960,4 @@ function showMandatoryAvatarModal(){
     if (m) m.classList.remove('hidden');
   }catch(e){}
 }
-/* Removed: btnUploadAvatarNow.onclick handler — now uses <label for="avatarInput"> native HTML pattern */
+/* Removed: btnUploadAvatarNow.onclick handler â now uses <label for="avatarInput"> native HTML pattern */
