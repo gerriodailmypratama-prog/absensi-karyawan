@@ -136,28 +136,6 @@
   </div>
 </main>
 
-<div id="earlyClockoutModal" class="modal hidden">
-  <div class="modal-box">
-    <h3>Clock Out Lebih Awal</h3>
-    <p class="muted small">Anda belum mencapai jam kerja kontrak. Mohon pilih alasan:</p>
-    <label for="earlyReasonSelect" class="small">Alasan</label>
-    <select id="earlyReasonSelect" class="input">
-      <option value="">-- Pilih alasan --</option>
-      <option value="sakit">Sakit</option>
-      <option value="izin_pribadi">Izin Pribadi</option>
-      <option value="urusan_keluarga">Urusan Keluarga</option>
-      <option value="selesai_lebih_cepat">Selesai Tugas Lebih Cepat</option>
-      <option value="lainnya">Lainnya</option>
-    </select>
-    <label for="earlyReasonNote" class="small" style="margin-top:8px;display:block">Catatan (opsional)</label>
-    <textarea id="earlyReasonNote" class="input" rows="2" placeholder="Tambahan detail jika perlu"></textarea>
-    <div class="row" style="margin-top:12px">
-      <button id="btnEarlyCancel" class="btn btn-ghost">Batal</button>
-      <button id="btnEarlyConfirm" class="btn btn-primary">Lanjut Clock Out</button>
-    </div>
-  </div>
-</div>
-
 <div id="selfieModal" class="modal hidden">
   <div class="modal-box">
     <h3 id="selfieTitle">Ambil Selfie</h3>
@@ -186,7 +164,17 @@
   <div class="modal-box">
     <h3>Alasan Pulang Lebih Awal</h3>
     <p class="muted small">Belum waktunya pulang. Mohon isi alasan pulang lebih awal.</p>
-    <textarea id="earlyReason" rows="3" placeholder="misal: sakit, urusan keluarga, dll."></textarea>
+    <label for="earlyReasonSelect" class="small">Alasan</label>
+      <select id="earlyReasonSelect" class="input">
+        <option value="">-- Pilih alasan --</option>
+        <option value="sakit">Sakit</option>
+        <option value="izin pribadi">Izin Pribadi</option>
+        <option value="urusan keluarga">Urusan Keluarga</option>
+        <option value="selesai lebih cepat">Selesai Tugas Lebih Cepat</option>
+        <option value="lainnya">Lainnya</option>
+      </select>
+      <label for="earlyReasonNote" class="small" style="margin-top:8px;display:block">Catatan (opsional)</label>
+      <textarea id="earlyReasonNote" class="input" rows="2" placeholder="Tambahan detail jika perlu"></textarea>
     <div class="row">
       <button id="btnEarlyCancel" class="btn btn-ghost">Batal</button>
       <button id="btnEarlyOk" class="btn btn-primary">Lanjutkan</button>
