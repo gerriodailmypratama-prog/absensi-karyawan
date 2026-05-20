@@ -524,6 +524,42 @@ async function doNoSelfieAction(type, extra={}){
 }
 
 async function saveAttendance(payload){
+  // PATCH: Auto-split untuk Clock Out Lembur (overtime_out -> tulis clock_out + overtime_in companion)
+  if (payload && payload.tipe === 'overtime_out'){
+    try {
+      const jamKerjaCL = parseFloat(userProfile && userProfile.jamKerja) || 8;
+      const ciEntryCL = getFirstInSession('clock_in');
+      if (ciEntryCL && ciEntryCL.ts && ciEntryCL.ts.toDate){
+        const citCL = ciEntryCL.ts.toDate();
+        const pausedCL = totalPausedMs();
+        const autoEndMs = citCL.getTime() + jamKerjaCL*3600*1000 + pausedCL;
+        const autoEndTs = Timestamp.fromMillis(autoEndMs);
+        const baseLoc = payload.lokasi || (ciEntryCL.lokasi || null);
+        if (!hasInSession('clock_out')){
+          await addDoc(collection(db,'absensi'), {
+            uid: currentUser.uid,
+            email: currentUser.email,
+            nama: (userProfile && userProfile.nama) || currentUser.displayName || '',
+            ts: autoEndTs, tipe: 'clock_out',
+            lokasi: baseLoc, jarak: 0, inRadius: true,
+            autoFromOvertimeOut: true
+          });
+        }
+        if (!hasInSession('overtime_in')){
+          await addDoc(collection(db,'absensi'), {
+            uid: currentUser.uid,
+            email: currentUser.email,
+            nama: (userProfile && userProfile.nama) || currentUser.displayName || '',
+            ts: autoEndTs, tipe: 'overtime_in',
+            lokasi: baseLoc, jarak: 0, inRadius: true,
+            autoFromOvertimeOut: true
+          });
+        }
+        payload.reviewStatus = 'pending';
+      }
+    } catch(e){ console.warn('Auto-split clockout lembur error:', e && e.message); }
+  }
+
   const namaForSave = userProfile.nama || (currentUser.email||'').split('@')[0];
   const data = Object.assign({
     uid: currentUser.uid,
@@ -577,8 +613,19 @@ function validateSequence(type){
     return null;
   }
   if (type === 'overtime_out'){
-    if (!hasInSession('overtime_in')) return 'Anda belum Mulai Lembur.';
-    if (hasInSession('overtime_out')) return 'Anda sudah Selesai Lembur.';
+    if (!hasCi) return 'Anda belum Clock In.';
+    if (hasInSession('overtime_out')) return 'Anda sudah Clock Out Lembur.';
+    const jamKerjaOT = parseFloat(userProfile && userProfile.jamKerja) || 8;
+    const ciEntryOT = getFirstInSession('clock_in');
+    if (ciEntryOT && ciEntryOT.ts && ciEntryOT.ts.toDate){
+      const citOT = ciEntryOT.ts.toDate();
+      const pausedOT = totalPausedMs();
+      const endTimeOT = new Date(citOT.getTime() + jamKerjaOT*3600*1000 + pausedOT);
+      if (new Date() < endTimeOT){
+        const minsLeft = Math.ceil((endTimeOT - new Date())/60000);
+        return 'Clock Out Lembur baru tersedia setelah lewat jam kerja kontrak. Sisa ' + minsLeft + ' menit.';
+      }
+    }
     return null;
   }
   return null;
