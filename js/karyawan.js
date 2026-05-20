@@ -755,10 +755,15 @@ function proceedClockOut(){
 
 $('btnEarlyCancel').onclick = ()=> $('earlyModal').classList.add('hidden');
 $('btnEarlyOk').onclick = ()=>{
-  const reason = ($('earlyReason').value||'').trim();
-  if (!reason){ alert('Mohon isi alasan.'); return; }
+  const sel = $('earlyReasonSelect');
+  const note = $('earlyReasonNote');
+  const reason = (sel && sel.value || '').trim();
+  if (!reason){ alert('Mohon pilih alasan.'); return; }
+  const noteVal = (note && note.value || '').trim();
+  const combined = noteVal ? (reason + ' - ' + noteVal) : reason;
   $('earlyModal').classList.add('hidden');
-  window.__earlyReason = reason;
+  window.__earlyReason = combined;
+  if(sel) sel.value=''; if(note) note.value='';
   openSelfie('clock_out');
 };
 
@@ -816,6 +821,30 @@ $('#btnBreakRangeNoBreak').onclick = () => {
 
 // ===== SOFT FORGOTTEN CLOCK OUT =====
 async function checkForgottenClockOut(uid){
+  // PATCH: Auto-cutoff 2 jam jika lupa clock_out
+  try{
+    const ciAuto = getFirstInSession('clock_in');
+    if (ciAuto && ciAuto.ts && ciAuto.ts.toDate && !hasInSession('clock_out')){
+      const citAuto = ciAuto.ts.toDate();
+      const jamKerjaAuto = parseFloat(userProfile && userProfile.jamKerja) || 8;
+      const bufferMs = 2*3600*1000;
+      const pausedAuto = totalPausedMs();
+      const cutoffMs = citAuto.getTime() + jamKerjaAuto*3600*1000 + pausedAuto + bufferMs;
+      if (Date.now() > cutoffMs){
+        const autoCoTs = Timestamp.fromMillis(citAuto.getTime() + jamKerjaAuto*3600*1000 + pausedAuto);
+        await addDoc(collection(db,'absensi'), {
+          uid: currentUser.uid,
+          email: currentUser.email,
+          nama: (userProfile && userProfile.nama) || currentUser.displayName || '',
+          ts: autoCoTs, tipe: 'clock_out',
+          lokasi: ciAuto.lokasi || null, jarak: 0, inRadius: true,
+          autoFromForgotten: true,
+          note: 'Auto clock-out (lupa tap, > jam kontrak + 2 jam buffer)'
+        });
+        try{ if(typeof loadActiveSession==='function') await loadActiveSession(); }catch(e){}
+      }
+    }
+  }catch(e){ console.warn('Auto-cutoff forgotten clockout error:', e && e.message); }
   try{
     const ciNow = getFirstInSession('clock_in');
     if (ciNow && ciNow.ts && ciNow.ts.toDate){
