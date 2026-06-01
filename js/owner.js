@@ -1829,6 +1829,7 @@ if (ci && co){
 durJam = (co.ts - ci.ts) / 3600000;
 const breaks = [];
 events.forEach(e=>{ if (e.tipe==='break_in' || e.tipe==='break_out') breaks.push(e); });
+  const pauses = events.filter(e=>e.tipe==='pause_in' || e.tipe==='pause_out'); for (let pi=0; pi<pauses.length-1; pi++){ if (pauses[pi].tipe==='pause_in' && pauses[pi+1].tipe==='pause_out'){ durJam -= (pauses[pi+1].ts - pauses[pi].ts)/3600000; pi++; } }
 for (let i=0; i<breaks.length-1; i++){
 if (breaks[i].tipe==='break_in' && breaks[i+1].tipe==='break_out'){
 durJam -= (breaks[i+1].ts - breaks[i].ts)/3600000;
