@@ -97,7 +97,7 @@ if (btnGoogle) {
 
     try {
       const provider = new GoogleAuthProvider();
-      if (isMobile || isInApp) {
+      if (isInApp) {
         await signInWithRedirect(auth, provider);
       } else {
         await signInWithPopup(auth, provider);
