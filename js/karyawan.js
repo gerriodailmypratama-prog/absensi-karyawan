@@ -32,6 +32,11 @@ const SESSION_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 // Helper aman untuk ambil radius office (kompat 'radius' & 'radiusMeters').
 const OFFICE_RADIUS = (OFFICE_LOCATION && (OFFICE_LOCATION.radius || OFFICE_LOCATION.radiusMeters)) || 150;
+const GPS_ACC_MAX_TOLERANCE = 75;
+function withinOfficeRadius(d, acc){
+    const tol = Math.min(Math.max(Number(acc)||0, 0), GPS_ACC_MAX_TOLERANCE);
+    return (d - tol) <= OFFICE_RADIUS;
+}
 
 let currentUser=null, currentType=null, stream=null, coords=null;
 let cameraReady=false;
@@ -356,13 +361,8 @@ async function openSelfie(type){
   $('selfieCanvas').classList.add('hidden');
   cameraReady = false;
 
-  // 1) Prefetch lokasi DULU sebelum minta kamera
-  if (!coords) { try { await refreshLocStatus(); } catch(e){} }
-  if (!coords) {
-    alert('Lokasi belum terdeteksi. Aktifkan GPS / izinkan akses lokasi, lalu coba lagi.');
-    closeSelfie();
-    return;
-  }
+      // 1) Prefetch lokasi di belakang layar (non-blocking) supaya kamera tetap kebuka
+        if (!coords) { refreshLocStatus().catch(()=>{}); }
 
   // 2) Disable tombol shoot sampai kamera siap
   const btnShoot = $('btnSelfieShoot');
@@ -389,7 +389,7 @@ async function openSelfie(type){
     // Tunggu metadata supaya videoWidth/Height valid (max 8s)
     await new Promise((res, rej) => {
       if (v.videoWidth > 0 && v.videoHeight > 0) return res();
-      const to = setTimeout(() => rej(new Error('Camera not ready (timeout)')), 8000);
+          const to = setTimeout(() => res(), 12000);
       const done = () => { clearTimeout(to); v.removeEventListener('loadedmetadata', done); res(); };
       v.addEventListener('loadedmetadata', done);
     });
@@ -418,7 +418,7 @@ function closeSelfie(){
 }
 $('btnSelfieCancel').onclick = closeSelfie;
 $('btnSelfieShoot').onclick = async ()=>{
-  if (!cameraReady) return;
+    if (!cameraReady) { alert('Kamera lagi disiapkan, tunggu 1-2 detik lalu klik lagi.'); return; }
   if (isSubmitting) return;
   const v = $('selfieVideo');
   const c = $('selfieCanvas');
@@ -449,7 +449,7 @@ $('btnSelfieShoot').onclick = async ()=>{
   if (!coords) try{ await refreshLocStatus(); }catch(e){}
   if (!coords){ alert('Lokasi belum tersedia.'); return; }
   const d = distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
-  const inRad = d <= OFFICE_RADIUS;
+      const inRad = withinOfficeRadius(d, coords && coords.acc);
   let selfieUrl = '';
 
   showSavingOverlay('Mengunggah foto & menyimpan absen...');
@@ -513,9 +513,9 @@ async function doNoSelfieAction(type, extra={}){
   if (!coords) try{ await refreshLocStatus(); }catch(e){}
   if (!coords){ alert('Lokasi belum tersedia.'); return; }
   const d = distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
-  const inRad = d <= OFFICE_RADIUS;
-  isSubmitting = true;
-  try {
+const inRad = withinOfficeRadius(d, coords && coords.acc);
+isSubmitting = true;
+    try {
     await saveAttendance(Object.assign({ tipe:type, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad }, extra));
     await loadActiveSession(currentUser.uid);
   } finally {
@@ -737,7 +737,7 @@ const [h,m]=s.split(':');const eh=String((parseInt(h)+1)%24).padStart(2,'0');con
     alert('Durasi istirahat dipotong maksimal 1 jam. Selesai jadi: ' + fmtTime(ed));
   }
   const d = coords ? distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng) : 0;
-  const inRad = coords ? d <= OFFICE_RADIUS : false;
+    const inRad = coords ? withinOfficeRadius(d, coords.acc) : false;
   const namaForSave = userProfile.nama || (currentUser.email||'').split('@')[0];
   const base = {
     uid: currentUser.uid,
