@@ -662,7 +662,7 @@ $('btnBreakOut').onclick  = () => handleAction('break_out');
 $('btnPauseIn').onclick   = () => handleAction('pause_in');
 $('btnPauseOut').onclick  = () => handleAction('pause_out');
 $('btnOtIn').onclick      = () => handleAction('overtime_in');
-$('btnOtOut').onclick     = () => handleAction('overtime_out');
+$('btnOtOut').onclick     = () => autoOtThenOut();
 
 async function handleClockOut(){
   if (isCurrentlyOnBreak()){
@@ -872,4 +872,70 @@ function showMandatoryAvatarModal(){
     const b = document.getElementById('btnUploadAvatarNow');
     if (b) b.onclick = ()=>{ try{ $('avatarInput').click(); }catch(e){} };
   }catch(e){}
+})();
+
+
+// ===== Auto-Overtime logic (ditambah lewat PR) =====
+// Aturan bisnis:
+//  - Lembur HANYA dihitung kalau karyawan menekan "Clock Out Lembur" (tombol ini).
+//    Clock out biasa tidak pernah menghitung lembur (karyawan sering lupa clock out).
+//  - overtime_in di-set OTOMATIS pada saat kuota jam kerja NET terpenuhi:
+//    clock_in + (jamKerja * 1 jam) + total durasi pause/break. Pause TIDAK dihitung jam kerja.
+
+// Total durasi pause + break hari ini dalam milidetik. Pasangkan in->out berurutan.
+function totalPauseMillisToday() {
+  let total = 0;
+  const pairs = [['break_in', 'break_out'], ['pause_in', 'pause_out']];
+  for (const [inT, outT] of pairs) {
+    const ins = sessionCache.filter(e => e.tipe === inT).sort((a, b) => a.ts.toMillis() - b.ts.toMillis());
+    const outs = sessionCache.filter(e => e.tipe === outT).sort((a, b) => a.ts.toMillis() - b.ts.toMillis());
+    const n = Math.min(ins.length, outs.length);
+    for (let i = 0; i < n; i++) {
+      const d = outs[i].ts.toMillis() - ins[i].ts.toMillis();
+      if (d > 0) total += d;
+    }
+  }
+  return total;
+}
+
+// Tulis dokumen overtime_in langsung ke Firestore dengan timestamp backdate
+// (saveAttendance memaksa ts = serverTimestamp(), jadi tidak bisa dipakai untuk backdate).
+async function writeOvertimeInAt(ms) {
+  const data = {
+    tipe: 'overtime_in',
+    ts: Timestamp.fromMillis(ms),
+    uid: currentUser.uid,
+    email: currentUser.email,
+    nama: (userProfile && userProfile.nama) ? userProfile.nama : (currentUser.displayName || ''),
+    auto: true
+  };
+  await addDoc(collection(db, 'absensi'), data);
+  sessionCache.push({ tipe: 'overtime_in', ts: data.ts });
+}
+
+// Handler tombol "Clock Out Lembur": catat overtime_in otomatis (kalau belum ada),
+// lalu catat overtime_out lewat alur normal (selfie/validasi seperti biasa).
+async function autoOtThenOut() {
+  try {
+    const clockIn = getFirstInSession('clock_in');
+    if (!clockIn) {
+      alert('Belum ada Clock In hari ini, lembur tidak bisa dicatat.');
+      return;
+    }
+    if (!hasInSession('overtime_in')) {
+      const jk = (userProfile && userProfile.jamKerja) ? Number(userProfile.jamKerja) : 9;
+      const otInMs = clockIn.ts.toMillis() + jk * 3600000 + totalPauseMillisToday();
+      await writeOvertimeInAt(otInMs);
+    }
+    await handleAction('overtime_out');
+  } catch (e) {
+    console.error('autoOtThenOut error', e);
+    alert('Gagal mencatat lembur: ' + (e && e.message ? e.message : e));
+  }
+}
+
+// Sembunyikan tombol "Mulai Lembur" karena overtime_in sekarang otomatis.
+(function hideManualOtIn() {
+  const el = document.getElementById('btnOtIn');
+  if (el) el.style.display = 'none';
 })();

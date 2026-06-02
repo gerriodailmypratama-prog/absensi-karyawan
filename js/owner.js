@@ -1908,7 +1908,7 @@ tr.innerHTML = '<td><b>' + r.nama + '</b><br><small class="muted">' + r.idKaryaw
 '<td class="num">' + prFormatRp(r.upahLembur) + '</td>' +
 '<td class="num"><b>' + prFormatRp(r.total) + '</b></td>' +
 '<td><span class="badge badge-warning">Belum Bayar</span></td>' +
-'<td><button class="btn btn-sm btn-secondary pr-detail-btn" data-uid="' + r.uid + '">Detail</button></td>';
+'<td><button class="btn btn-sm btn-secondary pr-detail-btn" data-uid="' + r.uid + '">Detail</button><button class="btn btn-sm btn-success pr-slip-btn" data-uid="' + r.uid + '">Slip Gaji</button></td>';
 tbody.appendChild(tr);
 }
 document.querySelectorAll('.pr-detail-btn').forEach(b => { b.onclick = () => showPayrollDetail(b.dataset.uid); });
@@ -1998,3 +1998,76 @@ window.calcPayroll = calcPayroll;
   });
   if (location.hash === '#payroll') setTimeout(wirePayrollOnce, 500);
 })();
+
+
+// ===== Download Slip Gaji (ditambah lewat PR) =====
+// Tombol "Slip Gaji" di kolom Aksi tiap karyawan. Convert otomatis hasil payroll
+// jadi slip gaji HTML yang langsung ke-download.
+function __slipFmtRp(n) {
+  const num = Math.round(Number(n) || 0);
+  return 'Rp' + num.toLocaleString('id-ID');
+}
+
+function __slipPeriode() {
+  const el = document.getElementById('prMonth');
+  const val = el && el.value ? el.value : '';
+  if (/^\d{4}-\d{2}$/.test(val)) {
+    const [y, m] = val.split('-');
+    const bulan = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+    return bulan[Number(m) - 1] + ' ' + y;
+  }
+  return val || '-';
+}
+
+function downloadSlipGaji(uid) {
+  const rows = (typeof __payrollData !== 'undefined' && __payrollData && __payrollData.rows) ? __payrollData.rows : [];
+  const r = rows.find(x => x.uid === uid);
+  if (!r) {
+    alert('Data payroll tidak ditemukan untuk karyawan ini. Klik "Hitung Ulang" dulu.');
+    return;
+  }
+  const periode = __slipPeriode();
+  const jamLembur = (r.totalJamLembur != null) ? r.totalJamLembur : 0;
+  const html = '<!doctype html><html lang="id"><head><meta charset="utf-8">' +
+    '<title>Slip Gaji - ' + (r.nama || '') + ' - ' + periode + '</title>' +
+    '<style>' +
+    'body{font-family:Arial,Helvetica,sans-serif;color:#222;margin:0;padding:32px;background:#f5f5f5;}' +
+    '.slip{max-width:620px;margin:0 auto;background:#fff;border:1px solid #ddd;border-radius:10px;padding:28px 32px;}' +
+    'h1{font-size:20px;margin:0 0 4px;}.sub{color:#666;font-size:13px;margin-bottom:20px;}' +
+    'table{width:100%;border-collapse:collapse;font-size:14px;}' +
+    'td{padding:8px 4px;border-bottom:1px solid #eee;}td.r{text-align:right;}' +
+    '.tot td{border-top:2px solid #333;font-weight:bold;font-size:16px;padding-top:12px;}' +
+    '.foot{margin-top:24px;color:#999;font-size:11px;text-align:center;}' +
+    '</style></head><body><div class="slip">' +
+    '<h1>Slip Gaji</h1>' +
+    '<div class="sub">GoodGems &middot; Periode ' + periode + '</div>' +
+    '<table>' +
+    '<tr><td>Nama</td><td class="r">' + (r.nama || '-') + '</td></tr>' +
+    '<tr><td>Hari Hadir</td><td class="r">' + (r.hariHadir != null ? r.hariHadir : '-') + ' hari</td></tr>' +
+    '<tr><td>Upah Harian</td><td class="r">' + __slipFmtRp(r.baseHarian) + '</td></tr>' +
+    '<tr><td>Upah Pokok</td><td class="r">' + __slipFmtRp(r.upahPokok) + '</td></tr>' +
+    '<tr><td>Jam Lembur</td><td class="r">' + (Math.round(jamLembur * 10) / 10) + ' jam</td></tr>' +
+    '<tr><td>Upah Lembur</td><td class="r">' + __slipFmtRp(r.upahLembur) + '</td></tr>' +
+    '<tr class="tot"><td>Total Diterima</td><td class="r">' + __slipFmtRp(r.total) + '</td></tr>' +
+    '</table>' +
+    '<div class="foot">Slip ini dibuat otomatis dari sistem absensi. Bukan bukti pembayaran resmi.</div>' +
+    '</div></body></html>';
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const safeName = String(r.nama || 'karyawan').replace(/[^a-zA-Z0-9]+/g, '_');
+  a.href = url;
+  a.download = 'Slip_Gaji_' + safeName + '_' + periode.replace(/\s+/g, '_') + '.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+// Delegasi klik untuk tombol slip gaji.
+document.addEventListener('click', function (e) {
+  const b = e.target.closest && e.target.closest('.pr-slip-btn');
+  if (b) {
+    downloadSlipGaji(b.dataset.uid);
+  }
+});
