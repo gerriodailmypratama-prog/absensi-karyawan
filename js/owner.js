@@ -2000,12 +2000,17 @@ window.calcPayroll = calcPayroll;
 })();
 
 
-// ===== Download Slip Gaji (ditambah lewat PR) =====
-// Tombol "Slip Gaji" di kolom Aksi tiap karyawan. Convert otomatis hasil payroll
-// jadi slip gaji HTML yang langsung ke-download.
+// ===== Download Slip Gaji (detail & transparan) =====
+// Slip gaji per karyawan, di-convert otomatis dari hasil payroll.
+// Tujuan: transparan — karyawan bisa lihat rincian per hari (full/partial/lembur).
 function __slipFmtRp(n) {
   const num = Math.round(Number(n) || 0);
   return 'Rp' + num.toLocaleString('id-ID');
+}
+
+function __slipJam(n) {
+  const x = Math.round((Number(n) || 0) * 10) / 10;
+  return x + ' jam';
 }
 
 function __slipPeriode() {
@@ -2019,6 +2024,18 @@ function __slipPeriode() {
   return val || '-';
 }
 
+// Ubah kode kategori internal jadi label yang ramah + warna.
+function __slipKategori(kat) {
+  switch (kat) {
+    case 'hadir':           return { label: 'Hari Penuh', color: '#16a34a' };
+    case 'parsial':         return { label: 'Sebagian',   color: '#d97706' };
+    case 'short':           return { label: 'Kurang Jam', color: '#d97706' };
+    case 'tidak-clockout':  return { label: 'Lupa Clock Out', color: '#dc2626' };
+    case 'absen':           return { label: 'Tidak Hadir', color: '#9ca3af' };
+    default:                return { label: kat || '-', color: '#374151' };
+  }
+}
+
 function downloadSlipGaji(uid) {
   const rows = (typeof __payrollData !== 'undefined' && __payrollData && __payrollData.rows) ? __payrollData.rows : [];
   const r = rows.find(x => x.uid === uid);
@@ -2027,31 +2044,100 @@ function downloadSlipGaji(uid) {
     return;
   }
   const periode = __slipPeriode();
-  const jamLembur = (r.totalJamLembur != null) ? r.totalJamLembur : 0;
+  const days = Array.isArray(r.dailyDetails) ? r.dailyDetails : [];
+
+  // Baris rincian per hari
+  let rowsHtml = '';
+  for (const d of days) {
+    const k = __slipKategori(d.kategori);
+    const lembur = (d.lemburJam && d.lemburJam > 0) ? __slipJam(d.lemburJam) : '-';
+    rowsHtml +=
+      '<tr>' +
+      '<td>' + (d.date || '-') + '</td>' +
+      '<td class="c">' + (d.jamMasuk || '-') + '</td>' +
+      '<td class="c">' + (d.jamKeluar || '-') + '</td>' +
+      '<td class="c">' + __slipJam(d.durJam) + '</td>' +
+      '<td class="c">' + __slipJam(d.effJam) + '</td>' +
+      '<td class="c">' + lembur + '</td>' +
+      '<td class="c"><span style="color:' + k.color + ';font-weight:600">' + k.label + '</span></td>' +
+      '<td class="r">' + __slipFmtRp(d.kontribusi) + '</td>' +
+      '</tr>';
+  }
+  if (!rowsHtml) {
+    rowsHtml = '<tr><td colspan="8" class="c" style="color:#9ca3af">Tidak ada catatan kehadiran di periode ini.</td></tr>';
+  }
+
+  // Info bank (kalau ada)
+  let bankHtml = '';
+  if (r.namaBank || r.nomorRekening) {
+    bankHtml =
+      '<tr><td>Bank</td><td class="r">' + (r.namaBank || '-') + '</td></tr>' +
+      '<tr><td>No. Rekening</td><td class="r">' + (r.nomorRekening || '-') + '</td></tr>' +
+      '<tr><td>Atas Nama</td><td class="r">' + (r.atasNamaRek || '-') + '</td></tr>';
+  }
+
+  const rateJam = r.ratePerJam || 0;
+  const jamLembur = r.totalJamLembur || 0;
+
   const html = '<!doctype html><html lang="id"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1">' +
     '<title>Slip Gaji - ' + (r.nama || '') + ' - ' + periode + '</title>' +
     '<style>' +
-    'body{font-family:Arial,Helvetica,sans-serif;color:#222;margin:0;padding:32px;background:#f5f5f5;}' +
-    '.slip{max-width:620px;margin:0 auto;background:#fff;border:1px solid #ddd;border-radius:10px;padding:28px 32px;}' +
-    'h1{font-size:20px;margin:0 0 4px;}.sub{color:#666;font-size:13px;margin-bottom:20px;}' +
-    'table{width:100%;border-collapse:collapse;font-size:14px;}' +
-    'td{padding:8px 4px;border-bottom:1px solid #eee;}td.r{text-align:right;}' +
-    '.tot td{border-top:2px solid #333;font-weight:bold;font-size:16px;padding-top:12px;}' +
-    '.foot{margin-top:24px;color:#999;font-size:11px;text-align:center;}' +
+    'body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;margin:0;padding:24px;background:#f3f4f6;}' +
+    '.slip{max-width:820px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:28px 32px;}' +
+    '.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0ea5e9;padding-bottom:14px;margin-bottom:18px;}' +
+    'h1{font-size:22px;margin:0;color:#0ea5e9;}.brand{font-size:13px;color:#6b7280;margin-top:2px;}' +
+    '.per{text-align:right;font-size:13px;color:#374151;}' +
+    'h2{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;margin:22px 0 8px;}' +
+    'table{width:100%;border-collapse:collapse;font-size:13px;}' +
+    '.info td{padding:6px 4px;border-bottom:1px solid #f1f5f9;}' +
+    '.info td.r{text-align:right;font-weight:600;}' +
+    '.rincian th{background:#f8fafc;color:#475569;padding:8px 6px;border-bottom:2px solid #e2e8f0;text-align:left;font-size:12px;}' +
+    '.rincian td{padding:7px 6px;border-bottom:1px solid #f1f5f9;}' +
+    '.rincian td.c{text-align:center;}.rincian td.r{text-align:right;}' +
+    '.rincian tr:nth-child(even) td{background:#fafafa;}' +
+    '.calc td{padding:7px 4px;border-bottom:1px solid #f1f5f9;}.calc td.r{text-align:right;}' +
+    '.calc .tot td{border-top:2px solid #111827;font-weight:bold;font-size:17px;padding-top:12px;color:#0ea5e9;}' +
+    '.muted{color:#6b7280;font-size:12px;}' +
+    '.foot{margin-top:22px;color:#9ca3af;font-size:11px;text-align:center;}' +
+    '@media print{body{background:#fff;padding:0;}.slip{border:none;}}' +
     '</style></head><body><div class="slip">' +
-    '<h1>Slip Gaji</h1>' +
-    '<div class="sub">GoodGems &middot; Periode ' + periode + '</div>' +
-    '<table>' +
+    '<div class="head"><div><h1>Slip Gaji</h1><div class="brand">GoodGems Absensi</div></div>' +
+    '<div class="per"><strong>Periode</strong><br>' + periode + '</div></div>' +
+
+    '<h2>Identitas Karyawan</h2>' +
+    '<table class="info">' +
     '<tr><td>Nama</td><td class="r">' + (r.nama || '-') + '</td></tr>' +
-    '<tr><td>Hari Hadir</td><td class="r">' + (r.hariHadir != null ? r.hariHadir : '-') + ' hari</td></tr>' +
-    '<tr><td>Upah Harian</td><td class="r">' + __slipFmtRp(r.baseHarian) + '</td></tr>' +
-    '<tr><td>Upah Pokok</td><td class="r">' + __slipFmtRp(r.upahPokok) + '</td></tr>' +
-    '<tr><td>Jam Lembur</td><td class="r">' + (Math.round(jamLembur * 10) / 10) + ' jam</td></tr>' +
-    '<tr><td>Upah Lembur</td><td class="r">' + __slipFmtRp(r.upahLembur) + '</td></tr>' +
+    '<tr><td>ID Karyawan</td><td class="r">' + (r.idKaryawan || '-') + '</td></tr>' +
+    '<tr><td>Upah Harian</td><td class="r">' + __slipFmtRp(r.baseHarian) + ' / ' + (r.jamKerja || '-') + ' jam</td></tr>' +
+    '<tr><td>Tarif per Jam</td><td class="r">' + __slipFmtRp(rateJam) + '</td></tr>' +
+    bankHtml +
+    '</table>' +
+
+    '<h2>Ringkasan Kehadiran</h2>' +
+    '<table class="info">' +
+    '<tr><td>Hari Hadir Penuh</td><td class="r">' + (r.hariHadir != null ? r.hariHadir : '-') + ' hari</td></tr>' +
+    '<tr><td>Hari Sebagian / Kurang Jam</td><td class="r">' + (r.hariParsial != null ? r.hariParsial : 0) + ' hari</td></tr>' +
+    '<tr><td>Total Jam Kerja Efektif</td><td class="r">' + __slipJam(r.totalJamKerja) + '</td></tr>' +
+    '<tr><td>Total Jam Lembur</td><td class="r">' + __slipJam(jamLembur) + '</td></tr>' +
+    '</table>' +
+
+    '<h2>Rincian Per Hari</h2>' +
+    '<table class="rincian"><thead><tr>' +
+    '<th>Tanggal</th><th>Masuk</th><th>Keluar</th><th>Total Kerja</th><th>Jam Efektif</th><th>Lembur</th><th>Status</th><th style="text-align:right">Kontribusi</th>' +
+    '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
+    '<div class="muted" style="margin-top:6px">* "Jam Efektif" = jam kerja bersih (di luar istirahat/pause). Lembur hanya dihitung kalau Clock Out Lembur.</div>' +
+
+    '<h2>Perhitungan Gaji</h2>' +
+    '<table class="calc">' +
+    '<tr><td>Upah Pokok <span class="muted">(akumulasi kontribusi harian)</span></td><td class="r">' + __slipFmtRp(r.upahPokok) + '</td></tr>' +
+    '<tr><td>Upah Lembur <span class="muted">(' + __slipJam(jamLembur) + ' &times; ' + __slipFmtRp(rateJam) + ')</span></td><td class="r">' + __slipFmtRp(r.upahLembur) + '</td></tr>' +
     '<tr class="tot"><td>Total Diterima</td><td class="r">' + __slipFmtRp(r.total) + '</td></tr>' +
     '</table>' +
-    '<div class="foot">Slip ini dibuat otomatis dari sistem absensi. Bukan bukti pembayaran resmi.</div>' +
+
+    '<div class="foot">Slip ini dibuat otomatis dari sistem absensi GoodGems pada ' + new Date().toLocaleString('id-ID') + '. Perhitungan transparan berdasarkan catatan kehadiran. Bukan bukti pembayaran resmi.</div>' +
     '</div></body></html>';
+
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
