@@ -140,6 +140,24 @@ function totalPausedMs(){
   if (pauseStart !== null) total += (Date.now() - pauseStart);
   return total;
 }
+function totalNonWorkMs(){
+  // Total waktu non-kerja: pause + istirahat (break), termasuk yang masih aktif sampai sekarang.
+  // Dipakai biar perhitungan jam efektif konsisten dgn payroll & lembur.
+  let total = 0;
+  let pauseStart = null, breakStart = null;
+  for (const r of sessionCache){
+    const tm = r.ts && r.ts.toDate ? r.ts.toDate().getTime() : (r.ts && r.ts.toMillis ? r.ts.toMillis() : null);
+    if (tm === null) continue;
+    if (r.tipe === 'pause_in') pauseStart = tm;
+    else if (r.tipe === 'pause_out' && pauseStart !== null){ total += (tm - pauseStart); pauseStart = null; }
+    else if (r.tipe === 'break_in') breakStart = tm;
+    else if (r.tipe === 'break_out' && breakStart !== null){ total += (tm - breakStart); breakStart = null; }
+  }
+  if (pauseStart !== null) total += (Date.now() - pauseStart);
+  if (breakStart !== null) total += (Date.now() - breakStart);
+  return total;
+}
+
 
 function updateWorkCountdown(){
   const wc = $('workCountdown');
@@ -150,7 +168,7 @@ function updateWorkCountdown(){
   }
   const clockInTime = clockInEntry.ts.toDate();
   const jamKerja = parseFloat(userProfile.jamKerja) || 8;
-  const paused = totalPausedMs();
+  const paused = totalNonWorkMs();
   const endTime = new Date(clockInTime.getTime() + jamKerja * 3600 * 1000 + paused);
   const now = new Date();
   const diff = endTime - now;
@@ -706,7 +724,7 @@ function proceedClockOut(){
   if (clockInEntry && clockInEntry.ts && clockInEntry.ts.toDate){
     const clockInTime = clockInEntry.ts.toDate();
     const jamKerja = parseFloat(userProfile.jamKerja) || 8;
-    const paused = totalPausedMs();
+    const paused = totalNonWorkMs();
     const endTime = new Date(clockInTime.getTime() + jamKerja * 3600 * 1000 + paused);
     const now = new Date();
     if (now < endTime){
