@@ -1883,12 +1883,54 @@ totalJamKerjaAll += totalJamKerja;
 }
 rows.sort((a,b)=>(a.nama||'').localeCompare(b.nama||''));
 __payrollData = {yyyymm: yyyymm, label: label, rows: rows};
+await loadPayStatus(yyyymm);
 renderPayrollTable();
 $('prTotalKaryawan').textContent = rows.length;
 $('prTotalBudget').textContent = prFormatRp(totalBudget);
 $('prTotalHari').textContent = totalHari.toFixed(1);
 $('prTotalLembur').textContent = totalLemburJam.toFixed(1) + ' jam';
 $('prLastCalc').textContent = 'Dihitung ' + new Date().toLocaleTimeString('id-ID') + ' \u2014 Bulan: ' + label;
+}
+
+// ===== Status pembayaran payroll (Paid/Belum) - tersimpan di Firestore =====
+window.__payStatus = window.__payStatus || {};
+function __payStatusKey(yyyymm, uid){ return String(yyyymm) + '_' + String(uid); }
+async function loadPayStatus(yyyymm){
+  window.__payStatus = {};
+  try {
+    const snap = await getDocs(collection(db, 'payroll_status'));
+    snap.forEach(function(d){
+      const data = d.data() || {};
+      if (String(data.yyyymm) === String(yyyymm) && data.status === 'paid') {
+        window.__payStatus[data.uid] = 'paid';
+      }
+    });
+  } catch(e){ console.warn('loadPayStatus gagal:', e); }
+}
+async function togglePayStatus(uid){
+  if (!__payrollData || !__payrollData.yyyymm){ alert('Hitung payroll dulu.'); return; }
+  const yyyymm = __payrollData.yyyymm;
+  const sudahPaid = window.__payStatus[uid] === 'paid';
+  const jadi = sudahPaid ? 'unpaid' : 'paid';
+  const row = (__payrollData.rows || []).find(function(x){ return x.uid === uid; });
+  const nama = row ? (row.nama || '') : '';
+  if (!confirm((jadi === 'paid' ? 'Tandai LUNAS' : 'Batalkan status lunas') + ' untuk ' + nama + ' (' + (__payrollData.label || yyyymm) + ')?')) return;
+  try {
+    await setDoc(doc(db, 'payroll_status', __payStatusKey(yyyymm, uid)), {
+      uid: uid, yyyymm: yyyymm, status: jadi, nama: nama,
+      total: row ? row.total : null, updatedAt: serverTimestamp()
+    }, { merge: true });
+    if (jadi === 'paid') window.__payStatus[uid] = 'paid'; else delete window.__payStatus[uid];
+    renderPayrollTable();
+  } catch(e){ alert('Gagal simpan status: ' + (e.message || e)); }
+}
+function __payStatusCell(uid){
+  const paid = window.__payStatus[uid] === 'paid';
+  const badge = paid
+    ? '<span class="badge" style="background:#14321f;color:#86efac">Lunas</span>'
+    : '<span class="badge" style="background:#3a2f12;color:#fcd34d">Belum Bayar</span>';
+  const btn = '<button class="btn btn-sm ' + (paid ? 'btn-secondary' : 'btn-success') + ' pr-paid-btn" data-uid="' + uid + '">' + (paid ? 'Batalkan' : 'Tandai Lunas') + '</button>';
+  return '<td>' + badge + '<br>' + btn + '</td>';
 }
 
 function renderPayrollTable(){
@@ -1907,11 +1949,12 @@ tr.innerHTML = '<td><b>' + r.nama + '</b><br><small class="muted">' + r.idKaryaw
 '<td class="num">' + prFormatRp(r.upahPokok) + '</td>' +
 '<td class="num">' + prFormatRp(r.upahLembur) + '</td>' +
 '<td class="num"><b>' + prFormatRp(r.total) + '</b></td>' +
-'<td><span class="badge badge-warning">Belum Bayar</span></td>' +
+__payStatusCell(r.uid) +
 '<td><button class="btn btn-sm btn-secondary pr-detail-btn" data-uid="' + r.uid + '">Detail</button><button class="btn btn-sm btn-success pr-slip-btn" data-uid="' + r.uid + '">Slip Gaji</button></td>';
 tbody.appendChild(tr);
 }
 document.querySelectorAll('.pr-detail-btn').forEach(b => { b.onclick = () => showPayrollDetail(b.dataset.uid); });
+document.querySelectorAll('.pr-paid-btn').forEach(b => { b.onclick = () => togglePayStatus(b.dataset.uid); });
 }
 
 function showPayrollDetail(uid){
@@ -2043,7 +2086,7 @@ function downloadSlipGaji(uid) {
     alert('Data payroll tidak ditemukan untuk karyawan ini. Klik "Hitung Ulang" dulu.');
     return;
   }
-  const periode = __slipPeriode();
+  const periode = (typeof __payrollData !== 'undefined' && __payrollData && __payrollData.label) ? __payrollData.label : __slipPeriode();
   const days = Array.isArray(r.dailyDetails) ? r.dailyDetails : [];
 
   // Baris rincian per hari
@@ -2111,6 +2154,7 @@ function downloadSlipGaji(uid) {
     '<tr><td>ID Karyawan</td><td class="r">' + (r.idKaryawan || '-') + '</td></tr>' +
     '<tr><td>Upah Harian</td><td class="r">' + __slipFmtRp(r.baseHarian) + ' / ' + (r.jamKerja || '-') + ' jam</td></tr>' +
     '<tr><td>Tarif per Jam</td><td class="r">' + __slipFmtRp(rateJam) + '</td></tr>' +
+    '<tr><td>Status Pembayaran</td><td class="r">' + ((typeof __payStatus!=='undefined' && __payStatus[uid]==='paid') ? '<strong style=\"color:#16a34a\">LUNAS / PAID</strong>' : 'Belum Dibayar') + '</td></tr>' +
     bankHtml +
     '</table>' +
 
@@ -2121,12 +2165,6 @@ function downloadSlipGaji(uid) {
     '<tr><td>Total Jam Kerja Efektif</td><td class="r">' + __slipJam(r.totalJamKerja) + '</td></tr>' +
     '<tr><td>Total Jam Lembur</td><td class="r">' + __slipJam(jamLembur) + '</td></tr>' +
     '</table>' +
-
-    '<h2>Rincian Per Hari</h2>' +
-    '<table class="rincian"><thead><tr>' +
-    '<th>Tanggal</th><th>Masuk</th><th>Keluar</th><th>Total Kerja</th><th>Jam Efektif</th><th>Lembur</th><th>Status</th><th style="text-align:right">Kontribusi</th>' +
-    '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
-    '<div class="muted" style="margin-top:6px">* "Jam Efektif" = jam kerja bersih (di luar istirahat/pause). Lembur hanya dihitung kalau Clock Out Lembur.</div>' +
 
     '<h2>Perhitungan Gaji</h2>' +
     '<table class="calc">' +
