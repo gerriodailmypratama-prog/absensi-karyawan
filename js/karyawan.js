@@ -29,6 +29,8 @@ const NO_SELFIE_TYPES = new Set(['break_in','break_out','overtime_in','pause_in'
 const BREAK_MAX_MS = 60 * 60 * 1000;
 // Window untuk load sesi shift aktif (cover shift lintas hari). 48 jam aman untuk shift sampai ~24-36 jam.
 const SESSION_WINDOW_MS = 48 * 60 * 60 * 1000;
+// Max durasi 1 shift yang wajar (jam masuk -> clock out). Lebih dari ini dianggap lupa Clock Out.
+const MAX_SHIFT_MS = 14 * 60 * 60 * 1000;
 
 // Helper aman untuk ambil radius office (kompat 'radius' & 'radiusMeters').
 const OFFICE_RADIUS = (OFFICE_LOCATION && (OFFICE_LOCATION.radius || OFFICE_LOCATION.radiusMeters)) || 150;
@@ -275,6 +277,15 @@ async function loadActiveSession(uid){
         if (all[j].tipe === 'clock_out'){ hasCo = true; break; }
       }
       if (!hasCo){ openCiIdx = i; break; }
+    }
+  }
+  // Anti-stuck: kalau clock_in yang masih kebuka udah lebih lama dari MAX_SHIFT_MS,
+  // anggap karyawan lupa Clock Out. Sesi itu jangan dijadiin aktif biar dia bisa Clock In lagi
+  // dan data nggak jadi shift 24 jam+ (datanya kacau).
+  if (openCiIdx >= 0) {
+    const __ciTs = all[openCiIdx].ts && all[openCiIdx].ts.toMillis ? all[openCiIdx].ts.toMillis() : 0;
+    if (__ciTs && (Date.now() - __ciTs) > MAX_SHIFT_MS) {
+      openCiIdx = -1;
     }
   }
   // Fix C: cari clock_out terakhir hari ini (untuk cooldown)
