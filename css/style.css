@@ -647,3 +647,40 @@ option { background: #0f172a !important; color: #e2e8f0 !important; }
 
 /* Garis pemisah */
 hr { border-color: #334155 !important; }
+
+
+/* ============================================================
+   DARK THEME CLEANUP v2 — hapus semua permukaan putih/terang
+   biar font ga ketimpa warna terang (semua halaman)
+   ============================================================ */
+.status-card,.history-item,.action-tile,.list-item,.karyawan-card,.stat-card,.kh-stat,.modal-box,.kry-section,.btn-google,#rekapDetailModal .modal-content.rekap-detail-content{background:#1e293b!important;color:#e2e8f0!important;border-color:#334155!important}
+.list-item,.kh-na,.work-countdown.paused{background:#1e293b!important}
+.karyawan-card .avatar{background:#334155!important}
+.kry-section input[type="file"]{background:#0f172a!important;color:#e2e8f0!important}
+.kh-stat,.stat,.stat-card,.kh-stat *{color:#e2e8f0!important}
+.kh-stat .kh-stat-num,.kh-stat b,.kh-stat strong{color:#f1f5f9!important}
+.stat-card.danger{background:#3b1d1d!important;border-color:#7f1d1d!important}
+.topbar,.owner-topbar,.app-topbar,header.topbar,[class*="topbar"]{background:#0b1220!important;border-bottom:1px solid #1e293b!important}
+.hadir-floating,#breakFloating,#workingFloating{background:#1e293b!important;background-image:none!important;border:1px solid #334155!important;color:#e2e8f0!important}
+.hadir-floating *{color:#e2e8f0!important}
+.hadir-avatar-ph,img.hadir-avatar{background:#334155!important}
+.badge.clock_in,.badge.break_out,.tag.ok,.kh-saved{background:#14321f!important;color:#86efac!important}
+.badge.clock_out,.tag.warn,.kh-belum,.col-aksi-kh .btn-link,.rd-hapus{background:#3b1d1d!important;color:#fca5a5!important}
+.badge.overtime_in,.badge.break_in,.badge.on_break,.tag,.kh-saving,.work-countdown.done,.kh-matrix input.kh-time.kh-edited{background:#3a2f12!important;color:#fcd34d!important}
+.badge.overtime_out{background:#2a2150!important;color:#c4b5fd!important}
+.tag.info{background:#16243f!important;color:#93c5fd!important}
+.col-aksi-kh .btn-link:hover,.rd-hapus:hover{background:#511c1c!important;color:#fecaca!important}
+.kh-working{background:#16243f!important;color:#93c5fd!important}
+.kh-break{background:#3a2a14!important;color:#fdba74!important}
+.kh-pause{background:#293548!important;color:#cbd5e1!important}
+.kh-finish{background:#14321f!important;color:#86efac!important}
+.kh-belum{background:#3b1d1d!important;color:#fca5a5!important}
+.kh-day-btn{background:#1e293b!important;color:#cbd5e1!important;border-color:#334155!important}
+.kh-day-btn:hover{background:#293548!important}
+.kh-day-btn.active,.gps-out{background:#a16207!important;color:#fff!important}
+.kh-matrix thead th,.kh-matrix th.col-dur,.rekap-detail-table th,.table-wrap th,.rekap-table th{background:#0f172a!important;color:#cbd5e1!important}
+.kh-matrix td.kh-dur{background:#0f172a!important;color:#cbd5e1!important}
+.kh-matrix tbody tr:hover,.table-wrap tr:hover,.rekap-table tbody tr:hover,.rekap-row-clickable:hover,.sidebar .nav-link:hover{background:#243049!important}
+input.kh-time,input.kh-edit-jam,input.rd-edit-jam,.kh-edit-jam,.kh-edit-tipe,.kh-edit-tgl,.rd-edit-jam,.rd-edit-tipe,.rd-edit-tgl{background:#0f172a!important;color:#e2e8f0!important;border-color:#334155!important}
+.divider::before,.divider::after{background:#334155!important}
+.work-countdown{background:#16243f!important;color:#bfdbfe!important}
