@@ -1185,6 +1185,14 @@ function statusBadgeFor(row){
   if (bt.clock_out || bt.overtime_out) return '<span class="kh-badge kh-finish">Finished</span>';
   if (bt.break_in && !bt.break_out) return '<span class="kh-badge kh-break">Break</span>';
   if (bt.pause_in && !bt.pause_out) return '<span class="kh-badge kh-pause">Paused</span>';
+  // Sesi nyangkut: clock_in tanpa clock_out yang umurnya > 14 jam = lupa Clock Out.
+  if ((bt.clock_in || bt.overtime_in) && !bt.clock_out && !bt.overtime_out) {
+    const ciEv = bt.clock_in || bt.overtime_in;
+    const ciMs = (ciEv && ciEv.ts) ? (ciEv.ts.toMillis ? ciEv.ts.toMillis() : (ciEv.ts.toDate ? ciEv.ts.toDate().getTime() : 0)) : 0;
+    if (ciMs && (Date.now() - ciMs) > 14 * 60 * 60 * 1000) {
+      return '<span class="kh-badge kh-lupa" title="Clock In lebih dari 14 jam tanpa Clock Out. Kemungkinan lupa Clock Out. Isi jam pulang di kolom Clock Out untuk koreksi.">\u26A0 Lupa Clock Out</span>';
+    }
+  }
   if (bt.clock_in || bt.overtime_in) return '<span class="kh-badge kh-working">Working</span>';
   return '<span class="kh-badge kh-belum">Belum Hadir</span>';
 }
