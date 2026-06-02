@@ -547,3 +547,103 @@ input.kh-time::placeholder, input.kh-edit-jam::placeholder, input.rd-edit-jam::p
   padding: 6px;
   background: #fff;
 }
+
+
+/* ============================================================
+   DARK THEME (ditambah lewat PR) — override di akhir file.
+   Palet: slate gelap, accent sky & emerald dipertahankan.
+   ============================================================ */
+
+/* Dasar halaman */
+html, body {
+  background: #0f172a !important;
+  color: #e2e8f0 !important;
+}
+
+/* Permukaan: card, stat, sidebar, panel, modal */
+.card,
+.stat,
+.stats,
+.pr-stat,
+.sidebar,
+.modal-content,
+.table-wrap,
+.rekap-toolbar,
+.filter-row,
+.chart-wrap,
+details,
+summary {
+  background: #1e293b !important;
+  color: #e2e8f0 !important;
+  border-color: #334155 !important;
+}
+
+/* Teks utama & heading */
+h1, h2, h3, h4, p, span, strong, b, label, .nav-link, .center {
+  color: #e2e8f0 !important;
+}
+
+/* Teks redup */
+small,
+.chart-caption,
+.badge-loc,
+.col-dur,
+.brand-logo {
+  color: #94a3b8 !important;
+}
+
+/* Tabel */
+table { color: #e2e8f0 !important; }
+th {
+  background: #0f172a !important;
+  color: #cbd5e1 !important;
+  border-color: #334155 !important;
+}
+td {
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+tbody tr:hover td { background: #243049 !important; }
+.kh-table-header,
+.rekap-table th { background: #0f172a !important; }
+
+/* Input, select, textarea */
+input, select, textarea {
+  background: #0f172a !important;
+  color: #e2e8f0 !important;
+  border-color: #334155 !important;
+}
+input::placeholder, textarea::placeholder { color: #64748b !important; }
+option { background: #0f172a !important; color: #e2e8f0 !important; }
+
+/* Tombol — accent dipertahankan, hanya yang netral yang digelapkan */
+.btn-secondary {
+  background: #334155 !important;
+  color: #e2e8f0 !important;
+  border-color: #475569 !important;
+}
+.btn-ghost, .btn-link, .btn-icon {
+  background: transparent !important;
+  color: #cbd5e1 !important;
+  border-color: #334155 !important;
+}
+.btn-ghost:hover, .btn-icon:hover { background: #334155 !important; }
+/* .btn-primary (#0ea5e9) & .btn-success (#10b981) tetap, teks putih dijaga */
+.btn-primary, .btn-success { color: #ffffff !important; }
+
+/* Topbar tetap gradient birunya, teksnya putih */
+.topbar, .topbar * { color: #ffffff !important; }
+
+/* Badge */
+.badge {
+  background: #334155 !important;
+  color: #e2e8f0 !important;
+  border-color: #475569 !important;
+}
+
+/* Sidebar nav links */
+.nav-link { color: #cbd5e1 !important; }
+.nav-link.active, .nav-link:hover { background: #334155 !important; color: #ffffff !important; }
+
+/* Garis pemisah */
+hr { border-color: #334155 !important; }
