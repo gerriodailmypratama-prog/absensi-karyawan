@@ -203,7 +203,7 @@ function updateWorkCountdown(){
   const labelEl = wc.querySelector('.wc-label');
   if (labelEl) labelEl.textContent = paused_now ? 'Jam kerja efektif (DIBEKUKAN)' : 'Jam kerja efektif berjalan';
   const targetH = Math.floor(targetMs/3600000), targetM = Math.floor((targetMs%3600000)/60000);
-  $('wcSub').textContent = 'Target jam kerja hari ini: ' + targetH + ' jam' + (targetM>0 ? (' ' + targetM + ' mnt') : '');
+
   if (workedMs >= targetMs) { wc.classList.add('done'); } else { wc.classList.remove('done'); }
   const totalSec = Math.floor(workedMs/1000);
   const h = Math.floor(totalSec/3600);
