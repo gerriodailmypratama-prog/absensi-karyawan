@@ -253,7 +253,7 @@ function updateBreakCountdown(){
     var bcTime=document.getElementById('bcTime'); if (bcTime) bcTime.textContent=disp;
     var bcSub=document.getElementById('bcSub');
     var credited = totalNonWorkMs() >= BREAK_MIN_FOR_CREDIT_MS;
-    if (bcSub) bcSub.textContent = credited ? 'Jam efektif dipotong 1 jam (istirahat >= 60 mnt)' : 'Min 60 menit untuk potong 1 jam';
+    if (bcSub) bcSub.textContent = 'Waktu kerja dibekukan selama istirahat / pause';
     wc.classList.toggle('done', credited);
 }
 setInterval(updateBreakCountdown, 1000);
@@ -697,7 +697,7 @@ async function handleAction(type){
 $('btnClockIn').onclick   = () => handleAction('clock_in');
 $('btnClockOut').onclick  = () => handleAction('clock_out');
 $('btnBreakToggle').onclick = ()=> handleBreakToggle();
-$('btnOtIn').onclick      = () => handleAction('overtime_in');
+// (tombol Mulai Lembur dihapus) overtime_in sekarang otomatis, tidak ada wiring manual
 $('btnOtOut').onclick     = () => autoOtThenOut();
 
 async function handleClockOut(){
