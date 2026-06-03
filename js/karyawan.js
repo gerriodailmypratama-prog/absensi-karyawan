@@ -193,30 +193,26 @@ function updateWorkCountdown(){
   }
   const clockInTime = clockInEntry.ts.toDate();
   const jamKerja = effectiveWorkHours();
-  const paused = totalNonWorkMs();
-  const endTime = new Date(clockInTime.getTime() + jamKerja * 3600 * 1000 + paused);
+  const targetMs = jamKerja * 3600 * 1000;
   const now = new Date();
-  const diff = endTime - now;
-  const paused_now = isCurrentlyPaused();
+  let workedMs = (now.getTime() - clockInTime.getTime()) - totalNonWorkMs();
+  if (workedMs < 0) workedMs = 0;
+  const paused_now = isCurrentlyPaused() || isCurrentlyOnBreak();
   wc.classList.remove('hidden');
   if (paused_now) wc.classList.add('paused'); else wc.classList.remove('paused');
   const labelEl = wc.querySelector('.wc-label');
-  if (labelEl) labelEl.textContent = paused_now ? 'Sisa jam kerja (DIJEDA)' : 'Sisa jam kerja';
-  $('wcSub').textContent = 'Jam pulang (estimasi): ' + endTime.toLocaleTimeString('id-ID',{hour:'2-digit', minute:'2-digit', hour12:false});
-  if (diff <= 0) {
-    $('wcTime').textContent = 'Waktunya pulang!';
-    wc.classList.add('done');
-    return;
-  }
-  wc.classList.remove('done');
-  const totalSec = Math.floor(diff/1000);
+  if (labelEl) labelEl.textContent = paused_now ? 'Jam kerja efektif (DIBEKUKAN)' : 'Jam kerja efektif berjalan';
+  const targetH = Math.floor(targetMs/3600000), targetM = Math.floor((targetMs%3600000)/60000);
+  $('wcSub').textContent = 'Target jam kerja hari ini: ' + targetH + ' jam' + (targetM>0 ? (' ' + targetM + ' mnt') : '');
+  if (workedMs >= targetMs) { wc.classList.add('done'); } else { wc.classList.remove('done'); }
+  const totalSec = Math.floor(workedMs/1000);
   const h = Math.floor(totalSec/3600);
   const m = Math.floor((totalSec%3600)/60);
-  const s = totalSec%60;
+  const sc = totalSec%60;
   $('wcTime').textContent =
     String(h).padStart(2,'0') + ':' +
     String(m).padStart(2,'0') + ':' +
-    String(s).padStart(2,'0');
+    String(sc).padStart(2,'0');
 }
 setInterval(updateWorkCountdown, 1000);
 
@@ -225,35 +221,26 @@ setInterval(updateWorkCountdown, 1000);
 // Tidak ada batas mundur 1 jam lagi; waktu kerja otomatis mundur karena freeze.
 function updateBreakCountdown(){
     var wc = document.getElementById('breakCountdown');
+    var clockedIn = hasInSession('clock_in') && !hasInSession('clock_out');
     var active = isCurrentlyOnBreak() || isCurrentlyPaused();
-    if (!active){ if (wc) wc.classList.add('hidden'); window.__breakOverPrompted=false; return; }
-    // cari waktu mulai istirahat/pause yang sedang aktif (in terakhir tanpa out)
-    var startMs = null;
-    for (var i=0;i<sessionCache.length;i++){
-      var r=sessionCache[i];
-      if (r.tipe==='break_in' || r.tipe==='pause_in'){ var d=r.ts&&r.ts.toDate?r.ts.toDate().getTime():null; if(d!=null) startMs=d; }
-      else if (r.tipe==='break_out' || r.tipe==='pause_out'){ startMs=null; }
-    }
-    if (startMs==null){ if (wc) wc.classList.add('hidden'); return; }
+    var totalMs = clockedIn ? totalNonWorkMs() : 0;
+    if (!clockedIn || totalMs <= 0){ if (wc) wc.classList.add('hidden'); window.__breakOverPrompted=false; return; }
     if (!wc){
         var c=document.createElement('div');
         c.id='breakCountdown'; c.className='work-countdown';
-        c.innerHTML='<div class="wc-label">Istirahat / Pause berjalan</div><div class="wc-time" id="bcTime">00:00</div><div class="wc-sub" id="bcSub">Waktu kerja dibekukan</div>';
+        c.innerHTML='<div class="wc-label">Total istirahat / pause</div><div class="wc-time" id="bcTime">00:00</div><div class="wc-sub" id="bcSub">Akumulatif hari ini</div>';
         var pn=document.getElementById('workCountdown'); pn=pn&&pn.parentNode;
         if (pn) pn.appendChild(c); else document.querySelector('main').appendChild(c);
         wc=c;
     }
     wc.classList.remove('hidden');
-    var elapsed = Date.now() - startMs;
-    if (elapsed<0) elapsed=0;
-    var totalSec = Math.floor(elapsed/1000);
+    var totalSec = Math.floor(totalMs/1000);
     var hh=Math.floor(totalSec/3600), mm=Math.floor((totalSec%3600)/60), ss=totalSec%60;
     var disp=(hh>0?(String(hh).padStart(2,'0')+':'):'')+String(mm).padStart(2,'0')+':'+String(ss).padStart(2,'0');
     var bcTime=document.getElementById('bcTime'); if (bcTime) bcTime.textContent=disp;
     var bcSub=document.getElementById('bcSub');
-    var credited = totalNonWorkMs() >= BREAK_MIN_FOR_CREDIT_MS;
-    if (bcSub) bcSub.textContent = 'Waktu kerja dibekukan selama istirahat / pause';
-    wc.classList.toggle('done', credited);
+    if (bcSub) bcSub.textContent = active ? 'Sedang istirahat / pause (berjalan)' : 'Akumulatif hari ini (jeda)';
+    wc.classList.toggle('paused', active);
 }
 setInterval(updateBreakCountdown, 1000);
 
@@ -509,10 +496,6 @@ $('btnSelfieShoot').onclick = async ()=>{
     showSavingOverlay('Menyimpan absen...');
   }
   const extra = {};
-  if (currentType === 'clock_out' && window.__earlyReason){
-    extra.earlyReason = window.__earlyReason;
-    window.__earlyReason = null;
-  }
   if (currentType === 'clock_out' && window.__noBreak){
     extra.noBreak = true;
     window.__noBreak = false;
@@ -726,29 +709,11 @@ async function handleClockOut(){
 }
 
 function proceedClockOut(){
-  const clockInEntry = getFirstInSession('clock_in');
-  if (clockInEntry && clockInEntry.ts && clockInEntry.ts.toDate){
-    const clockInTime = clockInEntry.ts.toDate();
-    const jamKerja = effectiveWorkHours();
-    const paused = totalNonWorkMs();
-    const endTime = new Date(clockInTime.getTime() + jamKerja * 3600 * 1000 + paused);
-    const now = new Date();
-    if (now < endTime){
-      $('earlyModal').classList.remove('hidden');
-      return;
-    }
-  }
+  // Peringatan pulang lebih awal + input alasan dihapus. Karyawan dibayar per jam efektif.
   openSelfie('clock_out');
 }
 
-$('btnEarlyCancel').onclick = ()=> $('earlyModal').classList.add('hidden');
-$('btnEarlyOk').onclick = ()=>{
-  const reason = ($('earlyReason').value||'').trim();
-  if (!reason){ alert('Mohon isi alasan.'); return; }
-  $('earlyModal').classList.add('hidden');
-  window.__earlyReason = reason;
-  openSelfie('clock_out');
-};
+// earlyModal dihapus (tidak ada lagi peringatan pulang lebih awal).
 
 $('btnForgotBreakOk').onclick = ()=>{
   $('forgotBreakOutModal').classList.add('hidden');

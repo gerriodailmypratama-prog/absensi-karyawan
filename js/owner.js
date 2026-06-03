@@ -1851,6 +1851,7 @@ i++;
 }
 if (durJam < 0) durJam = 0;
 const effJam = Math.min(durJam, jamKerja);
+  let effJamFinal = effJam;
 let kategori = 'absen', kontribusi = 0;
 if (ci && co){
 kontribusi = effJam * dayRatePerJam;
@@ -1858,9 +1859,9 @@ if (durJam >= jamKerja * 0.75){ kategori = 'hadir'; hariHadir++; }
 else if (durJam > 0){ kategori = 'parsial'; hariParsial++; }
 else { kategori = 'short'; }
 } else if (ci && !co){
-kategori = 'tidak-clockout'; kontribusi = 0;
+kategori = 'tidak-clockout'; effJamFinal = jamKerja; kontribusi = jamKerja * dayRatePerJam; hariHadir++;
 }
-totalJamKerja += effJam;
+totalJamKerja += effJamFinal;
 totalKontribusi += kontribusi;
 let lemburJam = 0;
 if (oi && oo){ lemburJam = Math.max(0, (oo.ts - oi.ts) / 3600000); totalJamLembur += lemburJam; }
