@@ -159,6 +159,32 @@ function totalNonWorkMs(){
 }
 
 
+// === Istirahat/Pause gabungan (break_in/break_out toggle) ===
+// Jam efektif: jamKerja dikurangi 1 jam HANYA jika total Istirahat/Pause hari itu >= 60 menit.
+// Kalau skip total / istirahat < 60 menit, jam efektif = jamKerja penuh. Rate gaji TIDAK diubah.
+var BREAK_MIN_FOR_CREDIT_MS = 60 * 60 * 1000;
+function rawJamKerja(){ return parseFloat(userProfile && userProfile.jamKerja) || 8; }
+function effectiveWorkHours(){
+  var jk = rawJamKerja();
+  return (totalNonWorkMs() >= BREAK_MIN_FOR_CREDIT_MS) ? Math.max(0, jk - 1) : jk;
+}
+// Toggle satu tombol: kalau lagi istirahat -> break_out, kalau tidak -> break_in. Repeatable.
+function handleBreakToggle(){
+  if (isCurrentlyOnBreak() || isCurrentlyPaused()) handleAction('break_out');
+  else handleAction('break_in');
+}
+// Update label + status tombol gabungan Istirahat/Pause.
+function updateBreakToggleUI(){
+  var btn = $('btnBreakToggle'); if (!btn) return;
+  var lbl = $('lblBreakToggle');
+  var active = isCurrentlyOnBreak() || isCurrentlyPaused();
+  if (lbl) lbl.textContent = active ? 'Selesai Istirahat / Pause' : 'Istirahat / Pause';
+  btn.classList.toggle('tile-afterbreak', active);
+  btn.classList.toggle('tile-break', !active);
+  btn.disabled = isSubmitting || !hasInSession('clock_in') || hasInSession('clock_out');
+  btn.style.opacity = btn.disabled ? '0.45' : '1';
+}
+
 function updateWorkCountdown(){
   const wc = $('workCountdown');
   if(!wc) return;
@@ -167,7 +193,7 @@ function updateWorkCountdown(){
     wc.classList.add('hidden'); return;
   }
   const clockInTime = clockInEntry.ts.toDate();
-  const jamKerja = parseFloat(userProfile.jamKerja) || 8;
+  const jamKerja = effectiveWorkHours();
   const paused = totalNonWorkMs();
   const endTime = new Date(clockInTime.getTime() + jamKerja * 3600 * 1000 + paused);
   const now = new Date();
@@ -196,45 +222,39 @@ function updateWorkCountdown(){
 setInterval(updateWorkCountdown, 1000);
 
 // ===== Countdown Istirahat (60 menit dari tap Istirahat) =====
+// Timer COUNT-UP Istirahat/Pause: tampilkan sudah berapa lama istirahat berjalan (naik).
+// Tidak ada batas mundur 1 jam lagi; waktu kerja otomatis mundur karena freeze.
 function updateBreakCountdown(){
-    let wc = document.getElementById('breakCountdown');
-    const bi = getLastInSession('break_in');
-    const bo = getLastInSession('break_out');
-    const onBreak = bi && (!bo || (bi.ts && bo.ts && bi.ts.toDate().getTime() > bo.ts.toDate().getTime()));
-    if (!onBreak){ if (wc) wc.classList.add('hidden'); return; }
+    var wc = document.getElementById('breakCountdown');
+    var active = isCurrentlyOnBreak() || isCurrentlyPaused();
+    if (!active){ if (wc) wc.classList.add('hidden'); window.__breakOverPrompted=false; return; }
+    // cari waktu mulai istirahat/pause yang sedang aktif (in terakhir tanpa out)
+    var startMs = null;
+    for (var i=0;i<sessionCache.length;i++){
+      var r=sessionCache[i];
+      if (r.tipe==='break_in' || r.tipe==='pause_in'){ var d=r.ts&&r.ts.toDate?r.ts.toDate().getTime():null; if(d!=null) startMs=d; }
+      else if (r.tipe==='break_out' || r.tipe==='pause_out'){ startMs=null; }
+    }
+    if (startMs==null){ if (wc) wc.classList.add('hidden'); return; }
     if (!wc){
-        const c = document.createElement('div');
-        c.id = 'breakCountdown';
-        c.className = 'work-countdown break-countdown';
-        c.innerHTML = '<div class="wc-label">Sisa waktu Istirahat</div><div class="wc-time" id="bcTime">--:--</div><div class="wc-sub" id="bcSub">Maksimal 1 jam</div>';
-        const parent = document.getElementById('workCountdown')?.parentNode;
-        if (parent) parent.appendChild(c); else document.querySelector('main')?.appendChild(c);
-        wc = c;
+        var c=document.createElement('div');
+        c.id='breakCountdown'; c.className='work-countdown';
+        c.innerHTML='<div class="wc-label">Istirahat / Pause berjalan</div><div class="wc-time" id="bcTime">00:00</div><div class="wc-sub" id="bcSub">Waktu kerja dibekukan</div>';
+        var pn=document.getElementById('workCountdown'); pn=pn&&pn.parentNode;
+        if (pn) pn.appendChild(c); else document.querySelector('main').appendChild(c);
+        wc=c;
     }
     wc.classList.remove('hidden');
-    const startTime = bi.ts.toDate();
-    const endTime = new Date(startTime.getTime() + 60*60*1000);
-    const now = new Date();
-    const diff = endTime - now;
-    const bcTime = document.getElementById('bcTime');
-    const bcSub = document.getElementById('bcSub');
-    if (diff <= 0){
-        if (bcTime) bcTime.textContent = 'Waktu habis!';
-        if (bcSub) bcSub.textContent = 'Silakan tap Selesai Istirahat';
-        wc.classList.add('done');
-        if (!window.__breakOverPrompted){
-            window.__breakOverPrompted = true;
-            try{ if (navigator.vibrate) navigator.vibrate([200,100,200]); }catch(e){}
-            alert('Waktu istirahat 1 jam sudah habis. Silakan tap "Selesai Istirahat".');
-        }
-        return;
-    }
-    wc.classList.remove('done');
-    const totalSec = Math.floor(diff/1000);
-    const m = Math.floor(totalSec/60);
-    const s = totalSec%60;
-    if (bcTime) bcTime.textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
-    if (bcSub) bcSub.textContent = 'Maksimal 1 jam dari mulai Istirahat';
+    var elapsed = Date.now() - startMs;
+    if (elapsed<0) elapsed=0;
+    var totalSec = Math.floor(elapsed/1000);
+    var hh=Math.floor(totalSec/3600), mm=Math.floor((totalSec%3600)/60), ss=totalSec%60;
+    var disp=(hh>0?(String(hh).padStart(2,'0')+':'):'')+String(mm).padStart(2,'0')+':'+String(ss).padStart(2,'0');
+    var bcTime=document.getElementById('bcTime'); if (bcTime) bcTime.textContent=disp;
+    var bcSub=document.getElementById('bcSub');
+    var credited = totalNonWorkMs() >= BREAK_MIN_FOR_CREDIT_MS;
+    if (bcSub) bcSub.textContent = credited ? 'Jam efektif dipotong 1 jam (istirahat >= 60 mnt)' : 'Min 60 menit untuk potong 1 jam';
+    wc.classList.toggle('done', credited);
 }
 setInterval(updateBreakCountdown, 1000);
 
@@ -337,14 +357,7 @@ function renderStatuses(){
 }
 
 function updatePauseTilesUI(){
-  const btnPauseIn = $('btnPauseIn');
-  const btnPauseOut = $('btnPauseOut');
-  if (!btnPauseIn || !btnPauseOut) return;
-  const paused = isCurrentlyPaused();
-  btnPauseIn.disabled = isSubmitting || paused || !hasInSession('clock_in') || hasInSession('clock_out') || isCurrentlyOnBreak();
-  btnPauseOut.disabled = isSubmitting || !paused;
-  btnPauseIn.style.opacity = btnPauseIn.disabled ? '0.45' : '1';
-  btnPauseOut.style.opacity = btnPauseOut.disabled ? '0.45' : '1';
+  updateBreakToggleUI();
 }
 
 onAuthStateChanged(auth, async u => {
@@ -686,10 +699,7 @@ async function handleAction(type){
 
 $('btnClockIn').onclick   = () => handleAction('clock_in');
 $('btnClockOut').onclick  = () => handleAction('clock_out');
-$('btnBreakIn').onclick   = () => handleAction('break_in');
-$('btnBreakOut').onclick  = () => handleAction('break_out');
-$('btnPauseIn').onclick   = () => handleAction('pause_in');
-$('btnPauseOut').onclick  = () => handleAction('pause_out');
+$('btnBreakToggle').onclick = ()=> handleBreakToggle();
 $('btnOtIn').onclick      = () => handleAction('overtime_in');
 $('btnOtOut').onclick     = () => autoOtThenOut();
 
@@ -723,7 +733,7 @@ function proceedClockOut(){
   const clockInEntry = getFirstInSession('clock_in');
   if (clockInEntry && clockInEntry.ts && clockInEntry.ts.toDate){
     const clockInTime = clockInEntry.ts.toDate();
-    const jamKerja = parseFloat(userProfile.jamKerja) || 8;
+    const jamKerja = effectiveWorkHours();
     const paused = totalNonWorkMs();
     const endTime = new Date(clockInTime.getTime() + jamKerja * 3600 * 1000 + paused);
     const now = new Date();
@@ -952,7 +962,7 @@ async function autoOtThenOut() {
       return;
     }
     if (!hasInSession('overtime_in')) {
-      const jk = (userProfile && userProfile.jamKerja) ? Number(userProfile.jamKerja) : 9;
+      const jk = effectiveWorkHours();
       const otInMs = clockIn.ts.toMillis() + jk * 3600000 + totalPauseMillisToday();
       await writeOvertimeInAt(otInMs);
     }
