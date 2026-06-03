@@ -77,6 +77,194 @@
         <span class="tile-status" id="sBreakIn">-</span>
       </button>
 
+
+      <button id="btnOtOut" class="action-tile tile-ot">
+        <span class="tile-icon">
+          <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="32" cy="34" r="20"/>
+            <path d="M32 22 L32 34 L42 34"/>
+            <path d="M26 12 L38 12"/>
+          </svg>
+        </span>
+        <span class="tile-label">Selesai Lembur</span>
+        <span class="tile-status" id="sOtOut">-</span>
+      </button>
+    </div>
+  </div>
+</main>
+
+<div id="selfieModal" class="modal hidden">
+  <div class="modal-box">
+    <h3 id="selfieTitle">Ambil Selfie</h3>
+    <div class="cam-frame">
+      <video id="selfieVideo" autoplay muted playsinline></video>
+      <canvas id="selfieCanvas" class="hidden"></canvas>
+    </div>
+    <div class="row">
+      <button id="btnSelfieCancel" class="btn btn-ghost">Batal</button>
+      <button id="btnSelfieShoot" class="btn btn-primary">Ambil Foto</button>
+    </div>
+  </div>
+</div>
+
+<div id="forgotBreakOutModal" class="modal hidden">
+  <div class="modal-box">
+    <h3>Lupa Tap Selesai Istirahat?</h3>
+    <p class="muted small">Anda sudah Istirahat tapi belum tap "Selesai Istirahat". Durasi istirahat otomatis dipotong maksimal 1 jam dari waktu mulai istirahat.</p>
+    <div class="row">
+      <button id="btnForgotBreakOk" class="btn btn-primary">Mengerti, Lanjutkan</button>
+    </div>
+  </div>
+</div>
+
+<div id="earlyModal" class="modal hidden">
+  <div class="modal-box">
+    <h3>Alasan Pulang Lebih Awal</h3>
+    <p class="muted small">Belum waktunya pulang. Mohon isi alasan pulang lebih awal.</p>
+    <textarea id="earlyReason" rows="3" placeholder="misal: sakit, urusan keluarga, dll."></textarea>
+    <div class="row">
+      <button id="btnEarlyCancel" class="btn btn-ghost">Batal</button>
+      <button id="btnEarlyOk" class="btn btn-primary">Lanjutkan</button>
+    </div>
+  </div>
+</div>
+
+<div id="breakRangeModal" class="modal hidden">
+  <div class="modal-box">
+    <h3>Lupa Tap Istirahat?</h3>
+    <p class="muted small">Anda belum tap Istirahat hari ini. Istirahat wajib dicatat. Mohon isi waktu istirahat Anda sebelum Clock Out.</p>
+    <label class="small"Jam >Mulai Istirahat</label>
+    <input type="time" id="breakStartInput" />
+                    <small class="muted">Otomatis selesai +1 jam</smal
+    <small id="breakRangeInfo" class="muted">Durasi istirahat maksimal 1 jam (otomatis dipotong jika lebih).</small>
+    <div class="row">
+      <button id="btnBreakRangeNoBreak" class="btn btn-ghost" title="Kemarin saya tidak istirahat sama sekali">Tidak Istirahat</button>
+      <button id="btnBreakRangeOk" class="btn btn-primary">Simpan & Clock Out</button>
+    </div>
+  </div>
+</div>
+
+<div id="confirmModal" class="modal hidden">
+  <div class="modal-box">
+    <h3 id="confirmTitle">Konfirmasi</h3>
+    <p id="confirmMsg" class="muted small">Apakah Anda yakin?</p>
+    <div class="row">
+      <button id="btnConfirmCancel" class="btn btn-ghost">Batal</button>
+      <button id="btnConfirmOk" class="btn btn-primary">Ya, Lanjutkan</button>
+    </div>
+  </div>
+</div>
+
+<div id="oldSessionModal" class="modal hidden">
+  <div class="modal-box">
+    <h3>Sesi Shift Sebelumnya Belum Ditutup</h3>
+    <p id="oldSessionMsg" class="muted small"></p>
+    <div class="row">
+      <button id="btnOldSessionLater" class="btn btn-ghost">Nanti</button>
+      <button id="btnOldSessionClose" class="btn btn-primary">Tutup Sesi Sekarang</button>
+    </div>
+  </div>
+</div>
+
+<div id="mandatoryAvatarModal" class="modal hidden">
+  <div class="modal-box">
+    <h3>Upload Foto Profil Dulu</h3>
+    <p class="muted small">Sebelum bisa Clock In, Anda wajib upload foto profil. Foto ini akan ditampilkan di dashboard owner agar identitas Anda jelas.</p>
+    <div class="row">
+      <button id="btnUploadAvatarNow" class="btn btn-primary">Pilih Foto / Selfie Sekarang</button>
+    </div>
+    <p class="muted small" style="margin-top:8px;text-align:center;">Tip: pakai foto wajah yang jelas (selfie).</p>
+  </div>
+</div>
+
+<script type="module" src="js/firebase-config.js"></script>
+<script type="module" src="js/karyawan.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('service-worker.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0ea5e9">
+<title>Dashboard Karyawan</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar topbar-greet">
+  <div class="greet-wrap">
+    <div class="greet-text">
+      <strong id="greetMsg">Halo!</strong>
+      <small id="greetSub" class="muted">selamat beraktivitas</small>
+    </div>
+  </div>
+  <div class="greet-right">
+    <div id="avatarWrap" class="avatar-wrap" title="Ganti foto profil">
+      <img id="avatarImg" src="" alt="" />
+      <span id="avatarPlaceholder" class="avatar-ph">+</span>
+      <input type="file" id="avatarInput" accept="image/*" hidden>
+    </div>
+    <button id="btnLogout" class="btn-icon">Keluar</button>
+  </div>
+</header>
+
+<main class="container">
+  <div class="card center">
+    <div class="clock" id="liveClock">--:--:--</div>
+    <div class="muted" id="liveDate">-</div>
+    <div id="workCountdown" class="work-countdown hidden">
+      <div class="wc-label">Sisa jam kerja</div>
+      <div class="wc-time" id="wcTime">--:--:--</div>
+      <div class="wc-sub" id="wcSub">Jam pulang: --:--</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="action-grid">
+      <button id="btnClockIn" class="action-tile tile-in">
+        <span class="tile-icon">
+          <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 30 L32 14 L54 30 L54 50 L10 50 Z"/>
+            <path d="M32 22 L32 34 M24 34 L40 34"/>
+            <circle cx="46" cy="44" r="6"/>
+            <path d="M46 41 L46 44 L48 46"/>
+          </svg>
+        </span>
+        <span class="tile-label">Clock In</span>
+        <span class="tile-status" id="sClockIn">-</span>
+      </button>
+
+      <button id="btnClockOut" class="action-tile tile-out">
+        <span class="tile-icon">
+          <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 30 L32 14 L54 30 L54 50 L10 50 Z"/>
+            <path d="M32 42 L32 24 M24 30 L32 22 L40 30"/>
+            <circle cx="46" cy="44" r="6"/>
+            <path d="M46 41 L46 44 L48 46"/>
+          </svg>
+        </span>
+        <span class="tile-label">Clock Out</span>
+        <span class="tile-status" id="sClockOut">-</span>
+      </button>
+
+      <button id="btnBreakToggle" class="action-tile tile-break">
+        <span class="tile-icon">
+          <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 10 L22 30 M18 10 L26 10 M30 10 L30 30 C30 26 34 26 34 22 L34 10"/>
+            <path d="M42 10 C46 10 50 14 50 22 C50 30 46 32 46 32 L46 54"/>
+          </svg>
+        </span>
+        <span class="tile-label" id="lblBreakToggle">Istirahat / Pause</span>
+        <span class="tile-status" id="sBreakIn">-</span>
+      </button>
+
       <button id="btnOtIn" class="action-tile tile-ot">
         <span class="tile-icon">
           <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
