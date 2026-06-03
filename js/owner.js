@@ -1231,7 +1231,7 @@ function renderKehadiranMatrix(){
       const ev = row.byTipe[col.tipe];
       const val = ev && ev.ts && ev.ts.toDate ? fmtHM(ev.ts.toDate()) : '';
       const editedFlag = ev && (ev.editedByOwner||ev.manualEdit) ? ' kh-edited' : '';
-      cells += '<td><input type="text" inputmode="numeric" maxlength="5" placeholder="--:--" class="kh-time'+editedFlag+'" data-tipe="'+col.tipe+'" value="'+val+'" data-orig="'+val+'"></td>';
+      if (col.tipe === 'clock_in' || col.tipe === 'clock_out') cells += '<td><input type="text" inputmode="numeric" maxlength="5" placeholder="--:--" class="kh-time'+editedFlag+'" data-tipe="'+col.tipe+'" value="'+val+'" data-orig="'+val+'"></td>';
       const pair = DUR_PAIRS[col.tipe];
       if (pair){
         const evIn = row.byTipe[pair.inTipe];
