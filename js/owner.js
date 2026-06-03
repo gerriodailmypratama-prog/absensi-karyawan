@@ -1859,7 +1859,7 @@ if (durJam >= jamKerja * 0.75){ kategori = 'hadir'; hariHadir++; }
 else if (durJam > 0){ kategori = 'parsial'; hariParsial++; }
 else { kategori = 'short'; }
 } else if (ci && !co){
-kategori = 'tidak-clockout'; effJamFinal = jamKerja; kontribusi = jamKerja * dayRatePerJam; hariHadir++;
+kategori = 'tidak-clockout'; var __cut = ci.ts.getTime() + jamKerja*3600000; var __pms=0, __ps=null; for(var __pe=0;__pe<events.length;__pe++){ if(events[__pe].tipe==='pause_in'){__ps=events[__pe].ts.getTime();} else if(events[__pe].tipe==='pause_out'&&__ps!==null){__pms+=Math.min(events[__pe].ts.getTime(),__cut)-__ps;__ps=null;} } if(__ps!==null){__pms+=Math.max(0,__cut-__ps);} effJamFinal = Math.max(0, Math.min(jamKerja, jamKerja - __pms/3600000)); kontribusi = effJamFinal * dayRatePerJam; hariHadir++;
 }
 totalJamKerja += effJamFinal;
 totalKontribusi += kontribusi;
