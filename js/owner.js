@@ -423,7 +423,7 @@ function renderTable(rows) {
             '<td><select class="kh-edit-tipe" data-id="'+(r._id||'')+'">'+tipeOpts+'</select></td>'+
             '<td>'+badge+'</td><td>'+loc+'</td><td>'+img+'</td>'+
             '<td class="col-aksi-kh">'+
-                '<button class="btn-link btn-hapus-absen" data-id="'+(r._id||'')+'" data-nama="'+nama+'" data-tipe="'+(r.tipe||'')+'" data-ts="'+isoTs+'" style="color:#dc2626">🗑️ Hapus</button>'+
+                '<button class="btn-link btn-hapus-absen" data-id="'+(r._id||'')+'" data-nama="'+nama+'" data-tipe="'+(r.tipe||'')+'" data-ts="'+isoTs+'" style="color:#dc2626">ðï¸ Hapus</button>'+
             '</td>';
         tb.appendChild(tr);
     });
@@ -630,7 +630,7 @@ async function openEditKaryawan(uid){
         if ($('editAtasNamaRek')) $('editAtasNamaRek').value = d.atasNamaRek || '';
         if ($('editNomorRekening')) $('editNomorRekening').value = d.nomorRekening || '';
         // Status upload dokumen
-        const setStat = (id, url) => { const el = $(id); if (el) el.textContent = url ? '✓ sudah diupload' : '(belum)'; };
+        const setStat = (id, url) => { const el = $(id); if (el) el.textContent = url ? 'â sudah diupload' : '(belum)'; };
         setStat('ktpStatus', d.ktpUrl);
         // Reset file inputs
         ['editKtpFile'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
@@ -1331,7 +1331,7 @@ async function deleteKehadiranRow(uid){
 
 
 /* ===========================================================
-   REKAP KEHADIRAN (Hadirr-style) — date range summary per user
+   REKAP KEHADIRAN (Hadirr-style) â date range summary per user
    =========================================================== */
 let rekapEventsCache = [];
 let rekapRangeFrom = null;
@@ -1466,6 +1466,7 @@ async function loadRekap(){
             if (s && e && e>s){ pauseSum += (e-s); }
           }
           work -= pauseSum;
+          jamIstirahatMs += pauseSum; // gabung: total Istirahat = break + pause
           if (work > 0) jamKerjaMs += work;
         } else if (hasCI && !hasCO){
           belumLengkap++;
@@ -1613,7 +1614,7 @@ function openRekapDetail(uid, nama){
                 '<td><input type="text" inputmode="numeric" maxlength="5" placeholder="--:--" class="rd-edit-jam" data-id="'+ev.id+'" value="'+(jam||'').slice(0,5)+'"></td>'+
                 '<td><select class="rd-edit-tipe" data-id="'+ev.id+'">'+opts+'</select></td>'+
                 '<td>'+status+'</td>'+
-                '<td><button class="btn-link rd-hapus" data-id="'+ev.id+'" data-nama="'+(nama||'').replace(/"/g,'&quot;')+'" data-tipe="'+(ev.tipe||'')+'" style="color:#dc2626">🗑️ Hapus</button></td>'+
+                '<td><button class="btn-link rd-hapus" data-id="'+ev.id+'" data-nama="'+(nama||'').replace(/"/g,'&quot;')+'" data-tipe="'+(ev.tipe||'')+'" style="color:#dc2626">ðï¸ Hapus</button></td>'+
             '</tr>';
         }).join('');
         tbody.querySelectorAll('.rd-edit-jam').forEach(inp=>{
@@ -1688,7 +1689,7 @@ function openRekapDetail(uid, nama){
                 }catch(err){
                     console.error('rd hapus err', err);
                     alert('Gagal hapus: '+(err.message||err));
-                    b.disabled = false; b.textContent = '🗑️ Hapus';
+                    b.disabled = false; b.textContent = 'ðï¸ Hapus';
                 }
             };
         });
@@ -1714,7 +1715,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
 
 // ============================================================
-// PAYROLL MODULE — gaji harian, dibayar bulanan
+// PAYROLL MODULE â gaji harian, dibayar bulanan
 // ============================================================
 let __payrollData = null;
 
@@ -2053,7 +2054,7 @@ window.calcPayroll = calcPayroll;
 
 // ===== Download Slip Gaji (detail & transparan) =====
 // Slip gaji per karyawan, di-convert otomatis dari hasil payroll.
-// Tujuan: transparan — karyawan bisa lihat rincian per hari (full/partial/lembur).
+// Tujuan: transparan â karyawan bisa lihat rincian per hari (full/partial/lembur).
 function __slipFmtRp(n) {
   const num = Math.round(Number(n) || 0);
   return 'Rp' + num.toLocaleString('id-ID');
