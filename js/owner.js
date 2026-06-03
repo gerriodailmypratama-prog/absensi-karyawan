@@ -561,6 +561,7 @@ $('formAddUser').onsubmit = async (e) => {
     const phone = $('newPhone').value.trim();
     const idKaryawanRaw = $('newIdKaryawan').value.trim();
     const jamKerja = parseInt($('newJamKerja').value, 10) || 8;
+  const baseHarian = parseInt(($('newBaseHarian')&&$('newBaseHarian').value)||'0', 10) || 0;
     const password = $('newPassword').value;
         const tanggalJoinVal = $('newTanggalJoin') ? $('newTanggalJoin').value : '';
     if (!nama || !email || !password) { alert('Name, Email, Password are required.'); return; }
@@ -580,6 +581,7 @@ $('formAddUser').onsubmit = async (e) => {
             phone: phone || '',
             idKaryawan: idKaryawanRaw || ('EMP-' + Math.random().toString(36).slice(2,6).toUpperCase()),
             jamKerja: jamKerja,
+            baseHarian: baseHarian,
             tanggalJoin: tanggalJoinVal ? Timestamp.fromDate(new Date(tanggalJoinVal)) : null,
             createdAt: serverTimestamp()
         }, {merge:true});
@@ -590,6 +592,7 @@ $('formAddUser').onsubmit = async (e) => {
         $('formAddUser').reset(); if ($('newTanggalJoin')) $('newTanggalJoin').value='';
         $('newPassword').value = 'Goodgems2026';
         $('newJamKerja').value = 8;
+      if ($('newBaseHarian')) $('newBaseHarian').value = '';
         loadKaryawanList();
     } catch (err) {
         console.error('Add user error:', err);
