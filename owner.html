@@ -265,6 +265,7 @@
           <div><label>No. HP</label><input type="text" id="newPhone" placeholder="+62..."></div>
           <div><label>ID Karyawan</label><input type="text" id="newIdKaryawan" placeholder="auto (EMP-XXX) jika kosong"></div>
           <div><label>Jam Kerja (jam)</label><input type="number" id="newJamKerja" min="1" max="24" value="8"></div>
+          <div><label>Base Harian (Rp)</label><input type="number" id="newBaseHarian" min="0" step="1000" placeholder="150000"></div>
           <div><label>Tanggal Join</label><input type="date" id="newTanggalJoin"></div>
           <div><label>Password</label><input type="text" id="newPassword" value="Goodgems2026"></div>
           <div class="form-actions">
@@ -359,7 +360,7 @@
         <div><label>Tanggal Join</label><input type="date" id="editTanggalJoin"></div>
       </details>
 
-      <details class="kry-section">
+      <details open class="kry-section">
         <summary>Payroll (Gaji Harian, Bayar Bulanan)</summary>
         <div><label>Base Harian (Rp)</label><input type="number" id="editBaseHarian" min="0" step="1000" placeholder="150000"></div>
         <div><label>Jam Kerja Standar / hari</label><input type="number" id="editJamKerja" min="1" max="24" value="8"></div>
