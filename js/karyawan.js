@@ -93,7 +93,6 @@ function updateGreeting(){
 
 function tickClock(){
   const d = new Date();
-  $('liveClock').textContent = d.toLocaleTimeString('id-ID',{hour12:false});
   $('liveDate').textContent  = d.toLocaleDateString('id-ID',{weekday:'long', day:'2-digit', month:'long', year:'numeric'});
 }
 setInterval(tickClock, 1000); tickClock();
