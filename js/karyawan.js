@@ -280,7 +280,7 @@ async function loadUserProfile(uid){
       }
     }catch(e){ console.warn('profil load err:', e); }
     userProfile = { nama, jamKerja, foto };
-    if (!foto){ showMandatoryAvatarModal(); }
+    // (foto profil opsional) auto-popup wajib upload dihapus
     if (foto){
       $('avatarImg').src = foto;
       $('avatarImg').style.display = 'block';
@@ -645,10 +645,7 @@ function askConfirm(title, message, okLabel){
 
 async function handleAction(type){
   if (isSubmitting){ return; } // cegah double-tap race condition
-  if (!userProfile || !userProfile.foto){
-    showMandatoryAvatarModal();
-    return;
-  }
+  // (foto profil opsional) tidak lagi memblokir aksi kalau belum upload foto
   const err = validateSequence(type);
   if (err){ alert(err); return; }
   if (!coords) try{ await refreshLocStatus(); }catch(e){}
