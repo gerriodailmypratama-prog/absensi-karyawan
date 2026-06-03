@@ -27,8 +27,8 @@ export const OWNER_EMAILS = [
 export const OFFICE_LOCATION = {
     lat: -6.238929,
     lng: 106.6459816,
-    radius: 150,
-    radiusMeters: 150
+    radius: 300,
+        radiusMeters: 300
 };
 
 const app = initializeApp(firebaseConfig);
