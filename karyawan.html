@@ -31,9 +31,9 @@
   <div class="card center">
     <div class="muted" id="liveDate">-</div>
     <div id="workCountdown" class="work-countdown hidden">
-      <div class="wc-label">Sisa jam kerja</div>
-      <div class="wc-time" id="wcTime">--:--:--</div>
-      <div class="wc-sub" id="wcSub">Jam pulang: --:--</div>
+      <div class="wc-label">Jam kerja efektif berjalan</div>
+      <div class="wc-time" id="wcTime">00:00:00</div>
+      <div class="wc-sub" id="wcSub">Target jam kerja hari ini: --</div>
     </div>
   </div>
 
@@ -112,18 +112,6 @@
     <p class="muted small">Anda sudah Istirahat tapi belum tap "Selesai Istirahat". Durasi istirahat otomatis dipotong maksimal 1 jam dari waktu mulai istirahat.</p>
     <div class="row">
       <button id="btnForgotBreakOk" class="btn btn-primary">Mengerti, Lanjutkan</button>
-    </div>
-  </div>
-</div>
-
-<div id="earlyModal" class="modal hidden">
-  <div class="modal-box">
-    <h3>Alasan Pulang Lebih Awal</h3>
-    <p class="muted small">Belum waktunya pulang. Mohon isi alasan pulang lebih awal.</p>
-    <textarea id="earlyReason" rows="3" placeholder="misal: sakit, urusan keluarga, dll."></textarea>
-    <div class="row">
-      <button id="btnEarlyCancel" class="btn btn-ghost">Batal</button>
-      <button id="btnEarlyOk" class="btn btn-primary">Lanjutkan</button>
     </div>
   </div>
 </div>
