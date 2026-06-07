@@ -955,6 +955,7 @@ async function autoOtThenOut() {
   }
 
   async function openProfil(){
+  try{ window.openProfil = openProfil; }catch(e){}
     const modal = el('profilModal'); if(!modal) return;
     pfSelectedKtpFile = null;
     if(typeof currentUser === 'undefined' || !currentUser){ alert('Sesi belum siap, coba lagi.'); return; }
@@ -1035,3 +1036,5 @@ async function autoOtThenOut() {
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
   else wire();
 })();
+
+;window.__pfTriggerAvatar=function(){var i=document.getElementById("avatarInput"); if(i) i.click();};
