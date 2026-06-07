@@ -372,7 +372,16 @@
       <details class="kry-section">
         <summary>Upload Dokumen (Privat)</summary>
         <div><label>Foto KTP <span id="ktpStatus" class="muted"></span></label><input type="file" id="editKtpFile" accept="image/*"></div>
-        <p class="muted" style="margin:6px 0 0">File KTP disimpan di Firebase Storage privat, hanya owner yang bisa akses.</p>
+        <div id="editKtpPreviewWrap" style="margin-top:8px;display:none">
+          <a id="editKtpLink" href="#" target="_blank" rel="noopener">
+            <img id="editKtpPreview" alt="Foto KTP" style="max-width:100%;border-radius:8px;border:1px solid #2a2a2a" />
+          </a>
+        </div>
+        <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
+          <span id="profilLockStatus" class="muted"></span>
+          <button type="button" id="btnResetLockProfil" class="btn btn-ghost" style="display:none">Reset Lock Profil</button>
+        </div>
+        <p class="muted" style="margin:6px 0 0">File KTP disimpan di Firebase Storage privat, hanya owner yang bisa akses. Reset Lock memperbolehkan karyawan mengisi ulang data 1x.</p>
       </details>
 
       <div class="form-actions" style="display:flex;gap:8px;margin-top:12px">
