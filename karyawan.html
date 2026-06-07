@@ -23,6 +23,7 @@
       <span id="avatarPlaceholder" class="avatar-ph">+</span>
       <input type="file" id="avatarInput" accept="image/*" hidden>
     </div>
+    <button id="btnOpenProfil" class="btn-icon" title="Lengkapi profil">Profil</button>
     <button id="btnLogout" class="btn-icon">Keluar</button>
   </div>
 </header>
@@ -160,6 +161,38 @@
       <button id="btnUploadAvatarNow" class="btn btn-primary">Pilih Foto / Selfie Sekarang</button>
     </div>
     <p class="muted small" style="margin-top:8px;text-align:center;">Tip: pakai foto wajah yang jelas (selfie).</p>
+  </div>
+</div>
+
+
+<div id="profilModal" class="modal hidden">
+  <div class="modal-box">
+    <h3>Lengkapi Data Profil</h3>
+    <p class="muted small">Lengkapi data berikut untuk keperluan payroll. Foto KTP &amp; rekening hanya bisa diisi 1x. Jika ada kesalahan, hubungi admin untuk reset.</p>
+    <div class="profil-form">
+      <label class="profil-label">Nama</label>
+      <input type="text" id="pfNama" class="profil-input" disabled />
+      <label class="profil-label">ID Karyawan</label>
+      <input type="text" id="pfIdKaryawan" class="profil-input" disabled />
+      <label class="profil-label">Nama Bank</label>
+      <input type="text" id="pfNamaBank" class="profil-input" placeholder="contoh: BCA, Mandiri, BRI" />
+      <label class="profil-label">Nomor Rekening</label>
+      <input type="text" id="pfNomorRekening" class="profil-input" inputmode="numeric" placeholder="contoh: 1234567890" />
+      <label class="profil-label">Nama Penerima (Atas Nama Rekening)</label>
+      <input type="text" id="pfAtasNamaRek" class="profil-input" placeholder="Sesuai buku tabungan" />
+      <label class="profil-label">Foto KTP</label>
+      <div id="pfKtpWrap" class="profil-ktp-wrap">
+        <img id="pfKtpPreview" class="profil-ktp-preview hidden" alt="Foto KTP" />
+        <button type="button" id="pfBtnPickKtp" class="btn btn-ghost">Pilih Foto KTP</button>
+        <input type="file" id="pfKtpInput" accept="image/*" hidden />
+        <span id="pfKtpName" class="muted small"></span>
+      </div>
+      <p id="pfLockedNote" class="profil-locked-note hidden">Data terkunci. Hubungi admin untuk mengubah.</p>
+    </div>
+    <div class="row">
+      <button id="pfBtnCancel" class="btn btn-ghost">Tutup</button>
+      <button id="pfBtnSave" class="btn btn-primary">Simpan</button>
+    </div>
   </div>
 </div>
 

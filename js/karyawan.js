@@ -939,3 +939,99 @@ async function autoOtThenOut() {
   const el = document.getElementById('btnOtIn');
   if (el) el.style.display = 'none';
 })();
+
+
+/* ===== Lengkapi Profil Karyawan (rekening + KTP, 1x lock) ===== */
+(function initProfilKaryawan(){
+  function el(id){ return document.getElementById(id); }
+  let pfSelectedKtpFile = null;
+
+  function setLocked(locked){
+    const fields = ['pfNamaBank','pfNomorRekening','pfAtasNamaRek'];
+    fields.forEach(id => { const e = el(id); if(e) e.disabled = !!locked; });
+    const pick = el('pfBtnPickKtp'); if(pick) pick.style.display = locked ? 'none' : '';
+    const save = el('pfBtnSave'); if(save) save.style.display = locked ? 'none' : '';
+    const note = el('pfLockedNote'); if(note) note.classList.toggle('hidden', !locked);
+  }
+
+  async function openProfil(){
+    const modal = el('profilModal'); if(!modal) return;
+    pfSelectedKtpFile = null;
+    if(typeof currentUser === 'undefined' || !currentUser){ alert('Sesi belum siap, coba lagi.'); return; }
+    const uid = currentUser.uid;
+    try{
+      const snap = await getDoc(doc(db,'karyawan',uid));
+      const d = snap.exists() ? snap.data() : {};
+      if(el('pfNama')) el('pfNama').value = d.nama || currentUser.displayName || '';
+      if(el('pfIdKaryawan')) el('pfIdKaryawan').value = d.idKaryawan || '';
+      if(el('pfNamaBank')) el('pfNamaBank').value = d.namaBank || '';
+      if(el('pfNomorRekening')) el('pfNomorRekening').value = d.nomorRekening || '';
+      if(el('pfAtasNamaRek')) el('pfAtasNamaRek').value = d.atasNamaRek || '';
+      const prev = el('pfKtpPreview');
+      if(prev){
+        if(d.ktpUrl){ prev.src = d.ktpUrl; prev.classList.remove('hidden'); }
+        else { prev.src = ''; prev.classList.add('hidden'); }
+      }
+      if(el('pfKtpName')) el('pfKtpName').textContent = '';
+      setLocked(!!d.profilLocked);
+    }catch(e){ console.error('load profil', e); }
+    modal.classList.remove('hidden');
+  }
+
+  function closeProfil(){ const m = el('profilModal'); if(m) m.classList.add('hidden'); }
+
+  async function saveProfil(){
+    if(typeof currentUser === 'undefined' || !currentUser){ alert('Sesi belum siap.'); return; }
+    const uid = currentUser.uid;
+    const namaBank = (el('pfNamaBank').value||'').trim();
+    const nomorRekening = (el('pfNomorRekening').value||'').trim();
+    const atasNamaRek = (el('pfAtasNamaRek').value||'').trim();
+    if(!namaBank || !nomorRekening || !atasNamaRek){ alert('Lengkapi semua data rekening dulu ya.'); return; }
+    if(!pfSelectedKtpFile){ alert('Upload foto KTP dulu ya.'); return; }
+    const saveBtn = el('pfBtnSave');
+    const oldTxt = saveBtn ? saveBtn.textContent : '';
+    if(saveBtn){ saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan...'; }
+    try{
+      const path = 'profil/' + uid + '/ktp.jpg';
+      const sref = ref(storage, path);
+      await uploadBytes(sref, pfSelectedKtpFile);
+      const ktpUrl = await getDownloadURL(sref);
+      await setDoc(doc(db,'karyawan',uid), {
+        namaBank, nomorRekening, atasNamaRek, ktpUrl,
+        profilLocked: true,
+        profilUpdatedAt: serverTimestamp()
+      }, { merge: true });
+      const prev = el('pfKtpPreview');
+      if(prev){ prev.src = ktpUrl; prev.classList.remove('hidden'); }
+      setLocked(true);
+      alert('Data profil tersimpan. Terima kasih!');
+    }catch(e){
+      console.error('save profil', e);
+      alert('Gagal menyimpan: ' + (e && e.message ? e.message : e));
+    }finally{
+      if(saveBtn){ saveBtn.disabled = false; saveBtn.textContent = oldTxt || 'Simpan'; }
+    }
+  }
+
+  function wire(){
+    const open = el('btnOpenProfil'); if(open) open.onclick = openProfil;
+    const cancel = el('pfBtnCancel'); if(cancel) cancel.onclick = closeProfil;
+    const pick = el('pfBtnPickKtp'); const input = el('pfKtpInput');
+    if(pick && input) pick.onclick = () => input.click();
+    if(input) input.onchange = (ev) => {
+      const f = ev.target.files && ev.target.files[0];
+      if(!f) return;
+      pfSelectedKtpFile = f;
+      if(el('pfKtpName')) el('pfKtpName').textContent = f.name;
+      const prev = el('pfKtpPreview');
+      if(prev){
+        const url = URL.createObjectURL(f);
+        prev.src = url; prev.classList.remove('hidden');
+      }
+    };
+    const save = el('pfBtnSave'); if(save) save.onclick = saveProfil;
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
+  else wire();
+})();
