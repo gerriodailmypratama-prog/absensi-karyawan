@@ -963,8 +963,8 @@ async function autoOtThenOut() {
     try{
       const snap = await getDoc(doc(db,'karyawan',uid));
       const d = snap.exists() ? snap.data() : {};
-      if(el('pfNama')) el('pfNama').value = d.nama || currentUser.displayName || '';
-      if(el('pfIdKaryawan')) el('pfIdKaryawan').value = d.idKaryawan || '';
+      if(el('pfNama')) el('pfNama').value = ((typeof userProfile!=='undefined'&&userProfile&&userProfile.nama)?userProfile.nama:'') || d.nama || currentUser.displayName || '';
+      if(el('pfIdKaryawan')) el('pfIdKaryawan').value = d.idKaryawan || d.nik || '';
       if(el('pfNamaBank')) el('pfNamaBank').value = d.namaBank || '';
       if(el('pfNomorRekening')) el('pfNomorRekening').value = d.nomorRekening || '';
       if(el('pfAtasNamaRek')) el('pfAtasNamaRek').value = d.atasNamaRek || '';
@@ -1038,3 +1038,29 @@ async function autoOtThenOut() {
 })();
 
 ;window.__pfTriggerAvatar=function(){var i=document.getElementById("avatarInput"); if(i) i.click();};
+/* === pf-profil-ui-fix: avatar circle in modal + nama/id readonly === */
+(function(){
+  function $(id){return document.getElementById(id);}
+  function syncPfAvatar(){
+    try{
+      var src=(typeof userProfile!=='undefined'&&userProfile&&userProfile.foto)?userProfile.foto:'';
+      var img=$('pfAvatarImg'), ph=$('pfAvatarPh');
+      if(img&&ph){ if(src){ img.src=src; img.classList.add('show'); ph.classList.add('hide'); } else { img.classList.remove('show'); ph.classList.remove('hide'); } }
+    }catch(e){}
+  }
+  function setRO(){ var n=$('pfNama'), i=$('pfIdKaryawan'); if(n){n.readOnly=true;n.removeAttribute('disabled');} if(i){i.readOnly=true;i.removeAttribute('disabled');} }
+  function trigger(){ var inp=$('avatarInput'); if(inp){ inp.click(); } }
+  function wireUp(){
+    var btn=$('pfBtnUploadAvatar'), circle=$('pfAvatarCircle');
+    if(btn&&!btn.__pfWired){ btn.__pfWired=true; btn.addEventListener('click',function(e){e.preventDefault();trigger();}); }
+    if(circle&&!circle.__pfWired){ circle.__pfWired=true; circle.addEventListener('click',function(e){e.preventDefault();trigger();}); }
+    var modal=$('profilModal');
+    if(modal&&!modal.__pfObs){ modal.__pfObs=true;
+      var obs=new MutationObserver(function(){ if(!modal.classList.contains('hidden')){ setRO(); syncPfAvatar(); } });
+      obs.observe(modal,{attributes:true,attributeFilter:['class']});
+    }
+    var hdr=$('avatarInput');
+    if(hdr&&!hdr.__pfMirror){ hdr.__pfMirror=true; hdr.addEventListener('change',function(){ setTimeout(syncPfAvatar,1500); }); }
+  }
+  if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded',wireUp); } else { wireUp(); }
+})();
