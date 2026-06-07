@@ -1,13 +1,15 @@
-const CACHE = 'absensi-v29';const ASSETS = [    './','./index.html','./karyawan.html','./owner.html',
+const CACHE = 'absensi-v30';const ASSETS = [    './','./index.html','./karyawan.html','./owner.html',
     './css/style.css','./manifest.json','./icon.svg'
 ];
 
 self.addEventListener('install', e => {
+  self.skipWaiting();
     e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS).catch(()=>null)));
     // Do NOT call skipWaiting - let user finish current session before activating new SW
 });
 
 self.addEventListener('activate', e => {
+  self.clients && self.clients.claim && event.waitUntil(self.clients.claim());
     e.waitUntil(caches.keys().then(keys =>
         Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
     ));
