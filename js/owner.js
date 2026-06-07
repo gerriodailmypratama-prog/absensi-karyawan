@@ -637,6 +637,34 @@ async function openEditKaryawan(uid){
         setStat('ktpStatus', d.ktpUrl);
         // Reset file inputs
         ['editKtpFile'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
+        // ===== KTP preview + lock status profil =====
+        (function(){
+          var wrap = $('editKtpPreviewWrap');
+          var img = $('editKtpPreview');
+          var link = $('editKtpLink');
+          if(wrap && img){
+            if(d.ktpUrl){ img.src = d.ktpUrl; if(link) link.href = d.ktpUrl; wrap.style.display = 'block'; }
+            else { img.src = ''; if(link) link.removeAttribute('href'); wrap.style.display = 'none'; }
+          }
+          var lockSpan = $('profilLockStatus');
+          var resetBtn = $('btnResetLockProfil');
+          var locked = !!d.profilLocked;
+          if(lockSpan) lockSpan.textContent = locked ? 'Status: TERKUNCI (karyawan sudah isi)' : 'Status: belum dikunci';
+          if(resetBtn){
+            resetBtn.style.display = locked ? 'inline-block' : 'none';
+            resetBtn.onclick = async function(){
+              if(!confirm('Reset lock profil karyawan ini? Karyawan akan bisa mengisi ulang data rekening & KTP 1x.')) return;
+              resetBtn.disabled = true;
+              try{
+                await updateDoc(doc(db,'karyawan',uid), { profilLocked: false, profilResetAt: serverTimestamp() });
+                if(lockSpan) lockSpan.textContent = 'Status: lock di-reset, karyawan bisa isi ulang';
+                resetBtn.style.display = 'none';
+                alert('Lock berhasil di-reset.');
+              }catch(e){ alert('Gagal reset: ' + (e && e.message ? e.message : e)); }
+              finally{ resetBtn.disabled = false; }
+            };
+          }
+        })();
         $('editKaryawanModal').classList.remove('hidden');
     } catch(e){ alert('Failed to load data: ' + e.message); }
 }
