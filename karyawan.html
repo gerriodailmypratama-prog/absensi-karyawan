@@ -203,5 +203,35 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('service-worker.js').catch(()=>{}));
 }
 </script>
+<script>
+(function(){
+  function ready(fn){ if(document.readyState!="loading") fn(); else document.addEventListener("DOMContentLoaded",fn); }
+  ready(function(){
+    var wrap=document.getElementById("avatarWrap");
+    var btnOld=document.getElementById("btnOpenProfil");
+    var modal=document.getElementById("profilModal");
+    if(btnOld){ btnOld.style.display="none"; }
+    function openProfilSafe(){
+      if(typeof window.openProfil==="function"){ window.openProfil(); }
+      else if(modal){ modal.classList.remove("hidden"); }
+    }
+    if(wrap){
+      wrap.style.cursor="pointer";
+      wrap.setAttribute("title","Buka Profil");
+      wrap.addEventListener("click", function(ev){ ev.stopPropagation(); openProfilSafe(); }, true);
+    }
+    var firstField=document.getElementById("pfNama");
+    if(modal && firstField && !document.getElementById("pfBtnAvatar")){
+      var b=document.createElement("button");
+      b.id="pfBtnAvatar"; b.type="button"; b.className="btn-secondary";
+      b.style.cssText="width:100%;margin-bottom:12px;";
+      b.textContent="Ganti Foto Profil";
+      b.addEventListener("click", function(){ if(window.__pfTriggerAvatar) window.__pfTriggerAvatar(); });
+      var holder=firstField.closest(".form-group")||firstField.parentElement||firstField;
+      holder.parentElement.insertBefore(b, holder);
+    }
+  });
+})();
+</script>
 </body>
 </html>
