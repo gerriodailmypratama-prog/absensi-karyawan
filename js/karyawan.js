@@ -761,7 +761,7 @@ const [h,m]=s.split(':');const eh=String((parseInt(h)+1)%24).padStart(2,'0');con
   proceedClockOut();
 };
 
-$('#btnBreakRangeNoBreak').onclick = () => {
+var __bnb=$('#btnBreakRangeNoBreak'); if(__bnb) __bnb.onclick = () => {
   $('#breakRangeModal').classList.add('hidden');
   window.__noBreak = true;
   proceedClockOut();
