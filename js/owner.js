@@ -1268,6 +1268,33 @@ function renderKehadiranMatrix(){
       const _d = new Date(_outMs);
       row._autoOut = { ts:{ toDate:function(){ return _d; } }, _autoLupa:true };
     })();
+    // === Kerja Efektif + Lembur (rumus, display-only) ===
+    (function(){
+      const _bt = row.byTipe || {};
+      const _ci = _bt.clock_in || _bt.overtime_in;
+      let _end = _bt.clock_out || _bt.overtime_out || row._autoOut;
+      if (!_ci || !_ci.ts || !_ci.ts.toDate || !_end || !_end.ts || !_end.ts.toDate) return;
+      const _ciMs = _ci.ts.toDate().getTime();
+      let _spanMs = _end.ts.toDate().getTime() - _ciMs;
+      if (_spanMs < 0) _spanMs += 24*60*60*1000;
+      function _sumPairs(inT, outT){
+        let _tot = 0, _open = null, _maxOne = 0;
+        const _list = (row.events||[]).slice().filter(function(e){return e.ts&&e.ts.toDate;}).sort(function(a,b){return a.ts.toDate()-b.ts.toDate();});
+        _list.forEach(function(e){
+          if (e.tipe===inT) _open = e.ts.toDate().getTime();
+          else if (e.tipe===outT && _open!=null){ const _dms = e.ts.toDate().getTime()-_open; if(_dms>0){ _tot+=_dms; if(_dms>_maxOne)_maxOne=_dms; } _open=null; }
+        });
+        return { tot:_tot, maxOne:_maxOne };
+      }
+      const _brk = _sumPairs('break_in','break_out');
+      const _pse = _sumPairs('pause_in','pause_out');
+      const _efektifMs = _spanMs - _brk.tot - _pse.tot;
+      const _kontrak = Number(row.jamKerja) || 9;
+      const _netMs = Math.max(0, (_kontrak-1)) * 60*60*1000;
+      row._efektifMs = _efektifMs;
+      row._lemburCalcMs = Math.max(0, _efektifMs - _netMs);
+      row._durAnom = (_brk.maxOne > 2*60*60*1000) || (_pse.maxOne > 2*60*60*1000) || (_efektifMs < 0);
+    })();
     tr.dataset.uid = uid;
     let cells = '<td class="col-nama">'+ gpsDotFor(row) +' '+ (row.nama||'-') +'</td>';
     cells += '<td>'+ statusBadgeFor(row) +'</td>';
@@ -1295,8 +1322,15 @@ function renderKehadiranMatrix(){
         let evEnd = ev;
         if (col.tipe === 'clock_out' && !evEnd) evEnd = row.byTipe['overtime_out'];
         if (col.tipe === 'clock_out' && !evEnd && row._autoOut) evEnd = row._autoOut;
-        const durTxt = (evIn && evEnd) ? fmtDur(evIn, evEnd) : '0';
-        cells += '<td class="kh-dur" title="'+pair.label+'">'+durTxt+'</td>';
+        function _fmtMs(ms){ if(ms==null) return '0'; if(ms<0) ms=0; const _m=Math.round(ms/60000); const _h=Math.floor(_m/60); const _mm=_m%60; return _h===0 ? _mm+'mn' : (_mm===0 ? _h+'j' : _h+'j '+_mm+'mn'); }
+        let durTxt = (evIn && evEnd) ? fmtDur(evIn, evEnd) : '0';
+        // Dur. Lembur: pakai rumus Kerja Efektif - (kontrak-1), bukan selisih overtime_in/out (sering rusak).
+        if (col.tipe === 'overtime_out' && row._lemburCalcMs != null) durTxt = _fmtMs(row._lemburCalcMs);
+        const _anomMark = (col.tipe === 'overtime_out' && row._durAnom) ? ' kh-anom' : '';
+        const _anomTitle = (col.tipe === 'overtime_out' && row._durAnom) ? ' (DATA PERLU REVIEW: tap istirahat/pause tidak lengkap)' : '';
+        cells += '<td class="kh-dur'+_anomMark+'" title="'+pair.label+_anomTitle+'">'+(_anomMark?'\u26a0 ':'')+durTxt+'</td>';
+        // Sisipkan kolom Kerja Efektif tepat setelah Total Kerja.
+        if (col.tipe === 'clock_out') { const _ef = (row._efektifMs!=null) ? _fmtMs(row._efektifMs) : '0'; cells += '<td class="kh-dur" title="Kerja Efektif (Total Kerja - istirahat - pause)">'+_ef+'</td>'; }
       }
     });
     cells += '<td class="col-aksi">'+
