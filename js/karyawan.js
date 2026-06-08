@@ -924,12 +924,9 @@ async function autoOtThenOut() {
       alert('Belum ada Clock In hari ini, lembur tidak bisa dicatat.');
       return;
     }
-    // 1) Tutup otomatis istirahat/pause yang masih kebuka biar durasi akurat
-    //    (kasus karyawan lupa tap Selesai Istirahat sebelum tap Selesai Lembur).
-    if (isCurrentlyOnBreak()) { await doNoSelfieAction('break_out'); }
-    if (isCurrentlyPaused()) { await doNoSelfieAction('pause_out'); }
-    // 2) Cek jam kerja efektif (NET) sudah mencapai target (kuota - 1 jam hak istirahat).
-    //    Kalau belum, belum ada lembur -> arahkan pakai Clock Out.
+    // 1) Cek jam kerja efektif (NET) sudah mencapai target (kuota - 1 jam hak istirahat).
+    //    totalNonWorkMs() sudah menghitung istirahat/pause yang masih kebuka sampai sekarang,
+    //    jadi estimasi akurat walau karyawan belum tap Selesai Istirahat.
     const targetH = effectiveWorkHours();
     const targetMs = targetH * 3600000;
     const workedNetMs = (Date.now() - clockIn.ts.toMillis()) - totalNonWorkMs();
@@ -937,12 +934,23 @@ async function autoOtThenOut() {
       alert('Jam kerja efektif Anda belum mencapai ' + targetH + ' jam, jadi belum ada lembur hari ini. Silakan gunakan tombol Clock Out untuk mengakhiri shift.');
       return;
     }
-    // 3) Catat overtime_in otomatis (backdate ke titik kuota terpenuhi).
+    // 2) Konfirmasi dulu sebelum lanjut (cegah salah pencet). Tampilkan estimasi durasi lembur.
+    const otMs = workedNetMs - targetMs;
+    const otH = Math.floor(otMs / 3600000);
+    const otM = Math.floor((otMs % 3600000) / 60000);
+    const otStr = (otH > 0 ? (otH + ' jam ') : '') + otM + ' menit';
+    const okOt = await askConfirm('Selesai Lembur Sekarang?', 'Lembur Anda yang akan tercatat sekitar ' + otStr + '. Aksi ini juga mencatat jam keluar (pulang) Anda. Lanjutkan dan ambil selfie?', 'Ya, Selesai Lembur');
+    if (!okOt) return;
+    // 3) Setelah dikonfirmasi: tutup otomatis istirahat/pause yang masih kebuka biar durasi akurat
+    //    (kasus karyawan lupa tap Selesai Istirahat sebelum tap Selesai Lembur).
+    if (isCurrentlyOnBreak()) { await doNoSelfieAction('break_out'); }
+    if (isCurrentlyPaused()) { await doNoSelfieAction('pause_out'); }
+    // 4) Catat overtime_in otomatis (backdate ke titik kuota terpenuhi).
     if (!hasInSession('overtime_in')) {
       const otInMs = clockIn.ts.toMillis() + targetMs + totalNonWorkMs();
       await writeOvertimeInAt(otInMs);
     }
-    // 4) Catat overtime_out (lewat selfie). Ini sekaligus penanda JAM KELUAR;
+    // 5) Catat overtime_out (lewat selfie). Ini sekaligus penanda JAM KELUAR;
     //    tidak perlu Clock Out terpisah karena overtime_out sudah menutup shift.
     await handleAction('overtime_out');
   } catch (e) {
