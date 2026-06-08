@@ -1263,7 +1263,10 @@ function renderKehadiranMatrix(){
       const pair = DUR_PAIRS[col.tipe];
       if (pair){
         const evIn = row.byTipe[pair.inTipe];
-        const durTxt = (evIn && ev) ? fmtDur(evIn, ev) : '0';
+        // Total Kerja: kalau tidak ada clock_out, pakai overtime_out (Selesai Lembur) sebagai jam keluar.
+        let evEnd = ev;
+        if (col.tipe === 'clock_out' && !evEnd) evEnd = row.byTipe['overtime_out'];
+        const durTxt = (evIn && evEnd) ? fmtDur(evIn, evEnd) : '0';
         cells += '<td class="kh-dur" title="'+pair.label+'">'+durTxt+'</td>';
       }
     });
