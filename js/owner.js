@@ -1325,10 +1325,25 @@ function renderKehadiranMatrix(){
         function _fmtMs(ms){ if(ms==null) return '0'; if(ms<0) ms=0; const _m=Math.round(ms/60000); const _h=Math.floor(_m/60); const _mm=_m%60; return _h===0 ? _mm+'mn' : (_mm===0 ? _h+'j' : _h+'j '+_mm+'mn'); }
         let durTxt = (evIn && evEnd) ? fmtDur(evIn, evEnd) : '0';
         // Dur. Lembur: pakai rumus Kerja Efektif - (kontrak-1), bukan selisih overtime_in/out (sering rusak).
-        if (col.tipe === 'overtime_out' && row._lemburCalcMs != null) durTxt = _fmtMs(row._lemburCalcMs);
+        function _lemHHMM(min){ if(min==null) return ''; if(min<0) min=0; const _h=Math.floor(min/60); const _m=Math.round(min%60); return _h+':'+String(_m).padStart(2,'0'); }
+        let _lemMin = null, _lemOverridden = false;
+        if (col.tipe === 'overtime_out'){
+          const _ciDoc = row.byTipe && row.byTipe['clock_in'];
+          if (_ciDoc && _ciDoc.lemburOverrideMin !== undefined && _ciDoc.lemburOverrideMin !== null && _ciDoc.lemburOverrideMin !== ''){
+            _lemMin = Math.round(Number(_ciDoc.lemburOverrideMin)); _lemOverridden = true;
+          } else if (row._lemburCalcMs !== null){
+            _lemMin = Math.round(row._lemburCalcMs/60000);
+          }
+          if (_lemMin !== null) durTxt = _fmtMs(_lemMin*60000);
+        }
         const _anomMark = (col.tipe === 'overtime_out' && row._durAnom) ? ' kh-anom' : '';
         const _anomTitle = (col.tipe === 'overtime_out' && row._durAnom) ? ' (DATA PERLU REVIEW: tap istirahat/pause tidak lengkap)' : '';
-        cells += '<td class="kh-dur'+_anomMark+'" title="'+pair.label+_anomTitle+'">'+(_anomMark?'\u26a0 ':'')+durTxt+'</td>';
+        if (col.tipe === 'overtime_out'){
+          const _lemVal = (_lemMin!==null)? _lemHHMM(_lemMin) : '';
+          cells += '<td class="kh-dur'+_anomMark+(_lemOverridden?' kh-lembur-ovr':'')+'" title="'+pair.label+_anomTitle+(_lemOverridden?' (di-set MANUAL oleh owner)':'')+'">'+(_anomMark?'\u26a0 ':'')+'<input type="text" inputmode="numeric" maxlength="5" placeholder="0:00" class="kh-lembur" data-tipe="lembur_override" value="'+_lemVal+'" data-orig="'+_lemVal+'">'+'</td>';
+        } else {
+          cells += '<td class="kh-dur'+_anomMark+'" title="'+pair.label+_anomTitle+'">'+(_anomMark?'\u26a0 ':'')+durTxt+'</td>';
+        }
         // Sisipkan kolom Kerja Efektif tepat setelah Total Kerja.
         if (col.tipe === 'clock_out') { const _ef = (row._efektifMs!=null) ? _fmtMs(row._efektifMs) : '0'; cells += '<td class="kh-dur" title="Kerja Efektif (Total Kerja - istirahat - pause)">'+_ef+'</td>'; }
       }
@@ -1359,7 +1374,7 @@ function renderKehadiranMatrix(){
 async function saveKehadiranRow(uid, tr){
   const row = khRowsCache[uid];
   if (!row){ alert('Data karyawan tidak ditemukan.'); return; }
-  const inputs = tr.querySelectorAll('input.kh-time');
+  const inputs = tr.querySelectorAll('input.kh-time, input.kh-lembur');
   const changes = [];
   inputs.forEach(inp=>{
     const tipe = inp.dataset.tipe;
@@ -1374,6 +1389,20 @@ async function saveKehadiranRow(uid, tr){
   let okCount = 0, errCount = 0;
   for (const ch of changes){
     try{
+      if (ch.tipe === 'lembur_override'){
+        const _ciDoc = row.byTipe && row.byTipe['clock_in'];
+        if (!_ciDoc){ alert('Tidak bisa set lembur manual: tidak ada Clock In di hari ini.'); errCount++; continue; }
+        let _mins = null;
+        const _v = (ch.newVal||'').trim();
+        if (_v !== ''){
+          const _mm = _v.match(/^(\d{1,2}):([0-5]?\d)$/);
+          if (_mm){ _mins = parseInt(_mm[1],10)*60 + parseInt(_mm[2],10); }
+          else if (/^\d{1,3}$/.test(_v)){ _mins = parseInt(_v,10); }
+          else { alert('Format lembur harus H:MM (contoh 0:38).'); errCount++; continue; }
+        }
+        await updateDoc(doc(db,'absensi', _ciDoc._id), { lemburOverrideMin: (_mins===null? null : _mins), editedByOwner: true, editedAt: serverTimestamp() });
+        okCount++; continue;
+      }
       const existing = row.byTipe[ch.tipe];
       if (ch.newVal === '' && existing){
         await deleteDoc(doc(db,'absensi', existing._id));
@@ -1879,7 +1908,7 @@ const personMap = byPerson.get(key);
 const ts = r.ts && r.ts.toDate ? r.ts.toDate() : new Date();
 const dateStr = _localDay(ts);
 if (!personMap.has(dateStr)) personMap.set(dateStr, []);
-personMap.get(dateStr).push({tipe: r.tipe, ts: ts, id: d.id});
+personMap.get(dateStr).push({tipe: r.tipe, ts: ts, id: d.id, lemburOverrideMin: r.lemburOverrideMin});
 });
 const rows = [];
 let totalBudget = 0, totalHari = 0, totalLemburJam = 0, totalJamKerjaAll = 0;
@@ -1970,7 +1999,9 @@ kategori = 'tidak-clockout'; var __cut = ci.ts.getTime() + jamKerja*3600000; var
 totalJamKerja += effJamFinal;
 totalKontribusi += kontribusi;
 let lemburJam = 0;
-if (oo){ const __netH = Math.max(0, jamKerja - 1); lemburJam = Math.max(0, durJam - __netH); totalJamLembur += lemburJam; }
+const __ovr = (ci && ci.lemburOverrideMin !== undefined && ci.lemburOverrideMin !== null && ci.lemburOverrideMin !== '') ? (Number(ci.lemburOverrideMin)/60) : null;
+if (__ovr !== null){ lemburJam = Math.max(0, __ovr); totalJamLembur += lemburJam; }
+else if (oo){ const __netH = Math.max(0, jamKerja - 1); lemburJam = Math.max(0, durJam - __netH); totalJamLembur += lemburJam; }
 dailyDetails.push({
 date: dateStr,
 jamMasuk: ci ? ci.ts.toTimeString().substring(0,5) : '--',
