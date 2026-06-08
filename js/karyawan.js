@@ -165,7 +165,9 @@ var BREAK_MIN_FOR_CREDIT_MS = 60 * 60 * 1000;
 function rawJamKerja(){ return parseFloat(userProfile && userProfile.jamKerja) || 8; }
 function effectiveWorkHours(){
   var jk = rawJamKerja();
-  return (totalNonWorkMs() >= BREAK_MIN_FOR_CREDIT_MS) ? Math.max(0, jk - 1) : jk;
+  // Target NET kerja = kuota jam kerja dikurangi 1 jam hak istirahat (kontrak 10->9, 9->8).
+  // Tidak lagi potong flat 1 jam bersyarat; istirahat asli dihitung di totalNonWorkMs().
+  return Math.max(0, jk - 1);
 }
 // Toggle satu tombol: kalau lagi istirahat -> break_out, kalau tidak -> break_in. Repeatable.
 function handleBreakToggle(){
@@ -298,7 +300,7 @@ async function loadActiveSession(uid){
     if (all[i].tipe === 'clock_in'){
       let hasCo = false;
       for (let j = i + 1; j < all.length; j++){
-        if (all[j].tipe === 'clock_out'){ hasCo = true; break; }
+        if (all[j].tipe === 'clock_out' || all[j].tipe === 'overtime_out'){ hasCo = true; break; }
       }
       if (!hasCo){ openCiIdx = i; break; }
     }
@@ -560,7 +562,7 @@ async function saveAttendance(payload){
 
 function validateSequence(type){
   const hasCi = hasInSession('clock_in');
-  const hasCo = hasInSession('clock_out');
+  const hasCo = hasInSession('clock_out') || hasInSession('overtime_out'); // overtime_out juga menutup shift
   if (type === 'clock_in'){
     if (hasCi && !hasCo) return 'Anda masih punya sesi shift aktif yang belum Clock Out.';
     return null;
@@ -922,11 +924,26 @@ async function autoOtThenOut() {
       alert('Belum ada Clock In hari ini, lembur tidak bisa dicatat.');
       return;
     }
+    // 1) Tutup otomatis istirahat/pause yang masih kebuka biar durasi akurat
+    //    (kasus karyawan lupa tap Selesai Istirahat sebelum tap Selesai Lembur).
+    if (isCurrentlyOnBreak()) { await doNoSelfieAction('break_out'); }
+    if (isCurrentlyPaused()) { await doNoSelfieAction('pause_out'); }
+    // 2) Cek jam kerja efektif (NET) sudah mencapai target (kuota - 1 jam hak istirahat).
+    //    Kalau belum, belum ada lembur -> arahkan pakai Clock Out.
+    const targetH = effectiveWorkHours();
+    const targetMs = targetH * 3600000;
+    const workedNetMs = (Date.now() - clockIn.ts.toMillis()) - totalNonWorkMs();
+    if (workedNetMs < targetMs) {
+      alert('Jam kerja efektif Anda belum mencapai ' + targetH + ' jam, jadi belum ada lembur hari ini. Silakan gunakan tombol Clock Out untuk mengakhiri shift.');
+      return;
+    }
+    // 3) Catat overtime_in otomatis (backdate ke titik kuota terpenuhi).
     if (!hasInSession('overtime_in')) {
-      const jk = effectiveWorkHours();
-      const otInMs = clockIn.ts.toMillis() + jk * 3600000 + totalPauseMillisToday();
+      const otInMs = clockIn.ts.toMillis() + targetMs + totalNonWorkMs();
       await writeOvertimeInAt(otInMs);
     }
+    // 4) Catat overtime_out (lewat selfie). Ini sekaligus penanda JAM KELUAR;
+    //    tidak perlu Clock Out terpisah karena overtime_out sudah menutup shift.
     await handleAction('overtime_out');
   } catch (e) {
     console.error('autoOtThenOut error', e);
