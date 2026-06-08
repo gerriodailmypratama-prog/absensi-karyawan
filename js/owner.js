@@ -628,7 +628,7 @@ async function openEditKaryawan(uid){
         if ($('editJabatan')) $('editJabatan').value = d.jabatan || '';
         if ($('editStatusKaryawan')) $('editStatusKaryawan').value = d.statusKaryawan || '';
         if ($('editBaseHarian')) $('editBaseHarian').value = d.baseHarian || '';
-        if ($('editMultiplierLembur')) $('editMultiplierLembur').value = d.multiplierLembur || 1.5;
+        if ($('editMultiplierLembur')) $('editMultiplierLembur').value = d.multiplierLembur || 1;
         if ($('editNamaBank')) $('editNamaBank').value = d.namaBank || '';
         if ($('editAtasNamaRek')) $('editAtasNamaRek').value = d.atasNamaRek || '';
         if ($('editNomorRekening')) $('editNomorRekening').value = d.nomorRekening || '';
@@ -689,7 +689,7 @@ $('formEditKaryawan').onsubmit = async (e) => {
     const jabatan = $('editJabatan') ? $('editJabatan').value.trim() : '';
     const statusKaryawan = $('editStatusKaryawan') ? $('editStatusKaryawan').value : '';
     const baseHarian = $('editBaseHarian') ? (parseInt($('editBaseHarian').value, 10) || 0) : 0;
-    const multiplierLembur = $('editMultiplierLembur') ? (parseFloat($('editMultiplierLembur').value) || 1.5) : 1.5;
+    const multiplierLembur = $('editMultiplierLembur') ? (parseFloat($('editMultiplierLembur').value) || 1) : 1;
     const namaBank = $('editNamaBank') ? $('editNamaBank').value.trim() : '';
     const atasNamaRek = $('editAtasNamaRek') ? $('editAtasNamaRek').value.trim() : '';
     const nomorRekening = $('editNomorRekening') ? $('editNomorRekening').value.trim() : '';
