@@ -1257,8 +1257,11 @@ function renderKehadiranMatrix(){
     };
     MATRIX_COLS.forEach(col=>{
       const ev = row.byTipe[col.tipe];
-      const val = ev && ev.ts && ev.ts.toDate ? fmtHM(ev.ts.toDate()) : '';
-      const editedFlag = ev && (ev.editedByOwner||ev.manualEdit) ? ' kh-edited' : '';
+      // Jam Keluar: kalau tidak ada clock_out, pakai overtime_out (Selesai Lembur) sebagai jam keluar.
+      let ev2 = ev;
+      if (col.tipe === 'clock_out' && !ev2 && row.byTipe['overtime_out']) ev2 = row.byTipe['overtime_out'];
+      const val = ev2 && ev2.ts && ev2.ts.toDate ? fmtHM(ev2.ts.toDate()) : '';
+      const editedFlag = ev2 && (ev2.editedByOwner||ev2.manualEdit) ? ' kh-edited' : '';
       if (col.tipe === 'clock_in' || col.tipe === 'clock_out') cells += '<td><input type="text" inputmode="numeric" maxlength="5" placeholder="--:--" class="kh-time'+editedFlag+'" data-tipe="'+col.tipe+'" value="'+val+'" data-orig="'+val+'"></td>';
       const pair = DUR_PAIRS[col.tipe];
       if (pair){
