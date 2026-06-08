@@ -1078,6 +1078,7 @@ async function loadKehadiranMatrix(){
           uid,
           nama: k.nama || (k.email||'').split('@')[0] || '-',
           email: k.email || '',
+          jamKerja: (k.jamKerja!=null ? Number(k.jamKerja) : 9),
           events: [],
           byTipe: {}
         };
@@ -1245,6 +1246,28 @@ function renderKehadiranMatrix(){
   uids.forEach(uid=>{
     const row = khRowsCache[uid];
     const tr = document.createElement('tr');
+    // Lupa Clock Out: clock_in > 14 jam tanpa clock_out/overtime_out -> hitung jam keluar otomatis.
+    // Rumus: clock_in + (kontrak-1 jam kerja efektif) + min(istirahat aktual, 1 jam). Display-only, tidak tulis DB.
+    (function(){
+      const _bt = row.byTipe || {};
+      const _ciEv = _bt.clock_in || _bt.overtime_in;
+      if (!_ciEv || _bt.clock_out || _bt.overtime_out) return;
+      if (!_ciEv.ts || !_ciEv.ts.toDate) return;
+      const _ciMs = _ciEv.ts.toDate().getTime();
+      if ((Date.now() - _ciMs) <= 14*60*60*1000) return;
+      const _kontrak = Number(row.jamKerja) || 9;
+      let _restMs = 0; const _open = {};
+      (row.events||[]).forEach(function(e){
+        if (!e.ts || !e.ts.toDate) return;
+        const _m = e.ts.toDate().getTime();
+        if (e.tipe==='break_in' || e.tipe==='pause_in') _open[e.tipe.replace('_in','')] = _m;
+        else if (e.tipe==='break_out' || e.tipe==='pause_out'){ const _b=e.tipe.replace('_out',''); if(_open[_b]!=null){ _restMs += _m-_open[_b]; _open[_b]=null; } }
+      });
+      const _restCap = Math.min(_restMs, 60*60*1000);
+      const _outMs = _ciMs + Math.max(0,(_kontrak-1))*60*60*1000 + _restCap;
+      const _d = new Date(_outMs);
+      row._autoOut = { ts:{ toDate:function(){ return _d; } }, _autoLupa:true };
+    })();
     tr.dataset.uid = uid;
     let cells = '<td class="col-nama">'+ gpsDotFor(row) +' '+ (row.nama||'-') +'</td>';
     cells += '<td>'+ statusBadgeFor(row) +'</td>';
@@ -1260,15 +1283,18 @@ function renderKehadiranMatrix(){
       // Jam Keluar: kalau tidak ada clock_out, pakai overtime_out (Selesai Lembur) sebagai jam keluar.
       let ev2 = ev;
       if (col.tipe === 'clock_out' && !ev2 && row.byTipe['overtime_out']) ev2 = row.byTipe['overtime_out'];
+      if (col.tipe === 'clock_out' && !ev2 && row._autoOut) ev2 = row._autoOut;
       const val = ev2 && ev2.ts && ev2.ts.toDate ? fmtHM(ev2.ts.toDate()) : '';
-      const editedFlag = ev2 && (ev2.editedByOwner||ev2.manualEdit) ? ' kh-edited' : '';
-      if (col.tipe === 'clock_in' || col.tipe === 'clock_out') cells += '<td><input type="text" inputmode="numeric" maxlength="5" placeholder="--:--" class="kh-time'+editedFlag+'" data-tipe="'+col.tipe+'" value="'+val+'" data-orig="'+val+'"></td>';
+      const editedFlag = (ev2 && (ev2._autoLupa||ev2.editedByOwner||ev2.manualEdit)) ? ' kh-edited' : '';
+      const autoTitle = (ev2 && ev2._autoLupa) ? ' title="Jam keluar OTOMATIS (lupa Clock Out >14 jam). Dihitung dari durasi kontrak + istirahat. Edit untuk koreksi."' : '';
+      if (col.tipe === 'clock_in' || col.tipe === 'clock_out') cells += '<td><input type="text" inputmode="numeric" maxlength="5" placeholder="--:--" class="kh-time'+editedFlag+'" data-tipe="'+col.tipe+'" value="'+val+'" data-orig="'+val+'"'+autoTitle+'></td>';
       const pair = DUR_PAIRS[col.tipe];
       if (pair){
         const evIn = row.byTipe[pair.inTipe];
         // Total Kerja: kalau tidak ada clock_out, pakai overtime_out (Selesai Lembur) sebagai jam keluar.
         let evEnd = ev;
         if (col.tipe === 'clock_out' && !evEnd) evEnd = row.byTipe['overtime_out'];
+        if (col.tipe === 'clock_out' && !evEnd && row._autoOut) evEnd = row._autoOut;
         const durTxt = (evIn && evEnd) ? fmtDur(evIn, evEnd) : '0';
         cells += '<td class="kh-dur" title="'+pair.label+'">'+durTxt+'</td>';
       }
