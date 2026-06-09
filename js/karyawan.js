@@ -861,7 +861,7 @@ async function checkForgottenClockOut(uid){
   }catch(e){ console.warn('checkForgottenClockOut err:', e); }
 }
 
-$('avatarWrap').onclick = () => $('avatarInput').click();
+$('avatarWrap').onclick = () => { try { openProfil(); } catch(e) { $('avatarInput').click(); } };
 $('avatarInput').onchange = async (ev) => {
   const f = ev.target.files[0]; if (!f) return;
   try{
