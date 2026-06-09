@@ -1916,7 +1916,8 @@ for (const k of karyMap.values()){
 const baseHarian = parseInt(k.baseHarian, 10) || 0;
 const jamKerja = parseInt(k.jamKerja, 10) || 8;
 const multiplierLembur = parseFloat(k.multiplierLembur) || 1;
-const ratePerJam = jamKerja > 0 ? (baseHarian / jamKerja) : 0;
+const netJamKerja = Math.max(1, jamKerja - 1);
+const ratePerJam = netJamKerja > 0 ? (baseHarian / netJamKerja) : 0;
 const personMap = byPerson.get(k.uid) || byPerson.get(k.email) || new Map();
 let hariHadir = 0, hariParsial = 0, totalJamLembur = 0, totalJamKerja = 0, totalKontribusi = 0;
 const dailyDetails = [];
@@ -1985,7 +1986,7 @@ i++;
 }
 }
 if (durJam < 0) durJam = 0;
-const effJam = Math.min(durJam, jamKerja);
+const effJam = Math.min(durJam, netJamKerja);
   let effJamFinal = effJam;
 let kategori = 'absen', kontribusi = 0;
 if (ci && __end){
@@ -1994,7 +1995,7 @@ if (durJam >= jamKerja * 0.75){ kategori = 'hadir'; hariHadir++; }
 else if (durJam > 0){ kategori = 'parsial'; hariParsial++; }
 else { kategori = 'short'; }
 } else if (ci && !__end){
-kategori = 'tidak-clockout'; var __cut = ci.ts.getTime() + jamKerja*3600000; var __pms=0, __ps=null; for(var __pe=0;__pe<events.length;__pe++){ if(events[__pe].tipe==='pause_in'){__ps=events[__pe].ts.getTime();} else if(events[__pe].tipe==='pause_out'&&__ps!==null){__pms+=Math.min(events[__pe].ts.getTime(),__cut)-__ps;__ps=null;} } if(__ps!==null){__pms+=Math.max(0,__cut-__ps);} effJamFinal = Math.max(0, Math.min(jamKerja, jamKerja - __pms/3600000)); kontribusi = effJamFinal * dayRatePerJam; hariHadir++;
+kategori = 'tidak-clockout'; var __cut = ci.ts.getTime() + jamKerja*3600000; var __pms=0, __ps=null; for(var __pe=0;__pe<events.length;__pe++){ if(events[__pe].tipe==='pause_in'){__ps=events[__pe].ts.getTime();} else if(events[__pe].tipe==='pause_out'&&__ps!==null){__pms+=Math.min(events[__pe].ts.getTime(),__cut)-__ps;__ps=null;} } if(__ps!==null){__pms+=Math.max(0,__cut-__ps);} effJamFinal = Math.max(0, Math.min(netJamKerja, jamKerja - __pms/3600000)); kontribusi = effJamFinal * dayRatePerJam; hariHadir++;
 }
 totalJamKerja += effJamFinal;
 totalKontribusi += kontribusi;
