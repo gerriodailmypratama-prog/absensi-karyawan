@@ -628,7 +628,7 @@ async function openEditKaryawan(uid){
         if ($('editJabatan')) $('editJabatan').value = d.jabatan || '';
         if ($('editStatusKaryawan')) $('editStatusKaryawan').value = d.statusKaryawan || '';
         if ($('editBaseHarian')) $('editBaseHarian').value = d.baseHarian || '';
-        if ($('editMultiplierLembur')) $('editMultiplierLembur').value = d.multiplierLembur || 1.5;
+        if ($('editMultiplierLembur')) $('editMultiplierLembur').value = d.multiplierLembur || 1;
         if ($('editNamaBank')) $('editNamaBank').value = d.namaBank || '';
         if ($('editAtasNamaRek')) $('editAtasNamaRek').value = d.atasNamaRek || '';
         if ($('editNomorRekening')) $('editNomorRekening').value = d.nomorRekening || '';
@@ -689,7 +689,7 @@ $('formEditKaryawan').onsubmit = async (e) => {
     const jabatan = $('editJabatan') ? $('editJabatan').value.trim() : '';
     const statusKaryawan = $('editStatusKaryawan') ? $('editStatusKaryawan').value : '';
     const baseHarian = $('editBaseHarian') ? (parseInt($('editBaseHarian').value, 10) || 0) : 0;
-    const multiplierLembur = $('editMultiplierLembur') ? (parseFloat($('editMultiplierLembur').value) || 1.5) : 1.5;
+    const multiplierLembur = $('editMultiplierLembur') ? (parseFloat($('editMultiplierLembur').value) || 1) : 1;
     const namaBank = $('editNamaBank') ? $('editNamaBank').value.trim() : '';
     const atasNamaRek = $('editAtasNamaRek') ? $('editAtasNamaRek').value.trim() : '';
     const nomorRekening = $('editNomorRekening') ? $('editNomorRekening').value.trim() : '';
@@ -1886,7 +1886,7 @@ let totalBudget = 0, totalHari = 0, totalLemburJam = 0, totalJamKerjaAll = 0;
 for (const k of karyMap.values()){
 const baseHarian = parseInt(k.baseHarian, 10) || 0;
 const jamKerja = parseInt(k.jamKerja, 10) || 8;
-const multiplierLembur = parseFloat(k.multiplierLembur) || 1.5;
+const multiplierLembur = parseFloat(k.multiplierLembur) || 1;
 const ratePerJam = jamKerja > 0 ? (baseHarian / jamKerja) : 0;
 const personMap = byPerson.get(k.uid) || byPerson.get(k.email) || new Map();
 let hariHadir = 0, hariParsial = 0, totalJamLembur = 0, totalJamKerja = 0, totalKontribusi = 0;
@@ -1896,7 +1896,7 @@ const sortedDateKeys = Array.from(personMap.keys()).sort();
 for (let _di=0; _di<sortedDateKeys.length; _di++){
 const dateStr = sortedDateKeys[_di]; const events = personMap.get(dateStr);
   const dayHasNoBreak = events.some(e=> e.tipe === 'clock_out' && e.noBreak === true);
-  const dayRatePerJam = (dayHasNoBreak && jamKerja > 1) ? (baseHarian / (jamKerja - 1)) : ratePerJam;
+  const dayRatePerJam = ratePerJam;
 const ci = events.find(e=>e.tipe==='clock_in');
 // Skip orphan-only days (cuma clock_out tanpa clock_in)
 if (!ci){
@@ -1916,12 +1916,22 @@ if (ci){
         const nextEvts = personMap.get(Dnext) || [];
         const nextCi = nextEvts.find(e=>e.tipe==='clock_in');
         const nextCoCandidate = nextEvts.find(e=>e.tipe==='clock_out');
-        if (nextCoCandidate && (!nextCi || nextCoCandidate.ts.getTime() < nextCi.ts.getTime())){
+        const __cut = nextCi ? nextCi.ts.getTime() : Infinity;
+        if (nextCoCandidate && nextCoCandidate.ts.getTime() < __cut){
           co = nextCoCandidate;
           const idxR = nextEvts.indexOf(nextCoCandidate);
           if (idxR>=0) nextEvts.splice(idxR,1);
-          personMap.set(Dnext, nextEvts);
         }
+        ['overtime_out','break_out','pause_out'].forEach(function(__tp){
+          for (let __z=0; __z<nextEvts.length; __z++){
+            if (nextEvts[__z].tipe===__tp && nextEvts[__z].ts.getTime() < __cut){
+              events.push(nextEvts[__z]);
+              nextEvts.splice(__z,1); __z--;
+            }
+          }
+        });
+        events.sort(function(a,b){return a.ts - b.ts;});
+        personMap.set(Dnext, nextEvts);
       }
     }
   }
@@ -1931,8 +1941,10 @@ const oi = events.find(e=>e.tipe==='overtime_in');
 const ooArr = events.filter(e=>e.tipe==='overtime_out');
 const oo = ooArr.length ? ooArr[ooArr.length-1] : null;
 let durJam = 0;
-if (ci && co){
-durJam = (co.ts - ci.ts) / 3600000;
+const __end = co || oo;
+if (ci && __end){
+durJam = (__end.ts - ci.ts) / 3600000;
+if (durJam < 0) durJam += 24;
 const breaks = [];
 events.forEach(e=>{ if (e.tipe==='break_in' || e.tipe==='break_out') breaks.push(e); });
   const pauses = events.filter(e=>e.tipe==='pause_in' || e.tipe==='pause_out'); for (let pi=0; pi<pauses.length-1; pi++){ if (pauses[pi].tipe==='pause_in' && pauses[pi+1].tipe==='pause_out'){ durJam -= (pauses[pi+1].ts - pauses[pi].ts)/3600000; pi++; } }
@@ -1947,18 +1959,18 @@ if (durJam < 0) durJam = 0;
 const effJam = Math.min(durJam, jamKerja);
   let effJamFinal = effJam;
 let kategori = 'absen', kontribusi = 0;
-if (ci && co){
+if (ci && __end){
 kontribusi = effJam * dayRatePerJam;
 if (durJam >= jamKerja * 0.75){ kategori = 'hadir'; hariHadir++; }
 else if (durJam > 0){ kategori = 'parsial'; hariParsial++; }
 else { kategori = 'short'; }
-} else if (ci && !co){
+} else if (ci && !__end){
 kategori = 'tidak-clockout'; var __cut = ci.ts.getTime() + jamKerja*3600000; var __pms=0, __ps=null; for(var __pe=0;__pe<events.length;__pe++){ if(events[__pe].tipe==='pause_in'){__ps=events[__pe].ts.getTime();} else if(events[__pe].tipe==='pause_out'&&__ps!==null){__pms+=Math.min(events[__pe].ts.getTime(),__cut)-__ps;__ps=null;} } if(__ps!==null){__pms+=Math.max(0,__cut-__ps);} effJamFinal = Math.max(0, Math.min(jamKerja, jamKerja - __pms/3600000)); kontribusi = effJamFinal * dayRatePerJam; hariHadir++;
 }
 totalJamKerja += effJamFinal;
 totalKontribusi += kontribusi;
 let lemburJam = 0;
-if (oi && oo){ lemburJam = Math.max(0, (oo.ts - oi.ts) / 3600000); totalJamLembur += lemburJam; }
+if (oo){ const __netH = Math.max(0, jamKerja - 1); lemburJam = Math.max(0, durJam - __netH); totalJamLembur += lemburJam; }
 dailyDetails.push({
 date: dateStr,
 jamMasuk: ci ? ci.ts.toTimeString().substring(0,5) : '--',
