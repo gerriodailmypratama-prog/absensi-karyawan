@@ -1330,10 +1330,11 @@ function renderKehadiranMatrix(){
         if (col.tipe === 'overtime_out'){
           const _ciDoc = row.byTipe && row.byTipe['clock_in'];
           if (_ciDoc && _ciDoc.lemburOverrideMin !== undefined && _ciDoc.lemburOverrideMin !== null && _ciDoc.lemburOverrideMin !== ''){
-            _lemMin = Math.round(Number(_ciDoc.lemburOverrideMin)); _lemOverridden = true;
-          } else if (row._lemburCalcMs !== null){
+            var __ovrN = Math.round(Number(_ciDoc.lemburOverrideMin)); if (Number.isFinite(__ovrN)) { _lemMin = __ovrN; _lemOverridden = true; }
+          } else if (Number.isFinite(row._lemburCalcMs)){
             _lemMin = Math.round(row._lemburCalcMs/60000);
           }
+          if (!Number.isFinite(_lemMin)) _lemMin = null;
           if (_lemMin !== null) durTxt = _fmtMs(_lemMin*60000);
         }
         const _anomMark = (col.tipe === 'overtime_out' && row._durAnom) ? ' kh-anom' : '';
