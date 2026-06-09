@@ -171,8 +171,11 @@ function effectiveWorkHours(){
 }
 // Toggle satu tombol: kalau lagi istirahat -> break_out, kalau tidak -> break_in. Repeatable.
 function handleBreakToggle(){
-  if (isCurrentlyOnBreak() || isCurrentlyPaused()) handleAction('break_out');
-  else handleAction('break_in');
+  if (isCurrentlyOnBreak() || isCurrentlyPaused()) { handleAction('break_out'); }
+  else {
+    try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch(e){}
+    handleAction('break_in');
+  }
 }
 // Update label + status tombol gabungan Istirahat/Pause.
 function updateBreakToggleUI(){
@@ -245,6 +248,60 @@ function updateBreakCountdown(){
     wc.classList.toggle('paused', active);
 }
 setInterval(updateBreakCountdown, 1000);
+
+// ===== Reminder: ingatkan kalau lupa tap Selesai Istirahat/Pause setelah 60 menit =====
+var BREAK_REMINDER_MS = 60 * 60 * 1000; // 1 jam
+function currentBreakStartMs(){
+  // cari break_in / pause_in terakhir yang belum ada pasangan out-nya
+  var startMs = 0;
+  for (var i = 0; i < sessionCache.length; i++){
+    var r = sessionCache[i];
+    var tm = (r.ts && r.ts.toDate) ? r.ts.toDate().getTime() : 0;
+    if (r.tipe === 'break_in' || r.tipe === 'pause_in') startMs = tm;
+    else if (r.tipe === 'break_out' || r.tipe === 'pause_out') startMs = 0;
+  }
+  return startMs;
+}
+function showBreakReminderBanner(menit){
+  var id = 'breakReminderBanner';
+  var el = document.getElementById(id);
+  if (!el){
+    el = document.createElement('div');
+    el.id = id;
+    el.style.cssText = 'position:fixed;left:12px;right:12px;top:12px;z-index:9999;background:#b45309;color:#fff;padding:14px 16px;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.35);font-size:14px;line-height:1.4;';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '<b>Istirahat sudah ' + menit + ' menit</b><br>Jangan lupa tap <b>Selesai Istirahat / Pause</b> kalau sudah balik kerja ya.';
+  el.style.display = 'block';
+}
+function hideBreakReminderBanner(){
+  var el = document.getElementById('breakReminderBanner');
+  if (el) el.style.display = 'none';
+}
+function checkBreakReminder(){
+  var active = isCurrentlyOnBreak() || isCurrentlyPaused();
+  if (!active){ window.__breakOverPrompted = false; hideBreakReminderBanner(); return; }
+  var startMs = currentBreakStartMs();
+  if (!startMs) return;
+  var elapsed = Date.now() - startMs;
+  if (elapsed >= BREAK_REMINDER_MS && !window.__breakOverPrompted){
+    window.__breakOverPrompted = true;
+    var menit = Math.floor(elapsed / 60000);
+    showBreakReminderBanner(menit);
+    try { if (navigator.vibrate) navigator.vibrate([300,150,300]); } catch(e){}
+    try {
+      if ('Notification' in window && Notification.permission === 'granted'){
+        var n = new Notification('Istirahat sudah lewat 1 jam', {
+          body: 'Jangan lupa tap Selesai Istirahat / Pause kalau sudah balik kerja.',
+          tag: 'break-reminder',
+          requireInteraction: true
+        });
+        n.onclick = function(){ try { window.focus(); } catch(e){} this.close(); };
+      }
+    } catch(e){}
+  }
+}
+setInterval(checkBreakReminder, 30000);
 
 function fmtTime(d){ return d.toLocaleTimeString('id-ID',{hour12:false}); }
 
