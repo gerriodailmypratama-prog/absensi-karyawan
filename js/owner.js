@@ -1896,7 +1896,7 @@ const sortedDateKeys = Array.from(personMap.keys()).sort();
 for (let _di=0; _di<sortedDateKeys.length; _di++){
 const dateStr = sortedDateKeys[_di]; const events = personMap.get(dateStr);
   const dayHasNoBreak = events.some(e=> e.tipe === 'clock_out' && e.noBreak === true);
-  const dayRatePerJam = (jamKerja > 1) ? (baseHarian / (jamKerja - 1)) : ratePerJam;
+  const dayRatePerJam = ratePerJam;
 const ci = events.find(e=>e.tipe==='clock_in');
 // Skip orphan-only days (cuma clock_out tanpa clock_in)
 if (!ci){
@@ -1956,7 +1956,7 @@ i++;
 }
 }
 if (durJam < 0) durJam = 0;
-const effJam = Math.min(durJam, Math.max(1, jamKerja - 1));
+const effJam = Math.min(durJam, jamKerja);
   let effJamFinal = effJam;
 let kategori = 'absen', kontribusi = 0;
 if (ci && __end){
@@ -1983,7 +1983,7 @@ kontribusi: kontribusi
 });
 }
 const upahPokok = totalKontribusi;
-const upahLembur = totalJamLembur * (jamKerja > 1 ? (baseHarian / (jamKerja - 1)) : ratePerJam) * multiplierLembur;
+const upahLembur = totalJamLembur * ratePerJam * multiplierLembur;
 const total = upahPokok + upahLembur;
 rows.push({
 uid: k.uid, nama: k.nama || '-', idKaryawan: k.idKaryawan || '-',
