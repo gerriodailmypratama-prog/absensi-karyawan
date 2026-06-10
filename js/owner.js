@@ -534,7 +534,7 @@ async function loadKaryawanList(){
             const tj = x.tanggalJoin ? (x.tanggalJoin.toDate ? x.tanggalJoin.toDate() : new Date(x.tanggalJoin)) : null;
             const tjStr = tj ? tj.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-';
             tr.innerHTML = '<td>'+(idx+1)+'</td>'+
-              '<td>'+(x.nama||'-')+'</td>'+
+              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#3b82f6;text-decoration:underline;">'+(x.nama||'-')+'</span></td>'+
               '<td>'+(x.email||'-')+'</td>'+
               '<td>'+(x.phone||'-')+'</td>'+
               '<td>'+idDisplay+'</td>'+
@@ -546,6 +546,9 @@ async function loadKaryawanList(){
         });
         document.querySelectorAll('.btn-edit-kar').forEach(b => {
             b.onclick = () => openEditKaryawan(b.dataset.uid);
+        });
+        document.querySelectorAll('.kry-nama-link').forEach(s => {
+            s.onclick = () => showProfilKaryawan(s.dataset.uid);
         });
         document.querySelectorAll('.btn-del-kar').forEach(b => {
             b.onclick = () => deleteKaryawan(b.dataset.uid, b.dataset.nama);
@@ -2371,3 +2374,49 @@ document.addEventListener('click', function (e) {
     downloadSlipGaji(b.dataset.uid);
   }
 });
+
+
+// ===== Modal Profil Karyawan (read-only) =====
+async function showProfilKaryawan(uid){
+  try {
+    const snap = await getDoc(doc(db,'karyawan',uid));
+    if(!snap.exists()){ alert('Data karyawan tidak ditemukan'); return; }
+    const d = snap.data();
+    const esc = (v)=>{ if(v===undefined||v===null||v==='') return '-'; return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+    let tj = '-';
+    if(d.tanggalJoin){ try { const t = d.tanggalJoin.toDate ? d.tanggalJoin.toDate() : new Date(d.tanggalJoin); tj = t.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}); } catch(e){} }
+    const baseH = (d.baseHarian!==undefined && d.baseHarian!==null && d.baseHarian!=='') ? ('Rp '+Number(d.baseHarian).toLocaleString('id-ID')) : '-';
+    const row = (label,val)=>'<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.08);"><span style="color:#94a3b8;">'+label+'</span><span style="text-align:right;font-weight:600;">'+val+'</span></div>';
+    const sec = (title)=>'<h4 style="margin:14px 0 4px;color:#e2e8f0;">'+title+'</h4>';
+    let html = '';
+    html += sec('Data Pribadi');
+    html += row('Nama', esc(d.nama));
+    html += row('No. HP', esc(d.phone));
+    html += row('ID Karyawan', esc(d.idKaryawan||d.nik));
+    html += row('Jabatan', esc(d.jabatan));
+    html += row('Status', esc(d.statusKaryawan));
+    html += row('Tanggal Join', tj);
+    html += sec('Payroll');
+    html += row('Base Harian', baseH);
+    html += row('Jam Kerja / hari', esc(d.jamKerja));
+    html += row('Multiplier Lembur', esc(d.multiplierLembur));
+    html += sec('Rekening Bank');
+    html += row('Nama Bank', esc(d.namaBank));
+    html += row('Atas Nama', esc(d.atasNamaRek));
+    html += row('Nomor Rekening', esc(d.nomorRekening));
+    html += sec('Dokumen');
+    html += row('Status Profil', d.profilLocked ? 'Terkunci (sudah diisi karyawan)' : 'Belum dikunci');
+    if(d.ktpUrl){ html += '<div style="margin-top:8px;"><div style="color:#94a3b8;margin-bottom:4px;">Foto KTP</div><a href="'+d.ktpUrl+'" target="_blank" rel="noopener"><img src="'+d.ktpUrl+'" style="max-width:100%;border-radius:8px;"></a></div>'; }
+    else { html += row('Foto KTP', 'Belum diupload'); }
+    const body = document.getElementById('profilViewBody');
+    if(body) body.innerHTML = html;
+    const ttl = document.getElementById('pvTitle');
+    if(ttl) ttl.textContent = 'Profil: ' + (d.nama || '-');
+    const modal = document.getElementById('profilViewModal');
+    if(modal) modal.classList.remove('hidden');
+  } catch(e){ console.error('showProfilKaryawan', e); alert('Gagal memuat profil: ' + (e && e.message ? e.message : e)); }
+}
+(function(){
+  var btn = document.getElementById('btnProfilViewClose');
+  if(btn) btn.onclick = function(){ var m = document.getElementById('profilViewModal'); if(m) m.classList.add('hidden'); };
+})();
