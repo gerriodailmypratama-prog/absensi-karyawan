@@ -649,6 +649,7 @@ function validateSequence(type){
     return null;
   }
   if (type === 'clock_out'){
+    if (isCurrentlyOnBreak()) return 'Kamu masih Istirahat. Tap Selesai Istirahat dulu sebelum Clock Out.';
     if (!hasCi) return 'Anda belum Clock In.';
     if (hasCo) return 'Anda sudah Clock Out hari ini.';
     if (isCurrentlyPaused()) return 'Anda sedang Pause. Tap Lanjutkan Kerja dulu sebelum Clock Out.';
@@ -660,6 +661,7 @@ function validateSequence(type){
     return null;
   }
   if (type === 'overtime_out'){
+    if (isCurrentlyOnBreak()) return 'Kamu masih Istirahat. Tap Selesai Istirahat dulu sebelum Selesai Lembur.';
     if (!hasInSession('overtime_in')) return 'Anda belum Mulai Lembur.';
     if (hasInSession('overtime_out')) return 'Anda sudah Selesai Lembur.';
     return null;
