@@ -1023,13 +1023,14 @@ function dateToInputStr(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+
 function buildWeekNav(refDate){
   const wrap = $('khWeekNav'); if (!wrap) return;
   wrap.innerHTML = '';
-  // Strip selalu berpusat pada HARI INI (today di tengah, index 3 dari 7). Tanggal lain geser di kiri-kanan.
+  // Strip berpusat pada tanggal yang dipilih (center index 3 dari 7); geser kiri-kanan ikut. Ring biru = HARI INI.
   const today = new Date(); today.setHours(0,0,0,0);
+  const ctr = new Date(refDate); ctr.setHours(0,0,0,0);
   const refStr = dateToInputStr(new Date(refDate));
   const todayStr = dateToInputStr(today);
   const wdNames = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
   for (let i=-3; i<=3; i++){
-    const dd = new Date(today); dd.setDate(today.getDate() + i);
+    const dd = new Date(ctr); dd.setDate(ctr.getDate() + i);
     const ddStr = dateToInputStr(dd);
     const btn = document.createElement('button');
     btn.type = 'button';
