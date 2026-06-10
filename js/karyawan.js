@@ -1077,7 +1077,31 @@ async function autoOtThenOut() {
     try{
       const path = 'profil/' + uid + '/ktp.jpg';
       const sref = ref(storage, path);
-      await uploadBytes(sref, pfSelectedKtpFile);
+      // --- Kompres foto KTP biar di bawah 2MB (batas Storage) sebelum upload ---
+      async function __compressKtp(file, maxBytes){
+        try {
+          if (!file || !/^image\//.test(file.type||"")) return file;
+          if (file.size && file.size <= maxBytes) return file;
+          const dataUrl = await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(file); });
+          const img = await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=dataUrl; });
+          let maxDim = 1600;
+          let quality = 0.82;
+          let outBlob = null;
+          for (let attempt=0; attempt<6; attempt++){
+            let w=img.width, h=img.height;
+            if (w>maxDim || h>maxDim){ const s=Math.min(maxDim/w, maxDim/h); w=Math.round(w*s); h=Math.round(h*s); }
+            const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+            const cx=cv.getContext("2d"); cx.fillStyle="#fff"; cx.fillRect(0,0,w,h); cx.drawImage(img,0,0,w,h);
+            outBlob = await new Promise(res=>cv.toBlob(res,"image/jpeg",quality));
+            if (outBlob && outBlob.size <= maxBytes) break;
+            if (quality > 0.5) quality -= 0.15; else maxDim = Math.round(maxDim*0.8);
+          }
+          if (!outBlob) return file;
+          return new File([outBlob], "ktp.jpg", { type:"image/jpeg" });
+        } catch(e){ console.warn("Kompres KTP gagal, pakai file asli:", e&&e.message); return file; }
+      }
+      const __ktpToUpload = await __compressKtp(pfSelectedKtpFile, 2*1024*1024 - 50*1024);
+      await uploadBytes(sref, __ktpToUpload);
       const ktpUrl = await getDownloadURL(sref);
       await setDoc(doc(db,'karyawan',uid), {
         namaBank, nomorRekening, atasNamaRek, ktpUrl,
