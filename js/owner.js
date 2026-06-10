@@ -1341,7 +1341,8 @@ function renderKehadiranMatrix(){
         const _anomTitle = (col.tipe === 'overtime_out' && row._durAnom) ? ' (DATA PERLU REVIEW: tap istirahat/pause tidak lengkap)' : '';
         if (col.tipe === 'overtime_out'){
           const _lemVal = (_lemMin!==null)? _lemHHMM(_lemMin) : '';
-          cells += '<td class="kh-dur'+_anomMark+(_lemOverridden?' kh-lembur-ovr':'')+'" title="'+pair.label+_anomTitle+(_lemOverridden?' (di-set MANUAL oleh owner)':'')+'">'+(_anomMark?'\u26a0 ':'')+'<input type="text" inputmode="numeric" maxlength="5" placeholder="0:00" class="kh-lembur" data-tipe="lembur_override" value="'+_lemVal+'" data-orig="'+_lemVal+'">'+'</td>';
+          const _lemShow = _lemVal ? _lemVal : '0:00';
+          cells += '<td class="kh-dur kh-lembur-cell'+_anomMark+(_lemOverridden?' kh-lembur-ovr':'')+'" title="'+pair.label+_anomTitle+(_lemOverridden?' (di-set MANUAL oleh owner)':'')+'">'+(_anomMark?'\u26a0 ':'')+'<span class="kh_lembur_disp" title="Klik untuk edit lembur">'+_lemShow+'</span><input type="text" inputmode="numeric" maxlength="5" placeholder="0:00" class="kh_lembur" data-tipe="lembur_override" value="'+_lemVal+'" data-orig="'+_lemVal+'" style="display:none"></td>';
         } else {
           cells += '<td class="kh-dur'+_anomMark+'" title="'+pair.label+_anomTitle+'">'+(_anomMark?'\u26a0 ':'')+durTxt+'</td>';
         }
@@ -1369,6 +1370,17 @@ function renderKehadiranMatrix(){
                 if(!tr) return;
                 await saveSingleKehadiranCell(tr.dataset.uid, inp);
             });
+        // === Dur. Lembur: tampil teks bersih, klik buat edit ===
+        tb.querySelectorAll('td.kh-lembur-cell').forEach(function(td){
+            const disp = td.querySelector('.kh_lembur_disp');
+            const inp  = td.querySelector('input.kh_lembur');
+            if (!disp || !inp) return;
+            function showInput(){ disp.style.display='none'; inp.style.display=''; inp.focus(); inp.select(); }
+            function showDisp(){ const v=(inp.value||'').trim(); disp.textContent = v ? v : '0:00'; inp.style.display='none'; disp.style.display=''; }
+            disp.addEventListener('click', showInput);
+            inp.addEventListener('blur', function(){ showDisp(); });
+            inp.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); inp.blur(); } });
+        });
         });
 }
 
@@ -2295,6 +2307,7 @@ function downloadSlipGaji(uid) {
     '.calc .tot td{border-top:2px solid #111827;font-weight:bold;font-size:17px;padding-top:12px;color:#0ea5e9;}' +
     '.muted{color:#6b7280;font-size:12px;}' +
     '.foot{margin-top:22px;color:#9ca3af;font-size:11px;text-align:center;}' +
+    '.kh-matrix td.kh-lembur-cell .kh_lembur_disp{cursor:pointer;display:inline-block;min-width:34px;padding:1px 4px;border-radius:4px;}.kh-matrix td.kh-lembur-cell .kh_lembur_disp:hover{background:rgba(56,189,248,.18);outline:1px dashed rgba(56,189,248,.5);}.kh-matrix td.kh-lembur-ovr .kh_lembur_disp{color:#38bdf8;font-weight:600;}.kh-matrix td.kh-lembur-cell input.kh_lembur{width:48px;text-align:center;}' +
     '@media print{body{background:#fff;padding:0;}.slip{border:none;}}' +
     '</style></head><body><div class="slip">' +
     '<div class="head"><div><h1>Slip Gaji</h1><div class="brand">GoodGems Absensi</div></div>' +
