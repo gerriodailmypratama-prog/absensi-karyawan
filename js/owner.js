@@ -1168,6 +1168,17 @@ async function loadKehadiranMatrix(){
           if (ts >= inTs){ bt[tOut] = e; break; }
         }
       });
+      // === Fix sesi lintas tengah malam: kalau ada clock_in beneran hari ini,
+      // buang sisa lembur/break/pause yang waktunya SEBELUM clock_in (itu sisa shift kemarin yang lupa di-clock out). ===
+      if (bt.clock_in) {
+        const __ciTs = (bt.clock_in.ts && bt.clock_in.ts.toDate) ? bt.clock_in.ts.toDate().getTime() : 0;
+        ['break_in','break_out','pause_in','pause_out','overtime_in','overtime_out'].forEach(function(__k){
+          const __e = bt[__k];
+          if (!__e) return;
+          const __ts = (__e.ts && __e.ts.toDate) ? __e.ts.toDate().getTime() : 0;
+          if (__ts < __ciTs) delete bt[__k];
+        });
+      }
       byUid[u].byTipe = bt;
     });
     khRowsCache = byUid;
