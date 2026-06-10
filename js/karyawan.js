@@ -1170,3 +1170,76 @@ async function autoOtThenOut() {
   }
   if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded',wireUp); } else { wireUp(); }
 })();
+
+
+// ===== Fallback wiring tombol profil (tahan banting, anti stale-cache/timing) =====
+// Hanya aktif kalau wiring utama (IIFE initProfilKaryawan) TIDAK jalan, dideteksi via window.openProfil.
+(function(){
+  function gid(id){ return document.getElementById(id); }
+  function mainWiringActive(){ return typeof window.openProfil === 'function'; }
+  if (typeof window.__pfKtpFile === 'undefined') window.__pfKtpFile = null;
+  document.addEventListener('change', function(ev){
+    if (mainWiringActive()) return;
+    var t = ev.target;
+    if (!t || t.id !== 'pfKtpInput') return;
+    var f = t.files && t.files[0];
+    if (!f) return;
+    window.__pfKtpFile = f;
+    var nm = gid('pfKtpName'); if (nm) nm.textContent = f.name;
+    var prev = gid('pfKtpPreview');
+    if (prev) { try { prev.src = URL.createObjectURL(f); prev.classList.remove('hidden'); } catch(e){} }
+  }, true);
+  async function compressKtpFallback(file, maxBytes){
+    try {
+      if (!file || !/^image\//.test(file.type)) return file;
+      if (file.size && file.size <= maxBytes) return file;
+      var dataUrl = await new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=rej; r.readAsDataURL(file); });
+      var img = await new Promise(function(res,rej){ var im=new Image(); im.onload=function(){res(im);}; im.onerror=rej; im.src=dataUrl; });
+      var maxDim = 1600, quality = 0.82, outBlob = null;
+      for (var attempt=0; attempt<6; attempt++){
+        var w=img.width, h=img.height;
+        if (w>maxDim || h>maxDim){ var s=Math.min(maxDim/w, maxDim/h); w=Math.round(w*s); h=Math.round(h*s); }
+        var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+        var cx=cv.getContext('2d'); cx.fillStyle='#fff'; cx.fillRect(0,0,w,h); cx.drawImage(img,0,0,w,h);
+        outBlob = await new Promise(function(res){ cv.toBlob(res,'image/jpeg',quality); });
+        if (outBlob && outBlob.size <= maxBytes) break;
+        if (quality > 0.5) quality -= 0.15; else maxDim = Math.round(maxDim*0.8);
+      }
+      if (!outBlob) return file;
+      return new File([outBlob], 'ktp.jpg', { type:'image/jpeg' });
+    } catch(e){ console.warn('compressKtpFallback gagal, pakai file asli', e); return file; }
+  }
+  async function doSaveFallback(){
+    if (window.__pfSaving) return;
+    if (typeof currentUser === 'undefined' || !currentUser){ alert('Sesi belum siap, coba lagi'); return; }
+    var uid = currentUser.uid;
+    var namaBank = ((gid('pfNamaBank')||{}).value||'').trim();
+    var nomorRekening = ((gid('pfNomorRekening')||{}).value||'').trim();
+    var atasNamaRek = ((gid('pfAtasNamaRek')||{}).value||'').trim();
+    if (!namaBank || !nomorRekening || !atasNamaRek){ alert('Lengkapi semua data rekening dulu ya'); return; }
+    var ktpFile = window.__pfKtpFile;
+    if (!ktpFile){ alert('Upload foto KTP dulu ya'); return; }
+    window.__pfSaving = true;
+    var saveBtn = gid('pfBtnSave');
+    var oldTxt = saveBtn ? saveBtn.textContent : '';
+    if (saveBtn){ saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan...'; }
+    try {
+      var sref = ref(storage, 'profil/' + uid + '/ktp.jpg');
+      var toUpload = await compressKtpFallback(ktpFile, 2*1024*1024 - 50*1024);
+      await uploadBytes(sref, toUpload);
+      var ktpUrl = await getDownloadURL(sref);
+      await setDoc(doc(db,'karyawan',uid), { namaBank: namaBank, nomorRekening: nomorRekening, atasNamaRek: atasNamaRek, ktpUrl: ktpUrl, profilLocked: true, profilUpdatedAt: serverTimestamp() }, { merge: true });
+      var prev = gid('pfKtpPreview'); if (prev){ prev.src = ktpUrl; prev.classList.remove('hidden'); }
+      alert('Data profil tersimpan. Terima kasih!');
+      var modal = gid('profilModal'); if (modal) modal.classList.add('hidden');
+    } catch(e){ console.error('doSaveFallback', e); alert('Gagal menyimpan: ' + (e && e.message ? e.message : e)); }
+    finally { window.__pfSaving = false; if (saveBtn){ saveBtn.disabled = false; saveBtn.textContent = oldTxt || 'Simpan'; } }
+  }
+  document.addEventListener('click', function(ev){
+    if (mainWiringActive()) return;
+    var t = ev.target; if (!t || !t.closest) return;
+    if (t.closest('#pfBtnPickKtp')){ var inp = gid('pfKtpInput'); if (inp) inp.click(); return; }
+    if (t.closest('#pfBtnCancel')){ var m = gid('profilModal'); if (m) m.classList.add('hidden'); return; }
+    if (t.closest('#pfBtnSave')){ doSaveFallback(); return; }
+  }, true);
+})();
