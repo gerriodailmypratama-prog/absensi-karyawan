@@ -460,7 +460,7 @@ img.hadir-avatar,
 .rd-hapus:hover { background: #fecaca; }
 
 
-/* ===== Matrix Kehadiran Harian â auto-save feedback ===== */
+/* ===== Matrix Kehadiran Harian Ã¢ÂÂ auto-save feedback ===== */
 input.kh-time { transition: background .25s ease, border-color .25s ease; }
 input.kh-time.kh-saving { background: #fef3c7 !important; border-color: #f59e0b !important; }
 input.kh-time.kh-saved { background: #d1fae5 !important; border-color: #10b981 !important; }
@@ -533,7 +533,7 @@ input.kh-time::placeholder, input.kh-edit-jam::placeholder, input.rd-edit-jam::p
   gap: 8px;
 }
 .kry-section > summary::before{
-  content: â¸;
+  content: Ã¢ÂÂ¸;
   font-size: 11px;
   color: #64748b;
   transition: transform 0.15s ease;
@@ -551,7 +551,7 @@ input.kh-time::placeholder, input.kh-edit-jam::placeholder, input.rd-edit-jam::p
 
 
 /* ============================================================
-   DARK THEME (ditambah lewat PR) â override di akhir file.
+   DARK THEME (ditambah lewat PR) Ã¢ÂÂ override di akhir file.
    Palet: slate gelap, accent sky & emerald dipertahankan.
    ============================================================ */
 
@@ -617,7 +617,7 @@ input, select, textarea {
 input::placeholder, textarea::placeholder { color: #64748b !important; }
 option { background: #0f172a !important; color: #e2e8f0 !important; }
 
-/* Tombol â accent dipertahankan, hanya yang netral yang digelapkan */
+/* Tombol Ã¢ÂÂ accent dipertahankan, hanya yang netral yang digelapkan */
 .btn-secondary {
   background: #334155 !important;
   color: #e2e8f0 !important;
@@ -651,7 +651,7 @@ hr { border-color: #334155 !important; }
 
 
 /* ============================================================
-   DARK THEME CLEANUP v2 â hapus semua permukaan putih/terang
+   DARK THEME CLEANUP v2 Ã¢ÂÂ hapus semua permukaan putih/terang
    biar font ga ketimpa warna terang (semua halaman)
    ============================================================ */
 .status-card,.history-item,.action-tile,.list-item,.karyawan-card,.stat-card,.kh-stat,.modal-box,.kry-section,.btn-google,#rekapDetailModal .modal-content.rekap-detail-content{background:#1e293b!important;color:#e2e8f0!important;border-color:#334155!important}
@@ -693,3 +693,7 @@ input.kh-time,input.kh-edit-jam,input.rd-edit-jam,.kh-edit-jam,.kh-edit-tipe,.kh
 .action-tile.tile-break{background:#14532d !important;border-color:#22c55e !important}
 .action-tile.tile-break .tile-label{color:#bbf7d0 !important}
 .action-tile.tile-break:hover{border-color:#4ade80 !important}
+
+/* ===== Kehadiran Harian: tandai hari ini (selalu di tengah strip) ===== */
+.kh-day-btn.kh-day-today{border-color:#38bdf8 !important;box-shadow:inset 0 0 0 1.5px #38bdf8 !important}
+.kh-day-btn.kh-day-today.active{box-shadow:inset 0 0 0 2px #38bdf8 !important}
