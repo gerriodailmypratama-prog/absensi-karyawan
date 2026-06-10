@@ -423,7 +423,7 @@ function renderTable(rows) {
             '<td><select class="kh-edit-tipe" data-id="'+(r._id||'')+'">'+tipeOpts+'</select></td>'+
             '<td>'+badge+'</td><td>'+loc+'</td><td>'+img+'</td>'+
             '<td class="col-aksi-kh">'+
-                '<button class="btn-link btn-hapus-absen" data-id="'+(r._id||'')+'" data-nama="'+nama+'" data-tipe="'+(r.tipe||'')+'" data-ts="'+isoTs+'" style="color:#dc2626">Ã°ÂÂÂÃ¯Â¸Â Hapus</button>'+
+                '<button class="btn-link btn-hapus-absen" data-id="'+(r._id||'')+'" data-nama="'+nama+'" data-tipe="'+(r.tipe||'')+'" data-ts="'+isoTs+'" style="color:#dc2626">ÃÂ°ÃÂÃÂÃÂÃÂ¯ÃÂ¸ÃÂ Hapus</button>'+
             '</td>';
         tb.appendChild(tr);
     });
@@ -636,7 +636,7 @@ async function openEditKaryawan(uid){
         if ($('editAtasNamaRek')) $('editAtasNamaRek').value = d.atasNamaRek || '';
         if ($('editNomorRekening')) $('editNomorRekening').value = d.nomorRekening || '';
         // Status upload dokumen
-        const setStat = (id, url) => { const el = $(id); if (el) el.textContent = url ? 'Ã¢ÂÂ sudah diupload' : '(belum)'; };
+        const setStat = (id, url) => { const el = $(id); if (el) el.textContent = url ? 'ÃÂ¢ÃÂÃÂ sudah diupload' : '(belum)'; };
         setStat('ktpStatus', d.ktpUrl);
         // Reset file inputs
         ['editKtpFile'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
@@ -1405,7 +1405,7 @@ function renderKehadiranMatrix(){
 async function saveKehadiranRow(uid, tr){
   const row = khRowsCache[uid];
   if (!row){ alert('Data karyawan tidak ditemukan.'); return; }
-  const inputs = tr.querySelectorAll('input.kh-time, input.kh-lembur');
+  const inputs = tr.querySelectorAll('input.kh-time, input.kh_lembur');
   const changes = [];
   inputs.forEach(inp=>{
     const tipe = inp.dataset.tipe;
@@ -1424,7 +1424,7 @@ async function saveKehadiranRow(uid, tr){
         const _ciDoc = row.byTipe && row.byTipe['clock_in'];
         if (!_ciDoc){ alert('Tidak bisa set lembur manual: tidak ada Clock In di hari ini.'); errCount++; continue; }
         let _mins = null;
-        const _v = (ch.newVal||'').trim();
+        const _v = (ch.newVal||'').trim().replace(/[.,]/g, ':');
         if (_v !== ''){
           const _mm = _v.match(/^(\d{1,2}):([0-5]?\d)$/);
           if (_mm){ _mins = parseInt(_mm[1],10)*60 + parseInt(_mm[2],10); }
@@ -1488,7 +1488,7 @@ async function deleteKehadiranRow(uid){
 
 
 /* ===========================================================
-   REKAP KEHADIRAN (Hadirr-style) Ã¢ÂÂ date range summary per user
+   REKAP KEHADIRAN (Hadirr-style) ÃÂ¢ÃÂÃÂ date range summary per user
    =========================================================== */
 let rekapEventsCache = [];
 let rekapRangeFrom = null;
@@ -1771,7 +1771,7 @@ function openRekapDetail(uid, nama){
                 '<td><input type="text" inputmode="numeric" maxlength="5" placeholder="--:--" class="rd-edit-jam" data-id="'+ev.id+'" value="'+(jam||'').slice(0,5)+'"></td>'+
                 '<td><select class="rd-edit-tipe" data-id="'+ev.id+'">'+opts+'</select></td>'+
                 '<td>'+status+'</td>'+
-                '<td><button class="btn-link rd-hapus" data-id="'+ev.id+'" data-nama="'+(nama||'').replace(/"/g,'&quot;')+'" data-tipe="'+(ev.tipe||'')+'" style="color:#dc2626">Ã°ÂÂÂÃ¯Â¸Â Hapus</button></td>'+
+                '<td><button class="btn-link rd-hapus" data-id="'+ev.id+'" data-nama="'+(nama||'').replace(/"/g,'&quot;')+'" data-tipe="'+(ev.tipe||'')+'" style="color:#dc2626">ÃÂ°ÃÂÃÂÃÂÃÂ¯ÃÂ¸ÃÂ Hapus</button></td>'+
             '</tr>';
         }).join('');
         tbody.querySelectorAll('.rd-edit-jam').forEach(inp=>{
@@ -1846,7 +1846,7 @@ function openRekapDetail(uid, nama){
                 }catch(err){
                     console.error('rd hapus err', err);
                     alert('Gagal hapus: '+(err.message||err));
-                    b.disabled = false; b.textContent = 'Ã°ÂÂÂÃ¯Â¸Â Hapus';
+                    b.disabled = false; b.textContent = 'ÃÂ°ÃÂÃÂÃÂÃÂ¯ÃÂ¸ÃÂ Hapus';
                 }
             };
         });
@@ -1872,7 +1872,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
 
 // ============================================================
-// PAYROLL MODULE Ã¢ÂÂ gaji harian, dibayar bulanan
+// PAYROLL MODULE ÃÂ¢ÃÂÃÂ gaji harian, dibayar bulanan
 // ============================================================
 let __payrollData = null;
 
@@ -2227,7 +2227,7 @@ window.calcPayroll = calcPayroll;
 
 // ===== Download Slip Gaji (detail & transparan) =====
 // Slip gaji per karyawan, di-convert otomatis dari hasil payroll.
-// Tujuan: transparan Ã¢ÂÂ karyawan bisa lihat rincian per hari (full/partial/lembur).
+// Tujuan: transparan ÃÂ¢ÃÂÃÂ karyawan bisa lihat rincian per hari (full/partial/lembur).
 function __slipFmtRp(n) {
   const num = Math.round(Number(n) || 0);
   return 'Rp' + num.toLocaleString('id-ID');
