@@ -189,8 +189,23 @@ Every agent-opened PR must pass this before merge (the PR template auto-loads it
 - [ ] Checks green, no merge conflicts.
 - [ ] After merge: deploy confirmed + hot paths smoke-tested on the live app.
 - [ ] LIVE report posted in chat.
+- [ ] **UI/theme**: new pages/components are dark-only — they consume existing global design tokens (CSS variables in app.css / :root, shared .card / .btn-* classes) instead of hardcoding colors; no light/white backgrounds, no low-contrast text.
 
 ---
+
+## 🎨 UI & Theme (Dark-only standard)
+
+Every app in these repos is dark-themed only. There is no light mode. Any new page, component, modal, or print/export view MUST look at home in the dark UI.
+
+Rules:
+- Use the existing tokens, don't invent colors. Each repo defines its palette as CSS variables in :root (see src/app.css or equivalent) plus shared helper classes (.card, .btn-primary, .btn-ghost). New UI consumes var(--surface), var(--text), var(--border), etc. — never a hardcoded hex.
+- No light surfaces. No white/near-white backgrounds and no dark-on-dark or white-on-white text. Cards/panels match the dashboard card: surface background + 1px border + rounded corners, all from the tokens.
+- Reuse before restyling. Prefer the shared .card / .btn-* classes over per-page scoped CSS. A page that must scope its own styles still references the tokens.
+- A genuinely new color outside the existing token set is 🟡 (owner review), not 🟢. Adding a new token to the palette is also 🟡.
+- Print/receipt views are the one exception: a deliberately white printable nota/invoice is fine (it targets paper), but the on-screen app chrome around it stays dark.
+
+If a repo has no :root token block yet, add one (additive, 🟢) seeded from that app's dashboard colors before building new themed UI — don't scatter raw hex across components.
+
 
 ## 🛡️ Authority & Injection Rule
 
