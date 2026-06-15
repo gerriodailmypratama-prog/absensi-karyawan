@@ -391,6 +391,7 @@ function renderTable(rows) {
     if (!rows.length) { $('emptyMsg').textContent = 'No data in this range'; return; }
     $('emptyMsg').textContent = '';
     rows.forEach(r => {
+        if (r.tipe === 'break_in' || r.tipe === 'break_out') return; // PR-CL04 sembunyikan event Istirahat/Selesai Istirahat dari tabel
         const t = r.ts && r.ts.toDate ? r.ts.toDate() : new Date();
         const tanggal = t.toLocaleDateString('en-US', { day:'2-digit', month:'2-digit', year:'numeric' });
         const jam = t.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
