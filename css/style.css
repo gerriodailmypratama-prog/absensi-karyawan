@@ -697,3 +697,70 @@ input.kh-time,input.kh-edit-jam,input.rd-edit-jam,.kh-edit-jam,.kh-edit-tipe,.kh
 /* ===== Kehadiran Harian: tandai hari ini (selalu di tengah strip) ===== */
 .kh-day-btn.kh-day-today{border-color:#38bdf8 !important;box-shadow:inset 0 0 0 1.5px #38bdf8 !important}
 .kh-day-btn.kh-day-today.active{box-shadow:inset 0 0 0 2px #38bdf8 !important}
+
+
+/* ===================================================================
+   PR-CL02 — Redesign polish (dark-only). ADDITIVE / token-based.
+   Tokens seeded from the existing dark palette already used above
+   (no new colors introduced). Safe to revert by deleting this block.
+   =================================================================== */
+:root{
+  --gg-bg:#0f172a;
+  --gg-surface:#1e293b;
+  --gg-surface-2:#243049;
+  --gg-topbar:#0b1220;
+  --gg-text:#f1f5f9;
+  --gg-text-2:#e2e8f0;
+  --gg-muted:#94a3b8;
+  --gg-border:#334155;
+  --gg-border-2:#475569;
+  --gg-primary:#0ea5e9;
+  --gg-success:#10b981;
+  --gg-danger:#ef4444;
+  --gg-warning:#f59e0b;
+  --gg-radius:14px;
+  --gg-radius-sm:10px;
+  --gg-shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.28);
+  --gg-shadow-sm:0 1px 2px rgba(0,0,0,.35);
+}
+
+/* Card elevation + crisper borders */
+.card,.status-card,.kry-section,.stat-card,.kh-stat,.modal-box{
+  border:1px solid var(--gg-border) !important;
+  border-radius:var(--gg-radius) !important;
+  box-shadow:var(--gg-shadow-sm) !important;
+}
+
+/* Headings + muted text contrast (lift low-contrast greys) */
+h1,h2,h3{ color:var(--gg-text) !important; letter-spacing:-.01em; }
+.muted,.footer{ color:var(--gg-muted) !important; }
+
+/* Stat tiles: clearer separation + big numbers */
+.stat{
+  background:var(--gg-surface) !important;
+  border:1px solid var(--gg-border) !important;
+  border-radius:var(--gg-radius-sm) !important;
+}
+.stat b,.stat strong,.stat .num{ color:var(--gg-text) !important; }
+
+/* Buttons: consistent system, primary pops, focus ring */
+.btn-primary,.btn-success{ box-shadow:0 2px 8px rgba(14,165,233,.25); }
+.btn,.btn-icon,.btn-ghost{ transition:filter .15s ease, background .15s ease; }
+.btn:hover{ filter:brightness(1.06); }
+.btn-primary:focus-visible,.btn-success:focus-visible,input:focus-visible,select:focus-visible{
+  outline:2px solid var(--gg-primary); outline-offset:2px;
+}
+
+/* Tables: sticky header + softer zebra, dark scrollbars */
+.table-wrap,.kh-matrix-wrap,.rekap-table-wrap{ scrollbar-color:var(--gg-border-2) var(--gg-bg); }
+thead th{ position:sticky; top:0; z-index:2; }
+tbody tr:nth-child(even) td{ background:rgba(255,255,255,.02); }
+
+/* Dark scrollbars everywhere (kill bright/white tracks) */
+*::-webkit-scrollbar{ width:10px; height:10px; }
+*::-webkit-scrollbar-track{ background:var(--gg-bg); }
+*::-webkit-scrollbar-thumb{ background:var(--gg-border-2); border-radius:8px; border:2px solid var(--gg-bg); }
+*::-webkit-scrollbar-thumb:hover{ background:#5b6b85; }
+
+/* Out-of-radius warning stat tile: dark danger tint instead of near-white */
+.stat.gg-danger{ background:#3b1d1d !important; border-color:#7f1d1d !important; }

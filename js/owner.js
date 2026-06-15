@@ -279,7 +279,7 @@ async function renderBeranda(rows){
         '<div class="stat"><b>' + stat.clock_out + '</b><small>Clock Out</small></div>' +
         '<div class="stat"><b>' + stat.overtime_in + '</b><small>OT In</small></div>' +
         '<div class="stat"><b>' + stat.overtime_out + '</b><small>OT Out</small></div>' +
-        '<div class="stat" style="background:#fef2f2"><b style="color:#dc2626">' + outRuko + '</b><small>Out of Radius</small></div>';
+        '<div class="stat" style="background:#3b1d1d"><b style="color:#dc2626">' + outRuko + '</b><small>Out of Radius</small></div>';
 
     const ctx1 = document.getElementById('chartHadir');
     if (ctx1 && window.Chart) {
@@ -288,7 +288,7 @@ async function renderBeranda(rows){
             type: 'doughnut',
             data: {
                 labels: ['Clocked In', 'Pending'],
-                datasets: [{ data: [hadir, belum], backgroundColor: ['#10b981', '#e5e7eb'], borderWidth: 0 }]
+                datasets: [{ data: [hadir, belum], backgroundColor: ['#10b981', '#243049'], borderWidth: 0 }]
             },
             options: { plugins:{ legend:{ position:'bottom' } }, cutout:'65%' }
         });
@@ -325,7 +325,7 @@ async function renderBeranda(rows){
         else if (r.inRadius === false) badge = '<span class="badge-loc badge-out">Out '+(r.jarak!=null?r.jarak+'m':'')+'</span>';
         else badge = '<span class="muted">-</span>';
         const tr = document.createElement('tr');
-        if (r.inRadius === false) tr.style.background = '#fef2f2';
+        if (r.inRadius === false) tr.style.background = '#3b1d1d';
         tr.innerHTML = '<td>'+jam+'</td><td>'+nama+'</td><td>'+(TIPE[r.tipe]||r.tipe)+'</td><td>'+badge+'</td>';
         tb.appendChild(tr);
     });
@@ -382,7 +382,7 @@ function renderStats(rows) {
         '<div class="stat"><b>'+stat.overtime_in+'</b><small>Overtime In</small></div>'+
         '<div class="stat"><b>'+stat.overtime_out+'</b><small>Overtime Out</small></div>'+
         '<div class="stat"><b>'+rows.length+'</b><small>Total Records</small></div>'+
-        '<div class="stat" style="background:#fef2f2"><b style="color:#dc2626">'+outCount+'</b><small>Out of Radius</small></div>';
+        '<div class="stat" style="background:#3b1d1d"><b style="color:#dc2626">'+outCount+'</b><small>Out of Radius</small></div>';
 }
 
 function renderTable(rows) {
@@ -411,7 +411,7 @@ function renderTable(rows) {
             badge = '<span class="muted" style="font-size:11px">-</span>';
         }
         const tr = document.createElement('tr');
-        if (r.inRadius === false) tr.style.background = '#fef2f2';
+        if (r.inRadius === false) tr.style.background = '#3b1d1d';
         const isoTs = r.ts && r.ts.toDate ? r.ts.toDate().toISOString() : '';
         const jamHHMMSS = (r.ts && r.ts.toDate) ? (()=>{ const d=r.ts.toDate(); const hh=String(d.getHours()).padStart(2,'0'); const mi=String(d.getMinutes()).padStart(2,'0'); const ss=String(d.getSeconds()).padStart(2,'0'); return hh+':'+mi+':'+ss; })() : '';
         const tanggalYMD = (r.ts && r.ts.toDate) ? (()=>{ const d=r.ts.toDate(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })() : '';
