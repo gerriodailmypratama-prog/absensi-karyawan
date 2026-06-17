@@ -21,6 +21,15 @@
 
 ---
 
+## 🗣️ Owner Communication
+
+> How to talk to the owner. These are as binding as every other rule in this file.
+
+- **Language — casual Indonesian.** Always reply to the owner in casual Indonesian (gaya santai *gua/lo*), never English. Code, identifiers, file contents, and commit/PR text stay in English.
+- **Audience = non-technical business owner.** Explain every step in plain, layman's language; avoid jargon, and when a technical term is unavoidable add a one-line analogy. Before any Yes/No approval request, first explain in one simple sentence what it does and whether it's safe.
+
+---
+
 ## 🚦 Autonomy Lanes (Merge Policy)
 
 Default mode is **ACT**. The owner wants finished work reported LIVE, not permission requests.
