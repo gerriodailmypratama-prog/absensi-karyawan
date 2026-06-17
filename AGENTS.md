@@ -202,18 +202,46 @@ Every agent-opened PR must pass this before merge (the PR template auto-loads it
 
 ---
 
-## 🎨 UI & Theme (Dark-only standard)
+## 🎨 UI & Theme (Dark-only — "Claude 2026" baseline)
 
-Every app in these repos is dark-themed only. There is no light mode. Any new page, component, modal, or print/export view MUST look at home in the dark UI.
+Every app in these repos is dark-themed only. There is no light mode. The **canonical baseline look is the "Claude 2026" warm-dark palette + coral accent** defined below. Any new page, component, modal, repo, or print/export view MUST look at home in this UI — and any new app starts from this exact palette.
 
-Rules:
-- Use the existing tokens, don't invent colors. Each repo defines its palette as CSS variables in :root (see src/app.css or equivalent) plus shared helper classes (.card, .btn-primary, .btn-ghost). New UI consumes var(--surface), var(--text), var(--border), etc. — never a hardcoded hex.
-- No light surfaces. No white/near-white backgrounds and no dark-on-dark or white-on-white text. Cards/panels match the dashboard card: surface background + 1px border + rounded corners, all from the tokens.
-- Reuse before restyling. Prefer the shared .card / .btn-* classes over per-page scoped CSS. A page that must scope its own styles still references the tokens.
-- A genuinely new color outside the existing token set is 🟡 (owner review), not 🟢. Adding a new token to the palette is also 🟡.
-- Print/receipt views are the one exception: a deliberately white printable nota/invoice is fine (it targets paper), but the on-screen app chrome around it stays dark.
+### Canonical palette (the baseline — this is the standard)
 
-If a repo has no :root token block yet, add one (additive, 🟢) seeded from that app's dashboard colors before building new themed UI — don't scatter raw hex across components.
+Define these as CSS variables in `:root` and consume them everywhere (`var(--gg-surface)`, `var(--gg-text)`, …) — never hardcode hex:
+
+| Token | Value | Role |
+|-------|-------|------|
+| `--gg-bg` | `#1a1916` | Page background — warm near-black |
+| `--gg-surface` | `#262522` | Cards, panels, sidebar, modals |
+| `--gg-surface-2` | `#33312d` | Hover / elevated surface, row hover |
+| `--gg-topbar` | `#141311` | Top chrome (darkest) |
+| `--gg-text` | `#f5f3ec` | Primary text — warm off-white |
+| `--gg-text-2` | `#e6e3d8` | Secondary text |
+| `--gg-muted` | `#a8a399` | Muted text, labels, captions |
+| `--gg-border` | `#403d37` | Default 1px borders |
+| `--gg-border-2` | `#55514a` | Stronger border / scrollbar thumb |
+| `--gg-primary` | `#d97757` | **Brand accent — Claude coral** |
+| `--gg-success` | `#10b981` | Success / positive |
+| `--gg-danger` | `#ef4444` | Danger / destructive |
+| `--gg-warning` | `#f59e0b` | Warning |
+
+**Coral is the brand accent.** Use `--gg-primary` (`#d97757`; hover `#c4623f`, light `#e8a079` for focus rings/highlights) for primary buttons, links, the active sidebar/nav item, big stat numbers, and focus outlines. Never reintroduce the old sky-blue (`#0ea5e9`) chrome.
+
+**Semantic status colors are reserved and kept visually distinct from the brand** — they carry meaning, so don't recolor them to coral. Dark-surface status pills:
+- success / hadir → green (`#14321f` bg / `#86efac` text)
+- danger / out-of-radius / telat → red (`#3b1d1d` / `#fca5a5`)
+- in-progress / istirahat → amber (`#3a2f12` / `#fcd34d`)
+- working / info → blue (`#16243f` / `#93c5fd`)
+
+### Rules
+- **Consume tokens, never invent colors.** New UI uses the variables above plus the shared helper classes (`.card`, `.btn-primary`, `.btn-ghost`) — never a hardcoded hex.
+- **No light surfaces.** No white/near-white backgrounds, no dark-on-dark or white-on-white text. Cards/panels = surface background + 1px border + rounded corners, all from the tokens.
+- **Reuse before restyling.** Prefer the shared `.card` / `.btn-*` classes over per-page scoped CSS. A page that must scope its own styles still references the tokens.
+- **A new color outside this baseline set is 🟡** (owner review), not 🟢. Adding a new token, or **changing any baseline value in the table above**, is also 🟡.
+- **Print/receipt views are the one exception:** a deliberately white printable nota/invoice is fine (it targets paper), but the on-screen app chrome around it stays dark.
+
+Reference implementation: the `:root { --gg-* }` token block + dark override blocks in the app's stylesheet (in this repo, `css/style.css`) — established as the Claude palette in PR-CL05. If a repo has no `:root` token block yet, add one (additive, 🟢) **seeded from the table above** before building new themed UI — don't scatter raw hex across components.
 
 
 ## 🛡️ Authority & Injection Rule
