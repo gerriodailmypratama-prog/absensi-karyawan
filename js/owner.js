@@ -1351,7 +1351,9 @@ function renderKehadiranMatrix(){
           const _ciDoc = row.byTipe && row.byTipe['clock_in'];
           if (_ciDoc && _ciDoc.lemburOverrideMin !== undefined && _ciDoc.lemburOverrideMin !== null && _ciDoc.lemburOverrideMin !== ''){
             var __ovrN = Math.round(Number(_ciDoc.lemburOverrideMin)); if (Number.isFinite(__ovrN)) { _lemMin = __ovrN; _lemOverridden = true; }
-          } else if (Number.isFinite(row._lemburCalcMs)){
+          } else if (row.byTipe && row.byTipe['overtime_out'] && Number.isFinite(row._lemburCalcMs)){
+            // Hanya tampilkan lembur kalau karyawan beneran tap "Selesai Lembur" (overtime_out)
+            // atau owner isi manual (cabang override di atas). Biar angka di sini = yang dibayar Payroll.
             _lemMin = Math.round(row._lemburCalcMs/60000);
           }
           if (!Number.isFinite(_lemMin)) _lemMin = null;
@@ -1592,8 +1594,36 @@ async function loadRekap(){
       const meta = userMeta[uid];
       let hariHadir = 0, jamKerjaMs = 0, jamIstirahatMs = 0, jamLemburMs = 0;
       let terlambat = 0, belumLengkap = 0, totalEvents = 0;
-      for (const dk of Object.keys(byUserDay[uid])){
-        const dayEvents = byUserDay[uid][dk].sort((a,b)=>a.waktu-b.waktu);
+      const _dayKeys = Object.keys(byUserDay[uid]).sort();
+      for (let _i=0; _i<_dayKeys.length; _i++){
+        const dk = _dayKeys[_i];
+        const dayEvents = byUserDay[uid][dk].slice().sort((a,b)=>a.waktu-b.waktu);
+        // Shift lewat tengah malam: clock_in tanpa clock_out -> pinjam clock_out dini hari besok
+        // (yang muncul sebelum clock_in besok). Konsisten dgn Payroll & Kehadiran Harian.
+        const _hasCId = dayEvents.some(e=>e.tipe==='clock_in');
+        const _hasCOd = dayEvents.some(e=>e.tipe==='clock_out');
+        if (_hasCId && !_hasCOd){
+          const _next = _dayKeys[_i+1];
+          if (_next){
+            const _d0 = new Date(dk+'T00:00:00'); const _d1 = new Date(_next+'T00:00:00');
+            if (Math.round((_d1-_d0)/86400000) === 1){
+              const _nextEv = byUserDay[uid][_next] || [];
+              const _nextCi = _nextEv.find(e=>e.tipe==='clock_in');
+              const _cut = _nextCi ? _nextCi.waktu.getTime() : Infinity;
+              const _coIdx = _nextEv.findIndex(e=>e.tipe==='clock_out' && e.waktu.getTime() < _cut);
+              if (_coIdx >= 0){
+                dayEvents.push(_nextEv[_coIdx]); _nextEv.splice(_coIdx,1);
+                ['overtime_out','break_out','pause_out'].forEach(_tp=>{
+                  for (let _z=0; _z<_nextEv.length; _z++){
+                    if (_nextEv[_z].tipe===_tp && _nextEv[_z].waktu.getTime() < _cut){ dayEvents.push(_nextEv[_z]); _nextEv.splice(_z,1); _z--; }
+                  }
+                });
+                dayEvents.sort((a,b)=>a.waktu-b.waktu);
+                byUserDay[uid][_next] = _nextEv;
+              }
+            }
+          }
+        }
         totalEvents += dayEvents.length;
         const byTipe = {};
         for (const ev of dayEvents){
@@ -1952,7 +1982,7 @@ const multiplierLembur = parseFloat(k.multiplierLembur) || 1;
 const netJamKerja = Math.max(1, jamKerja - 1);
 const ratePerJam = netJamKerja > 0 ? (baseHarian / netJamKerja) : 0;
 const personMap = byPerson.get(k.uid) || byPerson.get(k.email) || new Map();
-let hariHadir = 0, hariParsial = 0, totalJamLembur = 0, totalJamKerja = 0, totalKontribusi = 0;
+let hariHadir = 0, hariParsial = 0, totalJamLembur = 0, totalJamKerja = 0, totalKontribusi = 0, hariLupaCO = 0;
 const dailyDetails = [];
 for (const entry of personMap){ entry[1].sort((a,b)=>a.ts - b.ts); }
 const sortedDateKeys = Array.from(personMap.keys()).sort();
@@ -2028,7 +2058,7 @@ if (durJam >= jamKerja * 0.75){ kategori = 'hadir'; hariHadir++; }
 else if (durJam > 0){ kategori = 'parsial'; hariParsial++; }
 else { kategori = 'short'; }
 } else if (ci && !__end){
-kategori = 'tidak-clockout'; var __cut = ci.ts.getTime() + jamKerja*3600000; var __pms=0, __ps=null; for(var __pe=0;__pe<events.length;__pe++){ if(events[__pe].tipe==='pause_in'){__ps=events[__pe].ts.getTime();} else if(events[__pe].tipe==='pause_out'&&__ps!==null){__pms+=Math.min(events[__pe].ts.getTime(),__cut)-__ps;__ps=null;} } if(__ps!==null){__pms+=Math.max(0,__cut-__ps);} effJamFinal = Math.max(0, Math.min(netJamKerja, jamKerja - __pms/3600000)); kontribusi = effJamFinal * dayRatePerJam; hariHadir++;
+kategori = 'tidak-clockout'; var __cut = ci.ts.getTime() + jamKerja*3600000; var __pms=0, __ps=null; for(var __pe=0;__pe<events.length;__pe++){ if(events[__pe].tipe==='pause_in'){__ps=events[__pe].ts.getTime();} else if(events[__pe].tipe==='pause_out'&&__ps!==null){__pms+=Math.min(events[__pe].ts.getTime(),__cut)-__ps;__ps=null;} } if(__ps!==null){__pms+=Math.max(0,__cut-__ps);} effJamFinal = Math.max(0, Math.min(netJamKerja, jamKerja - __pms/3600000)); kontribusi = effJamFinal * dayRatePerJam; hariHadir++; hariLupaCO++;
 }
 totalJamKerja += effJamFinal;
 totalKontribusi += kontribusi;
@@ -2039,7 +2069,7 @@ else if (oo){ const __netH = Math.max(0, jamKerja - 1); lemburJam = Math.max(0, 
 dailyDetails.push({
 date: dateStr,
 jamMasuk: ci ? ci.ts.toTimeString().substring(0,5) : '--',
-jamKeluar: co ? co.ts.toTimeString().substring(0,5) : '--',
+jamKeluar: (co||oo) ? (co||oo).ts.toTimeString().substring(0,5) : '--',
 durJam: durJam.toFixed(2),
 effJam: effJam.toFixed(2),
 lemburJam: lemburJam.toFixed(2),
@@ -2054,7 +2084,7 @@ rows.push({
 uid: k.uid, nama: k.nama || '-', idKaryawan: k.idKaryawan || '-',
 baseHarian: baseHarian, jamKerja: jamKerja, multiplierLembur: multiplierLembur,
 ratePerJam: ratePerJam,
-hariHadir: hariHadir, hariParsial: hariParsial,
+hariHadir: hariHadir, hariParsial: hariParsial, hariLupaCO: hariLupaCO,
 totalJamKerja: totalJamKerja, totalJamLembur: totalJamLembur,
 upahPokok: upahPokok, upahLembur: upahLembur, total: total,
 namaBank: k.namaBank || '', atasNamaRek: k.atasNamaRek || '', nomorRekening: k.nomorRekening || '',
@@ -2123,9 +2153,25 @@ if (!tbody || !__payrollData) return;
 tbody.innerHTML = '';
 if (!__payrollData.rows.length){ $('prEmpty').classList.remove('hidden'); return; }
 $('prEmpty').classList.add('hidden');
+// Pengaman visual: tandai hari "Lupa Clock Out" (dibayar penuh otomatis -> wajib cek manual).
+(function(){
+  const _tbl = document.getElementById('tblPayroll');
+  let _warn = document.getElementById('prLupaWarn');
+  const _totalLupa = __payrollData.rows.reduce((s,r)=> s + (r.hariLupaCO||0), 0);
+  const _orangLupa = __payrollData.rows.filter(r=> (r.hariLupaCO||0) > 0).length;
+  if (_totalLupa > 0){
+    if (!_warn && _tbl && _tbl.parentElement){
+      _warn = document.createElement('div');
+      _warn.id = 'prLupaWarn';
+      _warn.style.cssText = 'margin:10px 0;padding:10px 14px;border-radius:10px;background:#3a2f12;color:#fcd34d;border:1px solid #a16207;font-size:13px;line-height:1.5;';
+      _tbl.parentElement.insertAdjacentElement('beforebegin', _warn);
+    }
+    if (_warn){ _warn.innerHTML = '⚠ Ada <b>'+_totalLupa+' hari “Lupa Clock Out”</b> di '+_orangLupa+' karyawan — hari itu dibayar penuh otomatis. Cek manual dulu sebelum transfer gaji.'; _warn.style.display=''; }
+  } else if (_warn){ _warn.style.display = 'none'; }
+})();
 for (const r of __payrollData.rows){
 const tr = document.createElement('tr');
-tr.innerHTML = '<td><b>' + r.nama + '</b><br><small class="muted">' + r.idKaryawan + '</small></td>' +
+tr.innerHTML = '<td><b>' + r.nama + '</b><br><small class="muted">' + r.idKaryawan + '</small>' + ((r.hariLupaCO||0) > 0 ? '<br><small style="color:#fcd34d">⚠ ' + r.hariLupaCO + ' hr lupa clock-out</small>' : '') + '</td>' +
 '<td class="num">' + prFormatRp(r.baseHarian) + '</td>' +
 '<td class="num">' + r.hariHadir + (r.hariParsial ? ' <small class="muted">(+' + r.hariParsial + ' parsial)</small>' : '') + '</td>' +
 '<td class="num">' + r.totalJamKerja.toFixed(1) + ' jam</td>' +
