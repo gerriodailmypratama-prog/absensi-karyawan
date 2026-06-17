@@ -288,7 +288,7 @@ async function renderBeranda(rows){
             type: 'doughnut',
             data: {
                 labels: ['Clocked In', 'Pending'],
-                datasets: [{ data: [hadir, belum], backgroundColor: ['#10b981', '#243049'], borderWidth: 0 }]
+                datasets: [{ data: [hadir, belum], backgroundColor: ['#10b981', '#33312d'], borderWidth: 0 }]
             },
             options: { plugins:{ legend:{ position:'bottom' } }, cutout:'65%' }
         });
@@ -535,7 +535,7 @@ async function loadKaryawanList(){
             const tj = x.tanggalJoin ? (x.tanggalJoin.toDate ? x.tanggalJoin.toDate() : new Date(x.tanggalJoin)) : null;
             const tjStr = tj ? tj.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-';
             tr.innerHTML = '<td>'+(idx+1)+'</td>'+
-              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#3b82f6;text-decoration:underline;">'+(x.nama||'-')+'</span></td>'+
+              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#d97757;text-decoration:underline;">'+(x.nama||'-')+'</span></td>'+
               '<td>'+(x.email||'-')+'</td>'+
               '<td>'+(x.phone||'-')+'</td>'+
               '<td>'+idDisplay+'</td>'+
@@ -2312,8 +2312,8 @@ function downloadSlipGaji(uid) {
     '<style>' +
     'body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;margin:0;padding:24px;background:#f3f4f6;}' +
     '.slip{max-width:820px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:28px 32px;}' +
-    '.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0ea5e9;padding-bottom:14px;margin-bottom:18px;}' +
-    'h1{font-size:22px;margin:0;color:#0ea5e9;}.brand{font-size:13px;color:#6b7280;margin-top:2px;}' +
+    '.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #d97757;padding-bottom:14px;margin-bottom:18px;}' +
+    'h1{font-size:22px;margin:0;color:#d97757;}.brand{font-size:13px;color:#6b7280;margin-top:2px;}' +
     '.per{text-align:right;font-size:13px;color:#374151;}' +
     'h2{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;margin:22px 0 8px;}' +
     'table{width:100%;border-collapse:collapse;font-size:13px;}' +
@@ -2324,10 +2324,10 @@ function downloadSlipGaji(uid) {
     '.rincian td.c{text-align:center;}.rincian td.r{text-align:right;}' +
     '.rincian tr:nth-child(even) td{background:#fafafa;}' +
     '.calc td{padding:7px 4px;border-bottom:1px solid #f1f5f9;}.calc td.r{text-align:right;}' +
-    '.calc .tot td{border-top:2px solid #111827;font-weight:bold;font-size:17px;padding-top:12px;color:#0ea5e9;}' +
+    '.calc .tot td{border-top:2px solid #111827;font-weight:bold;font-size:17px;padding-top:12px;color:#d97757;}' +
     '.muted{color:#6b7280;font-size:12px;}' +
     '.foot{margin-top:22px;color:#9ca3af;font-size:11px;text-align:center;}' +
-    '.kh-matrix td.kh-lembur-cell .kh_lembur_disp{cursor:pointer;display:inline-block;min-width:34px;padding:1px 4px;border-radius:4px;}.kh-matrix td.kh-lembur-cell .kh_lembur_disp:hover{background:rgba(56,189,248,.18);outline:1px dashed rgba(56,189,248,.5);}.kh-matrix td.kh-lembur-ovr .kh_lembur_disp{color:#38bdf8;font-weight:600;}.kh-matrix td.kh-lembur-cell input.kh_lembur{width:48px;text-align:center;}' +
+    '.kh-matrix td.kh-lembur-cell .kh_lembur_disp{cursor:pointer;display:inline-block;min-width:34px;padding:1px 4px;border-radius:4px;}.kh-matrix td.kh-lembur-cell .kh_lembur_disp:hover{background:rgba(217,119,87,.18);outline:1px dashed rgba(217,119,87,.5);}.kh-matrix td.kh-lembur-ovr .kh_lembur_disp{color:#d97757;font-weight:600;}.kh-matrix td.kh-lembur-cell input.kh_lembur{width:48px;text-align:center;}' +
     '@media print{body{background:#fff;padding:0;}.slip{border:none;}}' +
     '</style></head><body><div class="slip">' +
     '<div class="head"><div><h1>Slip Gaji</h1><div class="brand">GoodGems Absensi</div></div>' +
