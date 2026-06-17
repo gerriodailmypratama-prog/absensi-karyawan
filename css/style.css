@@ -796,3 +796,111 @@ tbody tr:nth-child(even) td{ background:rgba(255,255,255,.02); }
 .card,.status-card,.stat-card,.kh-stat,.modal-box,.modal-content{
   box-shadow:var(--gg-shadow) !important;
 }
+
+
+/* ===================================================================
+   PR-CL07 — UI polish pass (dark-only, token-based, NO logic changes).
+   Pure presentation: spacing rhythm, consistent radii, soft elevation,
+   typography hierarchy, refined controls/tables/sidebar/topbar/modals,
+   and subtle hover + transition micro-interactions. Introduces NO new
+   colors — only existing --gg-* tokens + black/white/coral alpha for
+   shadows, rings & hairlines. The dense Kehadiran Harian matrix
+   (.kh-matrix) is deliberately left untouched. Safe to revert by
+   deleting this whole block.
+   =================================================================== */
+
+:root{
+  --gg-radius-lg:18px;
+  --gg-shadow-lg:0 2px 4px rgba(0,0,0,.35), 0 14px 36px rgba(0,0,0,.42);
+  --gg-ring:0 0 0 3px rgba(217,119,87,.32);
+  --gg-ease:.18s cubic-bezier(.4,0,.2,1);
+}
+
+/* ---- Global rhythm & rendering ---- */
+body{ -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+.container{ padding:20px 16px; }
+.content{ padding:24px 26px !important; }
+.stats,.kh-summary{ gap:14px !important; }
+.page.active{ animation:gg-fade .22s ease; }
+@keyframes gg-fade{ from{ opacity:0; transform:translateY(4px); } to{ opacity:1; transform:none; } }
+@media (max-width:768px){ .content{ padding:16px 14px !important; } }
+
+/* ---- Typography hierarchy ---- */
+.page-title{ font-size:24px !important; font-weight:700 !important; letter-spacing:-.02em !important; }
+h3{ letter-spacing:-.01em; }
+label{ font-weight:600; letter-spacing:.01em; }
+
+/* ---- Cards: consistent radius, border, soft elevation, hover lift ---- */
+.card,.status-card,.stat-card,.kh-stat,.karyawan-card,.kry-section,.rekap-toolbar{
+  border-radius:var(--gg-radius) !important;
+  border:1px solid var(--gg-border) !important;
+  box-shadow:var(--gg-shadow) !important;
+}
+.card{ padding:18px 20px !important; }
+.stat-card,.karyawan-card,.action-tile{ transition:transform var(--gg-ease),box-shadow var(--gg-ease),border-color var(--gg-ease); }
+.stat-card:hover,.karyawan-card:hover{ transform:translateY(-2px); box-shadow:var(--gg-shadow-lg) !important; border-color:var(--gg-border-2) !important; }
+
+/* ---- Stat tiles: bigger numbers, calmer label ---- */
+.stat-card,.stat,.kh-stat{ padding:16px 14px !important; }
+.stat-card .stat-num{ font-size:30px !important; font-weight:700 !important; letter-spacing:-.02em; line-height:1.05; }
+.stat-card .stat-label,.stat small,.kh-stat small{ font-size:12px !important; color:var(--gg-muted) !important; margin-top:6px !important; display:block; }
+.kh-stat b{ font-size:22px !important; }
+
+/* ---- Topbar: presence + separation ---- */
+.topbar,[class*="topbar"]{ padding:14px 18px !important; box-shadow:0 1px 0 rgba(255,255,255,.03),0 6px 18px rgba(0,0,0,.28) !important; }
+
+/* ---- Sidebar: roomier nav, smooth active/hover ---- */
+.sidebar{ padding:14px 0 !important; }
+.sidebar nav{ gap:4px !important; padding:10px !important; }
+.sidebar .nav-link{ padding:11px 14px !important; border-radius:10px !important; font-weight:500 !important; transition:background var(--gg-ease),color var(--gg-ease),transform var(--gg-ease); }
+.sidebar .nav-link:hover{ transform:translateX(2px); }
+.sidebar .nav-link.active{ box-shadow:0 4px 14px rgba(217,119,87,.30) !important; }
+
+/* ---- Buttons: consistent, tactile ---- */
+.btn{ border-radius:10px !important; font-weight:600 !important; transition:filter var(--gg-ease),transform var(--gg-ease),box-shadow var(--gg-ease); }
+.btn:hover{ filter:brightness(1.07); }
+.btn:active{ transform:translateY(1px) scale(.99); }
+.btn-primary{ box-shadow:0 4px 14px rgba(217,119,87,.30) !important; }
+.btn-primary:hover{ box-shadow:0 6px 18px rgba(217,119,87,.42) !important; }
+.btn-ghost,.btn-secondary,.btn-google{ border:1px solid var(--gg-border) !important; }
+.btn-ghost:hover,.btn-secondary:hover,.btn-google:hover{ border-color:var(--gg-border-2) !important; }
+
+/* ---- Inputs: rounder + coral focus ring (no size change -> matrix-safe) ---- */
+input,select,textarea{ border-radius:10px !important; transition:border-color var(--gg-ease),box-shadow var(--gg-ease) !important; }
+input:hover,select:hover,textarea:hover{ border-color:var(--gg-border-2) !important; }
+input:focus,select:focus,textarea:focus{ border-color:var(--gg-primary) !important; box-shadow:var(--gg-ring) !important; outline:none !important; }
+.login-page input,.form-grid input,.filters input,.filters select,.rekap-search,.modal-box input,.modal-box textarea,.kry-section input{ padding:11px 12px !important; }
+
+/* ---- Tables (Data Absensi / Rekap): breathing room + soft hover. kh-matrix untouched. ---- */
+.table-wrap,.kh-matrix-wrap,.rekap-table-wrap{ border-radius:var(--gg-radius) !important; }
+.table-wrap,.rekap-table-wrap{ border:1px solid var(--gg-border) !important; }
+.table-wrap th,.rekap-table th{ font-size:11px !important; text-transform:uppercase; letter-spacing:.06em; font-weight:700 !important; padding:12px !important; }
+.table-wrap td,.rekap-table td{ padding:12px !important; }
+.table-wrap tbody tr,.rekap-table tbody tr{ transition:background var(--gg-ease); }
+.table-wrap tbody tr:hover td,.rekap-table tbody tr:hover{ background:var(--gg-surface-2) !important; }
+
+/* ---- Badges / tags / status pills: tidy pills ---- */
+.badge,.tag,.kh-badge{ border-radius:999px !important; padding:4px 10px !important; font-weight:600 !important; letter-spacing:.02em; }
+
+/* ---- Action tiles (karyawan): lift + label polish ---- */
+.action-tile{ border-radius:var(--gg-radius) !important; border:1px solid var(--gg-border) !important; box-shadow:var(--gg-shadow-sm) !important; }
+.action-tile:hover{ transform:translateY(-3px); box-shadow:var(--gg-shadow-lg) !important; }
+.tile-label{ font-size:15px !important; font-weight:600 !important; }
+
+/* ---- Modals: frosted backdrop + gentle entrance ---- */
+.modal:not(.hidden){ backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); }
+.modal-box,.modal-content{ border-radius:var(--gg-radius-lg) !important; box-shadow:var(--gg-shadow-lg) !important; animation:gg-pop var(--gg-ease); }
+@keyframes gg-pop{ from{ opacity:0; transform:translateY(8px) scale(.985); } to{ opacity:1; transform:none; } }
+
+/* ---- Floating bars (beranda) ---- */
+.hadir-floating,#workingFloating,#breakFloating{ border-radius:var(--gg-radius) !important; box-shadow:var(--gg-shadow-sm) !important; }
+
+/* ---- Corrections surfaced during QA preview ---- */
+.row > .btn{ width:auto !important; display:inline-block !important; }
+.stat-card.danger .stat-num{ color:var(--gg-danger) !important; }
+
+/* ---- Misc niceties ---- */
+::selection{ background:rgba(217,119,87,.35); color:#fff; }
+a,.btn-link{ transition:color var(--gg-ease),filter var(--gg-ease); }
+a:focus-visible,button:focus-visible,.nav-link:focus-visible{ outline:2px solid var(--gg-primary); outline-offset:2px; }
+hr{ border:none !important; border-top:1px solid var(--gg-border) !important; }
