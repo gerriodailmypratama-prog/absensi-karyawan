@@ -307,13 +307,14 @@ function fmtTime(d){ return d.toLocaleTimeString('id-ID',{hour12:false}); }
 
 async function loadUserProfile(uid){
   try{
-    let nama='', jamKerja=8, foto='';
+    let nama='', jamKerja=8, foto='', gpsExempt=false;
     try{
       const snap = await getDoc(doc(db, 'karyawan', uid));
       if (snap.exists()){
         const u = snap.data();
         nama = u.nama || '';
         jamKerja = (u.jamKerja!=null) ? parseFloat(u.jamKerja) : 8;
+        gpsExempt = !!u.gpsExempt;
       }
     }catch(e){ console.warn('karyawan profile load err:', e); }
     try{
@@ -324,7 +325,7 @@ async function loadUserProfile(uid){
         if (!nama && u2.nama) nama = u2.nama;
       }
     }catch(e){ console.warn('profil load err:', e); }
-    userProfile = { nama, jamKerja, foto };
+    userProfile = { nama, jamKerja, foto, gpsExempt };
     // (foto profil opsional) auto-popup wajib upload dihapus
     if (foto){
       $('avatarImg').src = foto;
@@ -614,6 +615,12 @@ async function saveAttendance(payload){
     nama: namaForSave,
     ts: serverTimestamp()
   }, payload);
+  // GPS dikecualikan (HP lokasi bermasalah): jangan tandai "luar radius",
+  // tapi tandai transparan gpsExempt biar owner tau lokasinya tidak diverifikasi.
+  if (userProfile && userProfile.gpsExempt){
+    data.inRadius = true;
+    data.gpsExempt = true;
+  }
   await addDoc(collection(db,'absensi'), data);
 }
 
