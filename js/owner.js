@@ -633,6 +633,7 @@ async function openEditKaryawan(uid){
         if ($('editStatusKaryawan')) $('editStatusKaryawan').value = d.statusKaryawan || '';
         if ($('editBaseHarian')) $('editBaseHarian').value = d.baseHarian || '';
         if ($('editMultiplierLembur')) $('editMultiplierLembur').value = d.multiplierLembur || 1;
+        if ($('editGpsExempt')) $('editGpsExempt').checked = !!d.gpsExempt;
         if ($('editNamaBank')) $('editNamaBank').value = d.namaBank || '';
         if ($('editAtasNamaRek')) $('editAtasNamaRek').value = d.atasNamaRek || '';
         if ($('editNomorRekening')) $('editNomorRekening').value = d.nomorRekening || '';
@@ -694,6 +695,7 @@ $('formEditKaryawan').onsubmit = async (e) => {
     const statusKaryawan = $('editStatusKaryawan') ? $('editStatusKaryawan').value : '';
     const baseHarian = $('editBaseHarian') ? (parseInt($('editBaseHarian').value, 10) || 0) : 0;
     const multiplierLembur = $('editMultiplierLembur') ? (parseFloat($('editMultiplierLembur').value) || 1) : 1;
+    const gpsExempt = $('editGpsExempt') ? $('editGpsExempt').checked : false;
     const namaBank = $('editNamaBank') ? $('editNamaBank').value.trim() : '';
     const atasNamaRek = $('editAtasNamaRek') ? $('editAtasNamaRek').value.trim() : '';
     const nomorRekening = $('editNomorRekening') ? $('editNomorRekening').value.trim() : '';
@@ -706,7 +708,7 @@ $('formEditKaryawan').onsubmit = async (e) => {
         const ktpFile = $('editKtpFile') ? $('editKtpFile').files[0] : null;
         const payload = {
             nama, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload,
-            jabatan, statusKaryawan, baseHarian, multiplierLembur,
+            jabatan, statusKaryawan, baseHarian, multiplierLembur, gpsExempt,
             namaBank, atasNamaRek, nomorRekening,
             updatedAt: serverTimestamp()
         };
@@ -1225,6 +1227,7 @@ function renderKhSummary(){
 function gpsDotFor(row){
   const ci = row.byTipe['clock_in'];
   if (!ci || ci.inRadius === undefined || ci.inRadius === null) return '<span class="gps-dot gps-na" title="GPS tidak terdeteksi"></span>';
+  if (ci.gpsExempt) return '<span class="gps-dot" title="GPS dilewati (HP lokasi bermasalah) — lokasi tidak diverifikasi" style="background:#60a5fa"></span>';
   return ci.inRadius
     ? '<span class="gps-dot gps-in" title="GPS dalam jangkauan ('+ (ci.jarak||0) +'m)"></span>'
     : '<span class="gps-dot gps-out" title="GPS di luar jangkauan ('+ (ci.jarak||0) +'m)"></span>';
