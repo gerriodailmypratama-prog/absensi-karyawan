@@ -1149,11 +1149,13 @@ async function autoOtThenOut() {
   }
 
   function wire(){
+    try{ window.openProfil = openProfil; }catch(e){} // pasang lebih awal: cegah jalur fallback ikut nembak (anti dobel picker)
     const open = el('btnOpenProfil'); if(open) open.onclick = openProfil;
     const cancel = el('pfBtnCancel'); if(cancel) cancel.onclick = closeProfil;
     const pick = el('pfBtnPickKtp'); const input = el('pfKtpInput');
-    if(pick && input) pick.onclick = () => input.click();
+    if(pick && input) pick.onclick = () => { if(window.__pfPicking) return; window.__pfPicking = true; setTimeout(function(){ window.__pfPicking = false; }, 1000); input.click(); };
     if(input) input.onchange = (ev) => {
+      window.__pfPicking = false;
       const f = ev.target.files && ev.target.files[0];
       if(!f) return;
       pfSelectedKtpFile = f;
@@ -1273,7 +1275,7 @@ async function autoOtThenOut() {
   document.addEventListener('click', function(ev){
     if (mainWiringActive()) return;
     var t = ev.target; if (!t || !t.closest) return;
-    if (t.closest('#pfBtnPickKtp')){ var inp = gid('pfKtpInput'); if (inp) inp.click(); return; }
+    if (t.closest('#pfBtnPickKtp')){ if(window.__pfPicking) return; window.__pfPicking = true; setTimeout(function(){ window.__pfPicking = false; }, 1000); var inp = gid('pfKtpInput'); if (inp) inp.click(); return; }
     if (t.closest('#pfBtnCancel')){ var m = gid('profilModal'); if (m) m.classList.add('hidden'); return; }
     if (t.closest('#pfBtnSave')){ doSaveFallback(); return; }
   }, true);
