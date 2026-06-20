@@ -1,10 +1,15 @@
-import { auth, OWNER_EMAILS } from './firebase-config.js';
+import { auth, db, OWNER_EMAILS } from './firebase-config.js';
 
 import {
   signInWithEmailAndPassword, GoogleAuthProvider,
   signInWithPopup, signInWithRedirect, getRedirectResult,
-  sendPasswordResetEmail, onAuthStateChanged
+  sendPasswordResetEmail, onAuthStateChanged,
+  createUserWithEmailAndPassword, updateProfile
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// Kode rahasia pendaftaran karyawan. Ganti nilai ini kapan saja kalau mau ganti kode.
+const REGISTRATION_CODE = 'GOODGEMS2026';
 
 const $ = id => document.getElementById(id);
 const msg = (t, ok=false) => {
@@ -28,7 +33,9 @@ const ERR_MAP = {
   'auth/operation-not-supported-in-this-environment':
                                    'Login Google tidak didukung di browser ini. Buka di Chrome/Safari biasa.',
   'auth/unauthorized-domain'     : 'Domain belum diizinkan untuk login Google.',
-  'auth/missing-password'        : 'Password belum diisi.'
+  'auth/missing-password'        : 'Password belum diisi.',
+  'auth/email-already-in-use'    : 'Email ini sudah terdaftar. Silakan Login.',
+  'auth/weak-password'           : 'Password terlalu lemah (minimal 6 karakter).'
 };
 
 const friendlyErr = (err) => ERR_MAP[err.code] || ('Login gagal: ' + (err.code || err.message || 'unknown'));
@@ -49,7 +56,7 @@ function redirect(user){
   else location.href = 'karyawan.html';
 }
 
-onAuthStateChanged(auth, user => { if (user) redirect(user); });
+onAuthStateChanged(auth, user => { if (user && !window.__registering) redirect(user); });
 
 // Tangkap hasil redirect (signInWithRedirect)
 getRedirectResult(auth).catch(err => {
@@ -142,4 +149,66 @@ if (btnForgot) {
       btnForgot.textContent = orig || 'Lupa Password?';
     }
   };
+}
+
+// ---------- TOGGLE LOGIN <-> DAFTAR ----------
+const linkShowRegister = $('linkShowRegister');
+const linkShowLogin = $('linkShowLogin');
+if (linkShowRegister) linkShowRegister.onclick = (e) => {
+  e.preventDefault();
+  const lf = $('loginForm'), rf = $('registerForm');
+  if (lf) lf.classList.add('hidden');
+  if (rf) rf.classList.remove('hidden');
+};
+if (linkShowLogin) linkShowLogin.onclick = (e) => {
+  e.preventDefault();
+  const lf = $('loginForm'), rf = $('registerForm');
+  if (rf) rf.classList.add('hidden');
+  if (lf) lf.classList.remove('hidden');
+};
+
+// ---------- DAFTAR (SELF-REGISTER) ----------
+const regMsg = (t, ok=false) => {
+  const m = $('registerMsg');
+  if (!m) { if (t) alert(t); return; }
+  m.textContent = t || '';
+  m.className = 'msg' + (ok ? ' ok' : '');
+};
+const btnRegister = $('btnRegister');
+if (btnRegister) {
+  const doRegister = async () => {
+    const nama = ($('regNama').value || '').trim();
+    const email = ($('regEmail').value || '').trim();
+    const pass = $('regPassword').value || '';
+    const code = ($('regCode').value || '').trim();
+    if (!nama || !email || !pass) return regMsg('Lengkapi nama, email, dan password dulu ya.');
+    if (pass.length < 6) return regMsg('Password minimal 6 karakter.');
+    if (code.toUpperCase() !== REGISTRATION_CODE.toUpperCase()) {
+      return regMsg('Kode pendaftaran salah. Minta kode yang benar ke admin/owner.');
+    }
+    const orig = btnRegister.textContent;
+    btnRegister.disabled = true;
+    btnRegister.textContent = 'Mendaftar...';
+    regMsg('');
+    window.__registering = true; // cegah auto-redirect sebelum dokumen karyawan dibuat
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      try { await updateProfile(cred.user, { displayName: nama }); } catch (_) {}
+      await setDoc(doc(db, 'karyawan', cred.user.uid), {
+        nama, email, selfRegistered: true, createdAt: serverTimestamp()
+      }, { merge: true });
+      window.__registering = false;
+      redirect(cred.user);
+    } catch (err) {
+      window.__registering = false;
+      regMsg(friendlyErr(err));
+      btnRegister.disabled = false;
+      btnRegister.textContent = orig || 'Daftar';
+    }
+  };
+  btnRegister.onclick = doRegister;
+  ['regNama','regEmail','regPassword','regCode'].forEach(id => {
+    const el = $(id);
+    if (el) el.addEventListener('keydown', ev => { if (ev.key === 'Enter') doRegister(); });
+  });
 }

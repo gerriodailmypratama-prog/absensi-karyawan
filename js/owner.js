@@ -535,7 +535,7 @@ async function loadKaryawanList(){
             const tj = x.tanggalJoin ? (x.tanggalJoin.toDate ? x.tanggalJoin.toDate() : new Date(x.tanggalJoin)) : null;
             const tjStr = tj ? tj.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-';
             tr.innerHTML = '<td>'+(idx+1)+'</td>'+
-              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#d97757;text-decoration:underline;">'+(x.nama||'-')+'</span></td>'+
+              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#d97757;text-decoration:underline;">'+(x.nama||'-')+'</span>'+((!x.baseHarian)?' <span class="tag warn" title="Karyawan baru / gaji belum diatur. Klik Edit untuk atur gaji & jam kerja.">baru</span>':'')+'</td>'+
               '<td>'+(x.email||'-')+'</td>'+
               '<td>'+(x.phone||'-')+'</td>'+
               '<td>'+idDisplay+'</td>'+
