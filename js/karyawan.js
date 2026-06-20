@@ -1067,7 +1067,7 @@ async function autoOtThenOut() {
         else { prev.src = ''; prev.classList.add('hidden'); }
       }
       if(el('pfKtpName')) el('pfKtpName').textContent = '';
-      setLocked(false); // tidak dikunci: karyawan boleh perbaiki rekening/KTP kapan saja
+      setLocked(!!d.profilLocked);
     }catch(e){ console.error('load profil', e); }
     modal.classList.remove('hidden');
   }
@@ -1075,6 +1075,7 @@ async function autoOtThenOut() {
   function closeProfil(){ const m = el('profilModal'); if(m) m.classList.add('hidden'); }
 
   async function saveProfil(){
+    if(window.__pfSaving) return; // cegah dobel-simpan (anti dobel-notif)
     if(typeof currentUser === 'undefined' || !currentUser){ alert('Sesi belum siap.'); return; }
     const uid = currentUser.uid;
     const namaBank = (el('pfNamaBank').value||'').trim();
@@ -1088,6 +1089,7 @@ async function autoOtThenOut() {
     const saveBtn = el('pfBtnSave');
     const oldTxt = saveBtn ? saveBtn.textContent : '';
     if(saveBtn){ saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan...'; }
+    window.__pfSaving = true;
     try{
       const path = 'profil/' + uid + '/ktp.jpg';
       const sref = ref(storage, path);
@@ -1128,9 +1130,12 @@ async function autoOtThenOut() {
         profilUpdatedAt: serverTimestamp()
       };
       if(ktpUrl) __payload.ktpUrl = ktpUrl;
+      // Profil dianggap LENGKAP & dikunci kalau rekening + KTP sudah ada.
+      if(ktpUrl) __payload.profilLocked = true;
       await setDoc(doc(db,'karyawan',uid), __payload, { merge: true });
       const prev = el('pfKtpPreview');
       if(prev && ktpUrl){ prev.src = ktpUrl; prev.classList.remove('hidden'); }
+      if(ktpUrl) setLocked(true);
       alert(ktpFailed
         ? 'Rekening tersimpan, tapi foto KTP gagal terupload. Cek koneksi / coba foto lebih kecil, lalu upload KTP lagi ya.'
         : 'Data profil tersimpan. Terima kasih!');
@@ -1138,6 +1143,7 @@ async function autoOtThenOut() {
       console.error('save profil', e);
       alert('Gagal menyimpan: ' + (e && e.message ? e.message : e));
     }finally{
+      window.__pfSaving = false;
       if(saveBtn){ saveBtn.disabled = false; saveBtn.textContent = oldTxt || 'Simpan'; }
     }
   }
@@ -1255,7 +1261,7 @@ async function autoOtThenOut() {
         await uploadBytes(sref, toUpload);
         ktpUrl = await getDownloadURL(sref);
       }
-      var __pl = { namaBank: namaBank, nomorRekening: nomorRekening, atasNamaRek: atasNamaRek, profilUpdatedAt: serverTimestamp() };
+      var __pl = { namaBank: namaBank, nomorRekening: nomorRekening, atasNamaRek: atasNamaRek, profilUpdatedAt: serverTimestamp() }; if (ktpUrl) __pl.profilLocked = true;
       if (ktpUrl) __pl.ktpUrl = ktpUrl;
       await setDoc(doc(db,'karyawan',uid), __pl, { merge: true });
       var prev = gid('pfKtpPreview'); if (prev){ prev.src = ktpUrl; prev.classList.remove('hidden'); }
