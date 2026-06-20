@@ -1067,7 +1067,7 @@ async function autoOtThenOut() {
         else { prev.src = ''; prev.classList.add('hidden'); }
       }
       if(el('pfKtpName')) el('pfKtpName').textContent = '';
-      setLocked(!!d.profilLocked);
+      setLocked(false); // tidak dikunci: karyawan boleh perbaiki rekening/KTP kapan saja
     }catch(e){ console.error('load profil', e); }
     modal.classList.remove('hidden');
   }
@@ -1128,12 +1128,9 @@ async function autoOtThenOut() {
         profilUpdatedAt: serverTimestamp()
       };
       if(ktpUrl) __payload.ktpUrl = ktpUrl;
-      // Kunci profil HANYA kalau sudah lengkap (rekening + KTP). Kalau KTP gagal, biarkan bisa diulang.
-      if(ktpUrl) __payload.profilLocked = true;
       await setDoc(doc(db,'karyawan',uid), __payload, { merge: true });
       const prev = el('pfKtpPreview');
       if(prev && ktpUrl){ prev.src = ktpUrl; prev.classList.remove('hidden'); }
-      if(ktpUrl) setLocked(true);
       alert(ktpFailed
         ? 'Rekening tersimpan, tapi foto KTP gagal terupload. Cek koneksi / coba foto lebih kecil, lalu upload KTP lagi ya.'
         : 'Data profil tersimpan. Terima kasih!');
@@ -1258,7 +1255,7 @@ async function autoOtThenOut() {
         await uploadBytes(sref, toUpload);
         ktpUrl = await getDownloadURL(sref);
       }
-      var __pl = { namaBank: namaBank, nomorRekening: nomorRekening, atasNamaRek: atasNamaRek, profilLocked: true, profilUpdatedAt: serverTimestamp() };
+      var __pl = { namaBank: namaBank, nomorRekening: nomorRekening, atasNamaRek: atasNamaRek, profilUpdatedAt: serverTimestamp() };
       if (ktpUrl) __pl.ktpUrl = ktpUrl;
       await setDoc(doc(db,'karyawan',uid), __pl, { merge: true });
       var prev = gid('pfKtpPreview'); if (prev){ prev.src = ktpUrl; prev.classList.remove('hidden'); }
