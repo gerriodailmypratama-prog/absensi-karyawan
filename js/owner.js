@@ -525,6 +525,17 @@ async function loadKaryawanList(){
         const rows = [];
         snap.forEach(d => rows.push({id:d.id, ...d.data()}));
         rows.sort((a,b)=>(a.nama||'').localeCompare(b.nama||''));
+        // === Auto-generate ID Karyawan (GG-####) untuk yang belum punya ===
+        let _maxKid = 0;
+        rows.forEach(r => { const m = /^GG-(\d+)$/i.exec(r.idKaryawan || ''); if (m){ const n = parseInt(m[1],10); if (n > _maxKid) _maxKid = n; } });
+        for (const r of rows){
+            if (!r.idKaryawan && !r.nik){
+                _maxKid++;
+                const newId = 'GG-' + String(_maxKid).padStart(4,'0');
+                try { await setDoc(doc(db,'karyawan', r.id), { idKaryawan: newId }, { merge:true }); r.idKaryawan = newId; }
+                catch(e){ console.warn('Auto ID gagal untuk', r.id, e); _maxKid--; }
+            }
+        }
         rows.forEach((x, idx) => {
             const img = x.photoURL
                 ? '<img src="'+x.photoURL+'" alt="foto" style="width:40px;height:40px;border-radius:50%;object-fit:cover">'
