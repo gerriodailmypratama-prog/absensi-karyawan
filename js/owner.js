@@ -640,8 +640,6 @@ async function openEditKaryawan(uid){
         // Status upload dokumen
         const setStat = (id, url) => { const el = $(id); if (el) el.textContent = url ? '✓ sudah diupload' : '(belum)'; };
         setStat('ktpStatus', d.ktpUrl);
-        // Reset file inputs
-        ['editKtpFile'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
         // ===== KTP preview + lock status profil =====
         (function(){
           var wrap = $('editKtpPreviewWrap');
@@ -674,15 +672,6 @@ async function openEditKaryawan(uid){
     } catch(e){ alert('Failed to load data: ' + e.message); }
 }
 $('btnEditCancel').onclick = () => $('editKaryawanModal').classList.add('hidden');
-// Helper upload satu file ke Storage path karyawan-private/{uid}/{slot}.{ext}
-async function uploadKaryawanFile(uid, slot, file){
-    if (!file) return null;
-    const ext = (file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'');
-    const path = 'karyawan-private/' + uid + '/' + slot + '.' + (ext||'jpg');
-    const r = storageRef(storage, path);
-    await uploadBytes(r, file, { contentType: file.type || 'image/jpeg' });
-    return await getDownloadURL(r);
-}
 
 $('formEditKaryawan').onsubmit = async (e) => {
     e.preventDefault();
@@ -705,14 +694,12 @@ $('formEditKaryawan').onsubmit = async (e) => {
     try {
         const tanggalJoinVal = $('editTanggalJoin') ? $('editTanggalJoin').value : '';
         const tjPayload = tanggalJoinVal ? Timestamp.fromDate(new Date(tanggalJoinVal)) : null;
-        const ktpFile = $('editKtpFile') ? $('editKtpFile').files[0] : null;
         const payload = {
             nama, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload,
             jabatan, statusKaryawan, baseHarian, multiplierLembur, gpsExempt,
             namaBank, atasNamaRek, nomorRekening,
             updatedAt: serverTimestamp()
         };
-        if (ktpFile){ try { payload.ktpUrl = await uploadKaryawanFile(uid,'ktp',ktpFile); } catch(ue){ console.error('upload ktp', ue); alert('Upload KTP gagal: '+ue.message); } }
         await setDoc(doc(db,'karyawan',uid), payload, {merge:true});
         $('editKaryawanModal').classList.add('hidden');
         loadKaryawanList();
