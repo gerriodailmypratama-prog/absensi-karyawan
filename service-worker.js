@@ -1,4 +1,4 @@
-const CACHE = 'absensi-v47';
+const CACHE = 'absensi-v48';
 const ASSETS = [
   './', './index.html', './karyawan.html', './owner.html',
   './css/style.css', './manifest.json', './icon.svg'
