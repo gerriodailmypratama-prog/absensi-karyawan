@@ -1036,6 +1036,7 @@ async function autoOtThenOut() {
 (function initProfilKaryawan(){
   function el(id){ return document.getElementById(id); }
   let pfSelectedKtpFile = null;
+  let pfExistingKtpUrl = '';
 
   function setLocked(locked){
     const fields = ['pfNamaBank','pfNomorRekening','pfAtasNamaRek'];
@@ -1059,6 +1060,7 @@ async function autoOtThenOut() {
       if(el('pfNamaBank')) el('pfNamaBank').value = d.namaBank || '';
       if(el('pfNomorRekening')) el('pfNomorRekening').value = d.nomorRekening || '';
       if(el('pfAtasNamaRek')) el('pfAtasNamaRek').value = d.atasNamaRek || '';
+      pfExistingKtpUrl = d.ktpUrl || '';
       const prev = el('pfKtpPreview');
       if(prev){
         if(d.ktpUrl){ prev.src = d.ktpUrl; prev.classList.remove('hidden'); }
@@ -1079,7 +1081,7 @@ async function autoOtThenOut() {
     const nomorRekening = (el('pfNomorRekening').value||'').trim();
     const atasNamaRek = (el('pfAtasNamaRek').value||'').trim();
     if(!namaBank || !nomorRekening || !atasNamaRek){ alert('Lengkapi semua data rekening dulu ya.'); return; }
-    if(!pfSelectedKtpFile){ alert('Upload foto KTP dulu ya.'); return; }
+    if(!pfSelectedKtpFile && !pfExistingKtpUrl){ alert('Upload foto KTP dulu ya.'); return; }
     const saveBtn = el('pfBtnSave');
     const oldTxt = saveBtn ? saveBtn.textContent : '';
     if(saveBtn){ saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan...'; }
@@ -1109,14 +1111,19 @@ async function autoOtThenOut() {
           return new File([outBlob], "ktp.jpg", { type:"image/jpeg" });
         } catch(e){ console.warn("Kompres KTP gagal, pakai file asli:", e&&e.message); return file; }
       }
-      const __ktpToUpload = await __compressKtp(pfSelectedKtpFile, 2*1024*1024 - 50*1024);
-      await uploadBytes(sref, __ktpToUpload);
-      const ktpUrl = await getDownloadURL(sref);
-      await setDoc(doc(db,'karyawan',uid), {
-        namaBank, nomorRekening, atasNamaRek, ktpUrl,
+      let ktpUrl = pfExistingKtpUrl;
+      if(pfSelectedKtpFile){
+        const __ktpToUpload = await __compressKtp(pfSelectedKtpFile, 2*1024*1024 - 50*1024);
+        await uploadBytes(sref, __ktpToUpload);
+        ktpUrl = await getDownloadURL(sref);
+      }
+      const __payload = {
+        namaBank, nomorRekening, atasNamaRek,
         profilLocked: true,
         profilUpdatedAt: serverTimestamp()
-      }, { merge: true });
+      };
+      if(ktpUrl) __payload.ktpUrl = ktpUrl;
+      await setDoc(doc(db,'karyawan',uid), __payload, { merge: true });
       const prev = el('pfKtpPreview');
       if(prev){ prev.src = ktpUrl; prev.classList.remove('hidden'); }
       setLocked(true);
@@ -1227,17 +1234,24 @@ async function autoOtThenOut() {
     var atasNamaRek = ((gid('pfAtasNamaRek')||{}).value||'').trim();
     if (!namaBank || !nomorRekening || !atasNamaRek){ alert('Lengkapi semua data rekening dulu ya'); return; }
     var ktpFile = window.__pfKtpFile;
-    if (!ktpFile){ alert('Upload foto KTP dulu ya'); return; }
+    var existingKtp = '';
+    try { var __s0 = await getDoc(doc(db,'karyawan',uid)); if (__s0.exists()) existingKtp = (__s0.data().ktpUrl)||''; } catch(e){}
+    if (!ktpFile && !existingKtp){ alert('Upload foto KTP dulu ya'); return; }
     window.__pfSaving = true;
     var saveBtn = gid('pfBtnSave');
     var oldTxt = saveBtn ? saveBtn.textContent : '';
     if (saveBtn){ saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan...'; }
     try {
-      var sref = ref(storage, 'profil/' + uid + '/ktp.jpg');
-      var toUpload = await compressKtpFallback(ktpFile, 2*1024*1024 - 50*1024);
-      await uploadBytes(sref, toUpload);
-      var ktpUrl = await getDownloadURL(sref);
-      await setDoc(doc(db,'karyawan',uid), { namaBank: namaBank, nomorRekening: nomorRekening, atasNamaRek: atasNamaRek, ktpUrl: ktpUrl, profilLocked: true, profilUpdatedAt: serverTimestamp() }, { merge: true });
+      var ktpUrl = existingKtp;
+      if (ktpFile){
+        var sref = ref(storage, 'profil/' + uid + '/ktp.jpg');
+        var toUpload = await compressKtpFallback(ktpFile, 2*1024*1024 - 50*1024);
+        await uploadBytes(sref, toUpload);
+        ktpUrl = await getDownloadURL(sref);
+      }
+      var __pl = { namaBank: namaBank, nomorRekening: nomorRekening, atasNamaRek: atasNamaRek, profilLocked: true, profilUpdatedAt: serverTimestamp() };
+      if (ktpUrl) __pl.ktpUrl = ktpUrl;
+      await setDoc(doc(db,'karyawan',uid), __pl, { merge: true });
       var prev = gid('pfKtpPreview'); if (prev){ prev.src = ktpUrl; prev.classList.remove('hidden'); }
       alert('Data profil tersimpan. Terima kasih!');
       var modal = gid('profilModal'); if (modal) modal.classList.add('hidden');
