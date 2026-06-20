@@ -27,6 +27,20 @@
       <div class="divider"><span>atau</span></div>
       <button id="btnLoginGoogle" class="btn btn-google">Login dengan Google</button>
       <p id="loginMsg" class="msg"></p>
+      <p class="footer" style="margin-top:14px">Belum punya akun? <a href="#" id="linkShowRegister" style="color:#d97757;text-decoration:underline">Daftar di sini</a></p>
+    </div>
+    <div id="registerForm" class="hidden">
+      <label>Nama Lengkap</label>
+      <input type="text" id="regNama" placeholder="Nama sesuai KTP" autocomplete="name">
+      <label>Email</label>
+      <input type="email" id="regEmail" placeholder="nama@email.com" autocomplete="email">
+      <label>Password</label>
+      <input type="password" id="regPassword" placeholder="minimal 6 karakter" autocomplete="new-password">
+      <label>Kode Pendaftaran</label>
+      <input type="text" id="regCode" placeholder="Minta kode ke admin/owner">
+      <button id="btnRegister" class="btn btn-primary">Daftar</button>
+      <p id="registerMsg" class="msg"></p>
+      <p class="footer" style="margin-top:14px">Sudah punya akun? <a href="#" id="linkShowLogin" style="color:#d97757;text-decoration:underline">Login di sini</a></p>
     </div>
   </div>
   <p class="footer">&copy; 2026 Absensi Karyawan Goodgems</p>
