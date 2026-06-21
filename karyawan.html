@@ -25,6 +25,7 @@
       <span id="avatarPlaceholder" class="avatar-ph">+</span>
       <input type="file" id="avatarInput" accept="image/*" hidden>
     </div>
+    <button id="btnPanduan" class="btn-icon" title="Panduan cara pakai absensi">&#x2753; Panduan</button>
     <button id="btnOpenProfil" class="btn-icon" title="Lengkapi profil">Profil</button>
     <button id="btnLogout" class="btn-icon">Keluar</button>
   </div>
@@ -198,6 +199,69 @@
   </div>
 </div>
 
+<!-- ===== Panduan / Onboarding (PR-CL20) ===== -->
+<div id="panduanModal" class="modal hidden">
+  <div class="modal-box" style="max-width:440px">
+    <h3 style="margin:0 0 4px">&#x1F44B; Panduan Absensi</h3>
+    <p class="muted small" style="margin:0 0 12px">Selamat datang! Ini cara pakai aplikasinya, gampang kok &#x1F642;</p>
+
+    <div class="panduan-item">
+      <span class="panduan-emo">&#x1F7E2;</span>
+      <div><strong>Clock In</strong><span class="muted small">Pencet pas kamu MULAI kerja. Kamu foto selfie dulu, dan lokasi (GPS) kebaca otomatis. Habis ini, jam kerja kamu mulai jalan.</span></div>
+    </div>
+    <div class="panduan-item">
+      <span class="panduan-emo">&#x2615;</span>
+      <div><strong>Istirahat / Pause</strong><span class="muted small">Pencet pas istirahat (makan/sholat/jeda). Nanti pencet lagi &ldquo;Selesai Istirahat&rdquo; pas balik kerja. Waktu istirahat NGGAK dihitung jam kerja. &#x26A0;&#xFE0F; Jangan lupa di-selesai-in ya!</span></div>
+    </div>
+    <div class="panduan-item">
+      <span class="panduan-emo">&#x1F534;</span>
+      <div><strong>Clock Out</strong><span class="muted small">Pencet pas kamu SELESAI kerja &amp; mau pulang (kerja biasa, bukan lembur). Foto selfie lagi, shift kamu ditutup.</span></div>
+    </div>
+    <div class="panduan-item">
+      <span class="panduan-emo">&#x23F0;</span>
+      <div><strong>Selesai Lembur</strong><span class="muted small">KHUSUS kalau kamu kerja LEBIH lama dari jam normal (lembur). Pas mau pulang, pencet INI (bukan Clock Out biasa) biar jam lembur kamu kecatat &amp; dibayar. Kalau kerja normal aja, cukup Clock Out.</span></div>
+    </div>
+    <div class="panduan-item">
+      <span class="panduan-emo">&#x1F4CD;</span>
+      <div><strong>Lokasi (GPS)</strong><span class="muted small">Tiap absen, lokasi kamu kecatat buat mastiin kamu di kantor. Kalau kebaca di luar area kantor bakal ditandai, tapi tenang &mdash; absen kamu TETAP masuk kok.</span></div>
+    </div>
+    <div class="panduan-item">
+      <span class="panduan-emo">&#x1F933;</span>
+      <div><strong>Selfie</strong><span class="muted small">Foto pas absen itu buat mastiin yang absen beneran kamu, bukan diwakilin orang lain.</span></div>
+    </div>
+    <div class="panduan-item">
+      <span class="panduan-emo">&#x1F464;</span>
+      <div><strong>Lengkapi Profil</strong><span class="muted small">Jangan lupa isi rekening + foto KTP (pencet tombol &ldquo;Profil&rdquo; di pojok atas) &mdash; ini buat transfer gaji kamu.</span></div>
+    </div>
+
+    <button id="btnPanduanOk" class="btn btn-primary" style="margin-top:14px">Oke, Ngerti! &#x1F44D;</button>
+  </div>
+</div>
+<style>
+  #panduanModal .panduan-item{display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--gg-border,#403d37)}
+  #panduanModal .panduan-item:last-of-type{border-bottom:none}
+  #panduanModal .panduan-emo{font-size:24px;line-height:1.25;flex-shrink:0;width:30px;text-align:center}
+  #panduanModal .panduan-item strong{font-size:15px}
+  #panduanModal .panduan-item .muted{display:block;margin-top:2px;line-height:1.5}
+</style>
+<script>
+  (function(){
+    function ready(fn){ if(document.readyState!='loading') fn(); else document.addEventListener('DOMContentLoaded',fn); }
+    ready(function(){
+      var modal=document.getElementById('panduanModal');
+      var btn=document.getElementById('btnPanduan');
+      var ok=document.getElementById('btnPanduanOk');
+      function show(){ if(modal) modal.classList.remove('hidden'); }
+      function seen(){ try{ localStorage.setItem('gg_panduan_seen','1'); }catch(e){} }
+      function hide(){ if(modal) modal.classList.add('hidden'); seen(); }
+      if(btn) btn.addEventListener('click', show);
+      if(ok) ok.addEventListener('click', hide);
+      if(modal) modal.addEventListener('click', function(e){ if(e.target===modal) hide(); });
+      // Muncul otomatis pertama kali (sekali aja, disimpan di HP)
+      try{ if(localStorage.getItem('gg_panduan_seen')!=='1'){ setTimeout(show, 900); } }catch(e){}
+    });
+  })();
+</script>
 <script type="module" src="js/firebase-config.js"></script>
 <script type="module" src="js/karyawan.js"></script>
 <script>
