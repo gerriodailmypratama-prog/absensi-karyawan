@@ -904,6 +904,7 @@ async function renderHadirFloating(rows){
     const hadirUids = [];
     const workingUids = [];
     const breakUids = [];
+    const breakStartByUid = new Map();
     const finishUids = [];
 
     // Karyawan "Hadir hari ini" hanya jika punya event clock_in dengan timestamp >= hari ini 00:00
@@ -942,6 +943,7 @@ async function renderHadirFloating(rows){
             }
         } else if (lastBreakInMs > 0 && lastBreakInMs > lastBreakOutMs){
             breakUids.push(uid);
+            breakStartByUid.set(uid, lastBreakInMs);
         } else {
             workingUids.push(uid);
         }
@@ -983,6 +985,29 @@ async function renderHadirFloating(rows){
     await paint('workingAvatars', 'workingCount', workingUids);
     await paint('breakAvatars', 'breakCount', breakUids);
     await paint('finishAvatars', 'finishCount', finishUids);
+
+    // Durasi istirahat LIVE (per karyawan yang sedang break), ticking tiap detik.
+    const _brkBox = $('breakTimers');
+    if (_brkBox){
+        _brkBox.innerHTML = breakUids.map(function(u){
+            const _s = breakStartByUid.get(u) || 0;
+            return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;margin-top:3px">'
+                 + '<span style="color:#e6e3d8">' + (namaOf(u)||'-') + '</span>'
+                 + '<span class="brk-timer" data-start="' + _s + '" style="color:#fcd34d;font-variant-numeric:tabular-nums;font-weight:600">--:--</span></div>';
+        }).join('');
+    }
+    if (!window.__ggBreakTick){
+        window.__ggBreakTick = setInterval(function(){
+            const _now = Date.now();
+            document.querySelectorAll('.brk-timer').forEach(function(t){
+                const _s = parseInt(t.getAttribute('data-start'),10) || 0;
+                if (!_s){ t.textContent = '--:--'; return; }
+                const _sec = Math.max(0, Math.floor((_now - _s)/1000));
+                const _h = Math.floor(_sec/3600), _m = Math.floor((_sec%3600)/60), _ss = _sec%60;
+                t.textContent = (_h>0 ? (_h + ':' + String(_m).padStart(2,'0')) : String(_m)) + ':' + String(_ss).padStart(2,'0');
+            });
+        }, 1000);
+    }
 }
 
 
