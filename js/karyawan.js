@@ -30,7 +30,8 @@ const BREAK_MAX_MS = 60 * 60 * 1000;
 // Window untuk load sesi shift aktif (cover shift lintas hari). 48 jam aman untuk shift sampai ~24-36 jam.
 const SESSION_WINDOW_MS = 48 * 60 * 60 * 1000;
 // Max durasi 1 shift yang wajar (jam masuk -> clock out). Lebih dari ini dianggap lupa Clock Out.
-const MAX_SHIFT_MS = 14 * 60 * 60 * 1000;
+// 18 jam: cukup untuk lembur panjang yang sah, tapi masih nangkep lupa-clock-out (biasanya 24 jam+).
+const MAX_SHIFT_MS = 18 * 60 * 60 * 1000;
 
 // Helper aman untuk ambil radius office (kompat 'radius' & 'radiusMeters').
 const OFFICE_RADIUS = (OFFICE_LOCATION && (OFFICE_LOCATION.radius || OFFICE_LOCATION.radiusMeters)) || 150;
