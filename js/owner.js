@@ -1242,7 +1242,7 @@ function statusBadgeFor(row){
   if ((bt.clock_in || bt.overtime_in) && !bt.clock_out && !bt.overtime_out) {
     const ciEv = bt.clock_in || bt.overtime_in;
     const ciMs = (ciEv && ciEv.ts) ? (ciEv.ts.toMillis ? ciEv.ts.toMillis() : (ciEv.ts.toDate ? ciEv.ts.toDate().getTime() : 0)) : 0;
-    if (ciMs && (Date.now() - ciMs) > 14 * 60 * 60 * 1000) {
+    if (ciMs && (Date.now() - ciMs) > 18 * 60 * 60 * 1000) {
       return '<span class="kh-badge kh-lupa" title="Clock In lebih dari 14 jam tanpa Clock Out. Kemungkinan lupa Clock Out. Isi jam pulang di kolom Clock Out untuk koreksi.">\u26A0 Lupa Clock Out</span>';
     }
   }
@@ -1275,7 +1275,7 @@ function renderKehadiranMatrix(){
       if (!_ciEv || _bt.clock_out || _bt.overtime_out) return;
       if (!_ciEv.ts || !_ciEv.ts.toDate) return;
       const _ciMs = _ciEv.ts.toDate().getTime();
-      if ((Date.now() - _ciMs) <= 14*60*60*1000) return;
+      if ((Date.now() - _ciMs) <= 18*60*60*1000) return;
       const _kontrak = Number(row.jamKerja) || 9;
       let _restMs = 0; const _open = {};
       (row.events||[]).forEach(function(e){
