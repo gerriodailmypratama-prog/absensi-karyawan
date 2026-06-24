@@ -960,6 +960,29 @@ async function renderHadirFloating(rows){
         return (r && r.nama) ? r.nama : '';
     }
 
+    // Total istirahat (sesi yang SUDAH selesai) hari ini, dalam ms
+    function completedBreakMsToday(uid){
+        const arr = byUid.get(uid) || [];
+        let total = 0, openStart = 0;
+        for (const r of arr){
+            const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0;
+            if (ms < _todayMsHF) continue;
+            if (r.tipe === 'break_in') openStart = ms;
+            else if (r.tipe === 'break_out'){ if (openStart && ms >= openStart){ total += (ms - openStart); openStart = 0; } }
+        }
+        return total; // sesi yang masih berjalan TIDAK dihitung di sini (ditambah live)
+    }
+    // Clock-in PERTAMA hari ini (mulai kerja), dalam ms
+    function firstClockInMsToday(uid){
+        const arr = byUid.get(uid) || [];
+        for (const r of arr){
+            const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0;
+            if (ms < _todayMsHF) continue;
+            if (r.tipe === 'clock_in' || r.tipe === 'overtime_in') return ms;
+        }
+        return 0;
+    }
+
     async function paint(containerId, countId, uids){
         const cnt = $(countId);
         if (cnt) cnt.textContent = '(' + uids.length + ' of ' + total + ')';
@@ -992,21 +1015,26 @@ async function renderHadirFloating(rows){
     await paint('breakAvatars', 'breakCount', breakUids);
     await paint('finishAvatars', 'finishCount', finishUids);
 
+    // Durasi kerja LIVE (per karyawan yang sedang bekerja), ticking tiap detik.
+    const _workBox = $('workTimers');
+    if (_workBox){
+        _workBox.innerHTML = workingUids.map(function(u){
+            const _ci = firstClockInMsToday(u);
+            if (!_ci) return '';
+            const _brk = completedBreakMsToday(u);
+            return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;margin-top:3px">'
+                 + '<span style="color:#e6e3d8">' + (namaOf(u)||'-') + '</span>'
+                 + '<span style="font-variant-numeric:tabular-nums">'
+                 +   '<span class="work-timer" data-start="' + _ci + '" style="color:#34d399;font-weight:600">--:--</span>'
+                 +   '<span class="muted" style="font-size:11px"> · efektif </span>'
+                 +   '<span class="work-net" data-start="' + _ci + '" data-base="' + _brk + '" style="color:#9ca3af;font-weight:600">--:--</span>'
+                 + '</span></div>';
+        }).join('');
+    }
+
     // Durasi istirahat LIVE (per karyawan yang sedang break), ticking tiap detik.
     const _brkBox = $('breakTimers');
     if (_brkBox){
-        // Total istirahat hari ini = semua sesi break yang SUDAH selesai + sesi yang lagi jalan (ditambah live di ticker)
-        function completedBreakMsToday(uid){
-            const arr = byUid.get(uid) || [];
-            let total = 0, openStart = 0;
-            for (const r of arr){
-                const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0;
-                if (ms < _todayMsHF) continue;
-                if (r.tipe === 'break_in') openStart = ms;
-                else if (r.tipe === 'break_out'){ if (openStart && ms >= openStart){ total += (ms - openStart); openStart = 0; } }
-            }
-            return total; // sesi yang masih berjalan TIDAK dihitung di sini (ditambah live)
-        }
         _brkBox.innerHTML = breakUids.map(function(u){
             const _s = breakStartByUid.get(u) || 0;
             const _b = completedBreakMsToday(u);
@@ -1026,7 +1054,7 @@ async function renderHadirFloating(rows){
                 const _h = Math.floor(_sec/3600), _m = Math.floor((_sec%3600)/60), _ss = _sec%60;
                 return (_h>0 ? (_h + ':' + String(_m).padStart(2,'0')) : String(_m)) + ':' + String(_ss).padStart(2,'0');
             }
-            document.querySelectorAll('.brk-timer').forEach(function(t){
+            document.querySelectorAll('.brk-timer, .work-timer').forEach(function(t){
                 const _s = parseInt(t.getAttribute('data-start'),10) || 0;
                 if (!_s){ t.textContent = '--:--'; return; }
                 t.textContent = _fmtBrk(Math.max(0, Math.floor((_now - _s)/1000)));
@@ -1036,6 +1064,12 @@ async function renderHadirFloating(rows){
                 const _b = parseInt(t.getAttribute('data-base'),10) || 0;
                 if (!_s){ t.textContent = '--:--'; return; }
                 t.textContent = _fmtBrk(Math.max(0, Math.floor((_b + (_now - _s))/1000)));
+            });
+            document.querySelectorAll('.work-net').forEach(function(t){
+                const _s = parseInt(t.getAttribute('data-start'),10) || 0;
+                const _b = parseInt(t.getAttribute('data-base'),10) || 0;
+                if (!_s){ t.textContent = '--:--'; return; }
+                t.textContent = _fmtBrk(Math.max(0, Math.floor(((_now - _s) - _b)/1000)));
             });
         }, 1000);
     }
