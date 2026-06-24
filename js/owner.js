@@ -960,18 +960,24 @@ async function renderHadirFloating(rows){
         return (r && r.nama) ? r.nama : '';
     }
 
-    // Total istirahat (sesi yang SUDAH selesai) hari ini, dalam ms
-    function completedBreakMsToday(uid){
+    // Jumlah durasi pasangan event (in->out) yang SUDAH selesai hari ini, dalam ms.
+    function pairMsToday(uid, inT, outT){
         const arr = byUid.get(uid) || [];
         let total = 0, openStart = 0;
         for (const r of arr){
             const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0;
             if (ms < _todayMsHF) continue;
-            if (r.tipe === 'break_in') openStart = ms;
-            else if (r.tipe === 'break_out'){ if (openStart && ms >= openStart){ total += (ms - openStart); openStart = 0; } }
+            if (r.tipe === inT) openStart = ms;
+            else if (r.tipe === outT){ if (openStart && ms >= openStart){ total += (ms - openStart); openStart = 0; } }
         }
-        return total; // sesi yang masih berjalan TIDAK dihitung di sini (ditambah live)
+        return total; // sesi yang belum ditutup TIDAK dihitung (selaras dengan live timer)
     }
+    // Total istirahat (sesi yang SUDAH selesai) hari ini, dalam ms
+    function completedBreakMsToday(uid){ return pairMsToday(uid, 'break_in', 'break_out'); }
+    // Istirahat + pause selesai (yang dipotong dari kerja efektif), dalam ms
+    function restMsToday(uid){ return pairMsToday(uid,'break_in','break_out') + pairMsToday(uid,'pause_in','pause_out'); }
+    // Total jam di-clock (clock + overtime), SEBELUM potong istirahat, dalam ms
+    function grossWorkMsToday(uid){ return pairMsToday(uid,'clock_in','clock_out') + pairMsToday(uid,'overtime_in','overtime_out'); }
     // Clock-in PERTAMA hari ini (mulai kerja), dalam ms
     function firstClockInMsToday(uid){
         const arr = byUid.get(uid) || [];
@@ -981,6 +987,12 @@ async function renderHadirFloating(rows){
             if (r.tipe === 'clock_in' || r.tipe === 'overtime_in') return ms;
         }
         return 0;
+    }
+    // Format durasi ms -> H:MM:SS atau M:SS
+    function fmtDurMs(ms){
+        const _sec = Math.max(0, Math.floor(ms/1000));
+        const _h = Math.floor(_sec/3600), _m = Math.floor((_sec%3600)/60), _ss = _sec%60;
+        return (_h>0 ? (_h + ':' + String(_m).padStart(2,'0')) : String(_m)) + ':' + String(_ss).padStart(2,'0');
     }
 
     async function paint(containerId, countId, uids){
@@ -1021,13 +1033,13 @@ async function renderHadirFloating(rows){
         _workBox.innerHTML = workingUids.map(function(u){
             const _ci = firstClockInMsToday(u);
             if (!_ci) return '';
-            const _brk = completedBreakMsToday(u);
+            const _rest = restMsToday(u);
             return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;margin-top:3px">'
                  + '<span style="color:#e6e3d8">' + (namaOf(u)||'-') + '</span>'
                  + '<span style="font-variant-numeric:tabular-nums">'
                  +   '<span class="work-timer" data-start="' + _ci + '" style="color:#34d399;font-weight:600">--:--</span>'
                  +   '<span class="muted" style="font-size:11px"> · efektif </span>'
-                 +   '<span class="work-net" data-start="' + _ci + '" data-base="' + _brk + '" style="color:#9ca3af;font-weight:600">--:--</span>'
+                 +   '<span class="work-net" data-start="' + _ci + '" data-base="' + _rest + '" style="color:#9ca3af;font-weight:600">--:--</span>'
                  + '</span></div>';
         }).join('');
     }
@@ -1044,6 +1056,23 @@ async function renderHadirFloating(rows){
                  +   '<span class="brk-timer" data-start="' + _s + '" style="color:#fcd34d;font-weight:600">--:--</span>'
                  +   '<span class="muted" style="font-size:11px"> · total </span>'
                  +   '<span class="brk-total" data-start="' + _s + '" data-base="' + _b + '" style="color:#9ca3af;font-weight:600">--:--</span>'
+                 + '</span></div>';
+        }).join('');
+    }
+
+    // Total kerja efektif (FINAL) untuk yang sudah Finish Working - angka statis, tidak ticking.
+    const _finBox = $('finishTimers');
+    if (_finBox){
+        _finBox.innerHTML = finishUids.map(function(u){
+            const _gross = grossWorkMsToday(u);
+            if (_gross <= 0) return '';
+            const _eff = Math.max(0, _gross - restMsToday(u));
+            return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;margin-top:3px">'
+                 + '<span style="color:#e6e3d8">' + (namaOf(u)||'-') + '</span>'
+                 + '<span style="font-variant-numeric:tabular-nums">'
+                 +   '<span style="color:#34d399;font-weight:600">' + fmtDurMs(_gross) + '</span>'
+                 +   '<span class="muted" style="font-size:11px"> · efektif </span>'
+                 +   '<span style="color:#9ca3af;font-weight:600">' + fmtDurMs(_eff) + '</span>'
                  + '</span></div>';
         }).join('');
     }
