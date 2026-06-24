@@ -260,8 +260,8 @@
           <div><label>Email</label><input type="email" id="newEmail" required></div>
           <div><label>No. HP</label><input type="text" id="newPhone" placeholder="+62..."></div>
           <div><label>ID Karyawan</label><input type="text" id="newIdKaryawan" placeholder="auto (EMP-XXX) jika kosong"></div>
-          <div><label>Jam Kerja (jam)</label><input type="number" id="newJamKerja" min="1" max="24" value="8"></div>
-          <div><label>Base Harian (Rp)</label><input type="number" id="newBaseHarian" min="0" step="1000" placeholder="150000"></div>
+          <div><label>Jam Kerja (jam)</label><input type="number" id="newJamKerja" min="1" max="24" value="9"></div>
+          <div><label>Base Harian (Rp)</label><input type="number" id="newBaseHarian" min="0" step="1000" value="100000"></div>
           <div><label>Tanggal Join</label><input type="date" id="newTanggalJoin"></div>
           <div><label>Password</label><input type="text" id="newPassword" value="Goodgems2026"></div>
           <div class="form-actions">
@@ -349,6 +349,7 @@
       <details open class="kry-section">
         <summary>Data Pribadi</summary>
         <div><label>Nama</label><input type="text" id="editNama" required></div>
+        <div><label>Nama Panggilan</label><input type="text" id="editNamaPanggilan" placeholder="contoh: Mila"></div>
         <div><label>No. HP</label><input type="text" id="editPhone" inputmode="numeric"></div>
         <div><label>ID Karyawan</label><input type="text" id="editIdKaryawan"></div>
         <div><label>Jabatan</label><input type="text" id="editJabatan" placeholder="contoh: Staff Operasional"></div>
@@ -358,8 +359,8 @@
 
       <details open class="kry-section">
         <summary>Payroll (Gaji Harian, Bayar Bulanan)</summary>
-        <div><label>Base Harian (Rp)</label><input type="number" id="editBaseHarian" min="0" step="1000" placeholder="150000"></div>
-        <div><label>Jam Kerja Standar / hari</label><input type="number" id="editJamKerja" min="1" max="24" value="8"></div>
+        <div><label>Base Harian (Rp)</label><input type="number" id="editBaseHarian" min="0" step="1000" placeholder="100000"></div>
+        <div><label>Jam Kerja Standar / hari</label><input type="number" id="editJamKerja" min="1" max="24" value="9"></div>
         <div><label>Multiplier Lembur</label><input type="number" id="editMultiplierLembur" min="1" max="5" step="0.1" value="1.5" placeholder="1.5"></div>
         <p class="muted" style="font-size:12px;margin:6px 0 0">Total bulanan = base harian × hari hadir + lembur. Setengah hari otomatis 0.5 × base.</p>
       </details>

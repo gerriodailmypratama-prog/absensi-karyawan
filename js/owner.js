@@ -525,15 +525,19 @@ async function loadKaryawanList(){
         const rows = [];
         snap.forEach(d => rows.push({id:d.id, ...d.data()}));
         rows.sort((a,b)=>(a.nama||'').localeCompare(b.nama||''));
-        // === Auto-generate ID Karyawan (GG-####) untuk yang belum punya ===
+        // === Auto-isi default buat yang belum punya: ID (GG-####), jam kerja 9, base 100rb, tanggal join ===
         let _maxKid = 0;
         rows.forEach(r => { const m = /^GG-(\d+)$/i.exec(r.idKaryawan || ''); if (m){ const n = parseInt(m[1],10); if (n > _maxKid) _maxKid = n; } });
         for (const r of rows){
-            if (!r.idKaryawan && !r.nik){
-                _maxKid++;
-                const newId = 'GG-' + String(_maxKid).padStart(4,'0');
-                try { await setDoc(doc(db,'karyawan', r.id), { idKaryawan: newId }, { merge:true }); r.idKaryawan = newId; }
-                catch(e){ console.warn('Auto ID gagal untuk', r.id, e); _maxKid--; }
+            const patch = {};
+            let _idBumped = false;
+            if (!r.idKaryawan && !r.nik){ _maxKid++; patch.idKaryawan = 'GG-' + String(_maxKid).padStart(4,'0'); _idBumped = true; }
+            if (!r.jamKerja)    patch.jamKerja = 9;          // default 9 jam/hari (kecuali owner sudah set)
+            if (!r.baseHarian)  patch.baseHarian = 100000;   // default base 100rb, nempel sampai owner edit
+            if (!r.tanggalJoin) patch.tanggalJoin = r.createdAt || Timestamp.fromDate(new Date()); // tanggal join otomatis
+            if (Object.keys(patch).length){
+                try { await setDoc(doc(db,'karyawan', r.id), patch, { merge:true }); Object.assign(r, patch); }
+                catch(e){ console.warn('Auto-isi default gagal untuk', r.id, e); if (_idBumped) _maxKid--; }
             }
         }
         rows.forEach((x, idx) => {
@@ -541,12 +545,12 @@ async function loadKaryawanList(){
                 ? '<img src="'+x.photoURL+'" alt="foto" style="width:40px;height:40px;border-radius:50%;object-fit:cover">'
                 : '<span class="muted">-</span>';
             const idDisplay = x.idKaryawan || x.nik || '-';
-            const jamKerja = x.jamKerja || 8;
+            const jamKerja = x.jamKerja || 9;
             const tr = document.createElement('tr');
             const tj = x.tanggalJoin ? (x.tanggalJoin.toDate ? x.tanggalJoin.toDate() : new Date(x.tanggalJoin)) : null;
             const tjStr = tj ? tj.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-';
             tr.innerHTML = '<td>'+(idx+1)+'</td>'+
-              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#d97757;text-decoration:underline;">'+(x.nama||'-')+'</span>'+((!x.baseHarian)?' <span class="tag warn" title="Karyawan baru / gaji belum diatur. Klik Edit untuk atur gaji & jam kerja.">baru</span>':'')+'</td>'+
+              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#d97757;text-decoration:underline;">'+(x.nama||'-')+'</span>'+(x.namaPanggilan?' <span class="muted" style="font-size:12px">('+x.namaPanggilan+')</span>':'')+((!x.updatedAt)?' <span class="tag warn" title="Karyawan baru / belum direview owner. Klik Edit untuk cek gaji & jam kerja.">baru</span>':'')+'</td>'+
               '<td>'+(x.email||'-')+'</td>'+
               '<td>'+(x.phone||'-')+'</td>'+
               '<td>'+idDisplay+'</td>'+
@@ -575,7 +579,7 @@ $('formAddUser').onsubmit = async (e) => {
     const email = $('newEmail').value.trim();
     const phone = $('newPhone').value.trim();
     const idKaryawanRaw = $('newIdKaryawan').value.trim();
-    const jamKerja = parseInt($('newJamKerja').value, 10) || 8;
+    const jamKerja = parseInt($('newJamKerja').value, 10) || 9;
   const baseHarian = parseInt(($('newBaseHarian')&&$('newBaseHarian').value)||'0', 10) || 0;
     const password = $('newPassword').value;
         const tanggalJoinVal = $('newTanggalJoin') ? $('newTanggalJoin').value : '';
@@ -632,9 +636,10 @@ async function openEditKaryawan(uid){
         const d = snap.data();
         $('editUid').value = uid;
         $('editNama').value = d.nama || '';
+        if ($('editNamaPanggilan')) $('editNamaPanggilan').value = d.namaPanggilan || '';
         $('editPhone').value = d.phone || '';
         $('editIdKaryawan').value = d.idKaryawan || d.nik || '';
-        $('editJamKerja').value = d.jamKerja || 8;
+        $('editJamKerja').value = d.jamKerja || 9;
         if ($('editTanggalJoin')){
             const tj = d.tanggalJoin ? (d.tanggalJoin.toDate ? d.tanggalJoin.toDate() : new Date(d.tanggalJoin)) : null;
             $('editTanggalJoin').value = tj ? tj.toISOString().substring(0,10) : '';
@@ -688,9 +693,10 @@ $('formEditKaryawan').onsubmit = async (e) => {
     e.preventDefault();
     const uid = $('editUid').value;
     const nama = $('editNama').value.trim();
+    const namaPanggilan = $('editNamaPanggilan') ? $('editNamaPanggilan').value.trim() : '';
     const phone = $('editPhone').value.trim();
     const idKaryawan = $('editIdKaryawan').value.trim();
-    const jamKerja = parseInt($('editJamKerja').value, 10) || 8;
+    const jamKerja = parseInt($('editJamKerja').value, 10) || 9;
     const jabatan = $('editJabatan') ? $('editJabatan').value.trim() : '';
     const statusKaryawan = $('editStatusKaryawan') ? $('editStatusKaryawan').value : '';
     const baseHarian = $('editBaseHarian') ? (parseInt($('editBaseHarian').value, 10) || 0) : 0;
@@ -706,7 +712,7 @@ $('formEditKaryawan').onsubmit = async (e) => {
         const tanggalJoinVal = $('editTanggalJoin') ? $('editTanggalJoin').value : '';
         const tjPayload = tanggalJoinVal ? Timestamp.fromDate(new Date(tanggalJoinVal)) : null;
         const payload = {
-            nama, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload,
+            nama, namaPanggilan, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload,
             jabatan, statusKaryawan, baseHarian, multiplierLembur, gpsExempt,
             namaBank, atasNamaRek, nomorRekening,
             updatedAt: serverTimestamp()
@@ -1603,7 +1609,7 @@ async function loadRekap(){
         waktu: x.ts?.toDate ? x.ts.toDate() : new Date(),
         inRadius: x.inRadius,
         terlambat: !!x.terlambat,
-        jamKerja: x.jamKerja || 8
+        jamKerja: x.jamKerja || 9
       });
     });
     const byUserDay = {};
@@ -2003,7 +2009,7 @@ const rows = [];
 let totalBudget = 0, totalHari = 0, totalLemburJam = 0, totalJamKerjaAll = 0;
 for (const k of karyMap.values()){
 const baseHarian = parseInt(k.baseHarian, 10) || 0;
-const jamKerja = parseInt(k.jamKerja, 10) || 8;
+const jamKerja = parseInt(k.jamKerja, 10) || 9;
 const multiplierLembur = parseFloat(k.multiplierLembur) || 1;
 const netJamKerja = Math.max(1, jamKerja - 1);
 const ratePerJam = netJamKerja > 0 ? (baseHarian / netJamKerja) : 0;

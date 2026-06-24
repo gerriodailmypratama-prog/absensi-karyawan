@@ -65,7 +65,7 @@ function updateClockInLock(){
   }
 } // semua event sesi shift aktif, ASC by ts
 let isSubmitting = false; // global lock untuk mencegah double-submit (race condition)
-let userProfile = { nama:'', jamKerja:8, foto:'' };
+let userProfile = { nama:'', namaPanggilan:'', jamKerja:9, foto:'' };
 
 function distanceMeters(lat1, lng1, lat2, lng2){
   const R = 6371000;
@@ -87,7 +87,7 @@ function greetingByHour(h){
 function updateGreeting(){
   const h = new Date().getHours();
   const g = greetingByHour(h);
-  const nama = userProfile.nama || (currentUser?.email||'').split('@')[0] || '';
+  const nama = userProfile.namaPanggilan || userProfile.nama || (currentUser?.email||'').split('@')[0] || '';
   $('greetMsg').textContent = g + (nama ? ', ' + nama : '');
   $('greetSub').textContent = 'selamat beraktivitas';
 }
@@ -163,7 +163,7 @@ function totalNonWorkMs(){
 // Jam efektif: jamKerja dikurangi 1 jam HANYA jika total Istirahat/Pause hari itu >= 60 menit.
 // Kalau skip total / istirahat < 60 menit, jam efektif = jamKerja penuh. Rate gaji TIDAK diubah.
 var BREAK_MIN_FOR_CREDIT_MS = 60 * 60 * 1000;
-function rawJamKerja(){ return parseFloat(userProfile && userProfile.jamKerja) || 8; }
+function rawJamKerja(){ return parseFloat(userProfile && userProfile.jamKerja) || 9; }
 function effectiveWorkHours(){
   var jk = rawJamKerja();
   // Target NET kerja = kuota jam kerja dikurangi 1 jam hak istirahat (kontrak 10->9, 9->8).
@@ -308,13 +308,14 @@ function fmtTime(d){ return d.toLocaleTimeString('id-ID',{hour12:false}); }
 
 async function loadUserProfile(uid){
   try{
-    let nama='', jamKerja=8, foto='', gpsExempt=false;
+    let nama='', namaPanggilan='', jamKerja=9, foto='', gpsExempt=false;
     try{
       const snap = await getDoc(doc(db, 'karyawan', uid));
       if (snap.exists()){
         const u = snap.data();
         nama = u.nama || '';
-        jamKerja = (u.jamKerja!=null) ? parseFloat(u.jamKerja) : 8;
+        namaPanggilan = u.namaPanggilan || '';
+        jamKerja = (u.jamKerja!=null) ? parseFloat(u.jamKerja) : 9;
         gpsExempt = !!u.gpsExempt;
       }
     }catch(e){ console.warn('karyawan profile load err:', e); }
@@ -326,7 +327,7 @@ async function loadUserProfile(uid){
         if (!nama && u2.nama) nama = u2.nama;
       }
     }catch(e){ console.warn('profil load err:', e); }
-    userProfile = { nama, jamKerja, foto, gpsExempt };
+    userProfile = { nama, namaPanggilan, jamKerja, foto, gpsExempt };
     // (foto profil opsional) auto-popup wajib upload dihapus
     if (foto){
       $('avatarImg').src = foto;

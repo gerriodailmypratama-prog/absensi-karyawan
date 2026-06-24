@@ -195,7 +195,8 @@ if (btnRegister) {
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
       try { await updateProfile(cred.user, { displayName: nama }); } catch (_) {}
       await setDoc(doc(db, 'karyawan', cred.user.uid), {
-        nama, email, selfRegistered: true, createdAt: serverTimestamp()
+        nama, email, selfRegistered: true,
+        createdAt: serverTimestamp(), tanggalJoin: serverTimestamp()
       }, { merge: true });
       window.__registering = false;
       redirect(cred.user);
