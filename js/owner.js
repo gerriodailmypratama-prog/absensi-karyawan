@@ -2283,10 +2283,10 @@ $('prEmpty').classList.add('hidden');
     if (!_warn && _tbl && _tbl.parentElement){
       _warn = document.createElement('div');
       _warn.id = 'prLupaWarn';
-      _warn.style.cssText = 'margin:10px 0;padding:10px 14px;border-radius:10px;background:#3a2f12;color:#fcd34d;border:1px solid #a16207;font-size:13px;line-height:1.5;';
+      _warn.style.cssText = 'margin:10px 0;padding:10px 14px;border-radius:10px;background:#3a2f12;color:#fcd34d;border:1px solid #a16207;font-size:13px;line-height:1.5;cursor:pointer;';
       _tbl.parentElement.insertAdjacentElement('beforebegin', _warn);
     }
-    if (_warn){ _warn.innerHTML = '⚠ Ada <b>'+_totalLupa+' hari “Lupa Clock Out”</b> di '+_orangLupa+' karyawan — hari itu dibayar penuh otomatis. Cek manual dulu sebelum transfer gaji.'; _warn.style.display=''; }
+    if (_warn){ _warn.innerHTML = '⚠ Ada <b>'+_totalLupa+' hari “Lupa Clock Out”</b> di '+_orangLupa+' karyawan — hari itu dibayar penuh otomatis. Cek manual dulu sebelum transfer gaji. <u>Klik untuk lihat detail &amp; edit ▸</u>'; _warn.onclick = openLupaModal; _warn.style.display=''; }
   } else if (_warn){ _warn.style.display = 'none'; }
 })();
 for (const r of __payrollData.rows){
@@ -2305,6 +2305,57 @@ tbody.appendChild(tr);
 }
 document.querySelectorAll('.pr-detail-btn').forEach(b => { b.onclick = () => showPayrollDetail(b.dataset.uid); });
 document.querySelectorAll('.pr-paid-btn').forEach(b => { b.onclick = () => togglePayStatus(b.dataset.uid); });
+}
+
+// Popup rangkuman hari "Lupa Clock Out" (dipanggil saat banner peringatan di Payroll diklik).
+function openLupaModal(){
+    if (!__payrollData || !__payrollData.rows) return;
+    const items = [];
+    for (const r of __payrollData.rows){
+        (r.dailyDetails||[]).forEach(function(d){
+            if (d.kategori === 'tidak-clockout'){
+                items.push({ uid:r.uid, nama:r.nama||'-', idKaryawan:r.idKaryawan||'', date:d.date, jamMasuk:d.jamMasuk, kontribusi:d.kontribusi });
+            }
+        });
+    }
+    items.sort(function(a,b){ if (a.date!==b.date) return a.date<b.date?-1:1; return (a.nama||'').localeCompare(b.nama||''); });
+    const sub = document.getElementById('lupaSub');
+    if (sub) sub.textContent = items.length + ' hari di ' + (new Set(items.map(function(i){return i.uid;})).size) + ' karyawan — Clock In tapi tidak ada Clock Out, jadi dibayar penuh otomatis.';
+    const tb = document.getElementById('lupaTbody');
+    if (tb){
+        tb.innerHTML = items.map(function(it){
+            var tgl = it.date; try { tgl = new Date(it.date+'T00:00:00').toLocaleDateString('id-ID',{weekday:'short',day:'2-digit',month:'short',year:'numeric'}); } catch(e){}
+            return '<tr>'
+                 + '<td><b>'+it.nama+'</b><br><small class="muted">'+it.idKaryawan+'</small></td>'
+                 + '<td>'+tgl+'</td>'
+                 + '<td>'+(it.jamMasuk||'--')+'</td>'
+                 + '<td class="num">'+prFormatRp(Math.round(it.kontribusi||0))+'</td>'
+                 + '<td><button class="btn btn-sm btn-secondary lupa-edit-btn" data-date="'+it.date+'">Cek &amp; Edit</button></td>'
+                 + '</tr>';
+        }).join('');
+        tb.querySelectorAll('.lupa-edit-btn').forEach(function(b){ b.onclick = function(){ gotoKehadiranDate(b.dataset.date); }; });
+    }
+    const modal = document.getElementById('lupaModal');
+    if (modal){
+        modal.classList.remove('hidden');
+        modal.onclick = function(e){ if (e.target === modal) modal.classList.add('hidden'); };
+    }
+    const close = document.getElementById('btnLupaClose');
+    if (close) close.onclick = function(){ document.getElementById('lupaModal').classList.add('hidden'); };
+}
+
+// Pindah ke Kehadiran Harian pada tanggal tertentu (untuk koreksi jam pulang yang lupa di-clock-out).
+function gotoKehadiranDate(dateStr){
+    try {
+        const p = (dateStr||'').split('-');
+        if (p.length === 3){
+            currentKhDate = new Date(Number(p[0]), Number(p[1])-1, Number(p[2]));
+            const inp = document.getElementById('khDate'); if (inp) inp.value = dateToInputStr(currentKhDate);
+        }
+    } catch(e){}
+    const m = document.getElementById('lupaModal'); if (m) m.classList.add('hidden');
+    const link = document.querySelector('.nav-link[data-page="kehadiran"]');
+    if (link) link.click(); else { try { loadKehadiranMatrix(); } catch(e){} }
 }
 
 function showPayrollDetail(uid){
