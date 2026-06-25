@@ -2293,7 +2293,7 @@ for (const r of __payrollData.rows){
 const tr = document.createElement('tr');
 tr.innerHTML = '<td><b>' + r.nama + '</b><br><small class="muted">' + r.idKaryawan + '</small>' + ((r.hariLupaCO||0) > 0 ? '<br><small style="color:#fcd34d">⚠ ' + r.hariLupaCO + ' hr lupa clock-out</small>' : '') + '</td>' +
 '<td class="num">' + prFormatRp(r.baseHarian) + '</td>' +
-'<td class="num">' + r.hariHadir + (r.hariParsial ? ' <small class="muted">(+' + r.hariParsial + ' parsial)</small>' : '') + '</td>' +
+'<td class="num">' + r.hariHadir + (r.hariParsial ? ' <small class="muted" title="Masuk tapi kerja kurang dari 75% jam standar - dibayar proporsional, bukan sehari penuh">(+' + r.hariParsial + ' parsial)</small>' : '') + '</td>' +
 '<td class="num">' + r.totalJamKerja.toFixed(1) + ' jam</td>' +
 '<td class="num">' + r.totalJamLembur.toFixed(1) + '</td>' +
 '<td class="num">' + prFormatRp(r.upahPokok) + '</td>' +
