@@ -976,8 +976,29 @@ async function renderHadirFloating(rows){
     function completedBreakMsToday(uid){ return pairMsToday(uid, 'break_in', 'break_out'); }
     // Istirahat + pause selesai (yang dipotong dari kerja efektif), dalam ms
     function restMsToday(uid){ return pairMsToday(uid,'break_in','break_out') + pairMsToday(uid,'pause_in','pause_out'); }
-    // Total jam di-clock (clock + overtime), SEBELUM potong istirahat, dalam ms
-    function grossWorkMsToday(uid){ return pairMsToday(uid,'clock_in','clock_out') + pairMsToday(uid,'overtime_in','overtime_out'); }
+    // Jam keluar terakhir hari ini: utamakan clock_out, fallback ke overtime_out (selaras Kehadiran Harian).
+    function lastOutMsToday(uid){
+        const arr = byUid.get(uid) || [];
+        let co = 0, oo = 0;
+        for (const r of arr){
+            const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0;
+            if (ms < _todayMsHF) continue;
+            if (r.tipe === 'clock_out' && ms > co) co = ms;
+            else if (r.tipe === 'overtime_out' && ms > oo) oo = ms;
+        }
+        return co || oo;
+    }
+    // Total kerja = rentang jam masuk -> jam keluar (span), SEBELUM potong istirahat, dalam ms.
+    // Pakai span (bukan jumlah pasangan) biar selaras "Total Kerja" Kehadiran Harian, termasuk yang
+    // keluarnya pakai Selesai Lembur (overtime_out) tanpa clock_out.
+    function grossWorkMsToday(uid){
+        const ci = firstClockInMsToday(uid);
+        const out = lastOutMsToday(uid);
+        if (!ci || !out) return 0;
+        let span = out - ci;
+        if (span < 0) span += 24*60*60*1000;
+        return span;
+    }
     // Clock-in PERTAMA hari ini (mulai kerja), dalam ms
     function firstClockInMsToday(uid){
         const arr = byUid.get(uid) || [];
