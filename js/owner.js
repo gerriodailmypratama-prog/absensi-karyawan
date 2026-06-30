@@ -2326,7 +2326,7 @@ tr.innerHTML = '<td><b>' + r.nama + '</b><br><small class="muted">' + r.idKaryaw
 '<td class="num">' + prFormatRp(r.upahPokok) + '</td>' +
 '<td class="num">' + prFormatRp(r.upahLembur) + '</td>' +
 '<td class="num">' + prFormatRp(r.total) + '</td>' +
-'<td class="num"><input type="number" class="pr-potongan" data-uid="' + r.uid + '" value="' + (r.potongan||0) + '" min="0" step="1000" title="Potongan / kasbon bulan ini" style="width:96px;padding:4px 6px;text-align:right;background:#26241f;color:#e6e3d8;border:1px solid #4a463f;border-radius:6px"></td>' +
+'<td class="num pr-pot-cell" data-uid="' + r.uid + '"><span class="pr-pot-val">' + (r.potongan ? prFormatRp(r.potongan) : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-pot-edit" data-uid="' + r.uid + '" style="color:#d97757">Edit</button></td>' +
 '<td class="num"><b class="pr-totalbayar" data-uid="' + r.uid + '" style="color:#34d399">' + prFormatRp(r.totalBayar!=null ? r.totalBayar : r.total) + '</b></td>' +
 __payStatusCell(r.uid) +
 '<td><button class="btn btn-sm btn-secondary pr-detail-btn" data-uid="' + r.uid + '">Detail</button><button class="btn btn-sm btn-success pr-slip-btn" data-uid="' + r.uid + '">Slip Gaji</button></td>';
@@ -2334,32 +2334,55 @@ tbody.appendChild(tr);
 }
 document.querySelectorAll('.pr-detail-btn').forEach(b => { b.onclick = () => showPayrollDetail(b.dataset.uid); });
 document.querySelectorAll('.pr-paid-btn').forEach(b => { b.onclick = () => togglePayStatus(b.dataset.uid); });
-document.querySelectorAll('.pr-potongan').forEach(inp => { inp.onchange = () => savePotongan(inp); });
+document.querySelectorAll('.pr-pot-edit').forEach(b => { b.onclick = () => startEditPotongan(b.dataset.uid); });
 }
 
-// Simpan potongan/kasbon bulan ini ke dokumen karyawan (map potonganBulan[yyyymm]). Display-only buat payroll.
-async function savePotongan(inp){
+// Potongan/kasbon: tampil sebagai TEKS (font sama dgn tabel); klik "Edit" baru muncul input + Simpan/Batal,
+// biar nilainya tidak keubah ga sengaja.
+function renderPotonganCell(uid){
+  const cell = document.querySelector('.pr-pot-cell[data-uid="' + uid + '"]');
+  if (!cell) return;
+  const row = __payrollData && __payrollData.rows.find(x => x.uid === uid);
+  const pot = row ? (row.potongan || 0) : 0;
+  cell.innerHTML = '<span class="pr-pot-val">' + (pot ? prFormatRp(pot) : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-pot-edit" data-uid="' + uid + '" style="color:#d97757">Edit</button>';
+  const eb = cell.querySelector('.pr-pot-edit'); if (eb) eb.onclick = () => startEditPotongan(uid);
+}
+function startEditPotongan(uid){
+  const cell = document.querySelector('.pr-pot-cell[data-uid="' + uid + '"]');
+  if (!cell) return;
+  const row = __payrollData && __payrollData.rows.find(x => x.uid === uid);
+  const cur = row ? (row.potongan || 0) : 0;
+  cell.innerHTML = '<input type="number" class="pr-pot-input" min="0" step="1000" value="' + cur + '" style="width:90px;font:inherit;text-align:right;padding:3px 5px;background:#26241f;color:#e6e3d8;border:1px solid #d97757;border-radius:6px"> '
+    + '<button class="btn-link pr-pot-save" style="color:#34d399">Simpan</button> '
+    + '<button class="btn-link pr-pot-cancel" style="color:#9ca3af">Batal</button>';
+  const inp = cell.querySelector('.pr-pot-input');
+  if (inp){ inp.focus(); inp.select(); inp.onkeydown = (e) => { if (e.key === 'Enter') savePotongan(uid); else if (e.key === 'Escape') renderPotonganCell(uid); }; }
+  cell.querySelector('.pr-pot-save').onclick = () => savePotongan(uid);
+  cell.querySelector('.pr-pot-cancel').onclick = () => renderPotonganCell(uid);
+}
+// Simpan potongan bulan ini ke dokumen karyawan (potonganBulan[yyyymm]) via setDoc merge.
+async function savePotongan(uid){
   if (!__payrollData) return;
-  const uid = inp.dataset.uid;
   const yyyymm = __payrollData.yyyymm;
-  const amount = Math.max(0, parseInt(inp.value, 10) || 0);
   const row = __payrollData.rows.find(x => x.uid === uid);
   if (!row) return;
-  inp.disabled = true;
+  const cell = document.querySelector('.pr-pot-cell[data-uid="' + uid + '"]');
+  const inp = cell ? cell.querySelector('.pr-pot-input') : null;
+  const amount = Math.max(0, parseInt(inp ? inp.value : row.potongan, 10) || 0);
+  const saveBtn = cell ? cell.querySelector('.pr-pot-save') : null;
+  if (saveBtn){ saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan...'; }
   try {
     await setDoc(doc(db, 'karyawan', uid), { potonganBulan: { [yyyymm]: amount } }, { merge: true });
     row.potongan = amount;
     row.totalBayar = row.total - amount;
-    inp.value = amount;
-    const cell = document.querySelector('.pr-totalbayar[data-uid="' + uid + '"]');
-    if (cell) cell.textContent = prFormatRp(row.totalBayar);
+    const cb = document.querySelector('.pr-totalbayar[data-uid="' + uid + '"]');
+    if (cb) cb.textContent = prFormatRp(row.totalBayar);
     const budget = __payrollData.rows.reduce((s, x) => s + (x.totalBayar != null ? x.totalBayar : x.total), 0);
     const bEl = document.getElementById('prTotalBudget'); if (bEl) bEl.textContent = prFormatRp(budget);
+    renderPotonganCell(uid);
   } catch (e) {
     alert('Gagal simpan potongan: ' + (e.message || 'unknown'));
-    inp.value = row.potongan || 0;
-  } finally {
-    inp.disabled = false;
+    if (saveBtn){ saveBtn.disabled = false; saveBtn.textContent = 'Simpan'; }
   }
 }
 
