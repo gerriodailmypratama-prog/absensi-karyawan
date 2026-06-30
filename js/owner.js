@@ -2084,7 +2084,7 @@ if (!yyyymm){ alert('Pilih bulan dulu.'); return; }
 const range = prMonthRange(yyyymm);
 const start = range.start, end = range.end, label = range.label;
 const tbody = document.querySelector('#tblPayroll tbody');
-if (tbody) tbody.innerHTML = '<tr><td colspan="10" class="muted center">Menghitung...</td></tr>';
+if (tbody) tbody.innerHTML = '<tr><td colspan="12" class="muted center">Menghitung...</td></tr>';
 $('prEmpty').classList.add('hidden');
 const karyMap = new Map();
 const karySnap = await getDocs(collection(db, 'karyawan'));
@@ -2224,6 +2224,8 @@ kontribusi: kontribusi
 const upahPokok = totalKontribusi;
 const upahLembur = totalJamLembur * ratePerJam * multiplierLembur;
 const total = upahPokok + upahLembur;
+const potongan = (k.potonganBulan && k.potonganBulan[yyyymm]) ? (Number(k.potonganBulan[yyyymm]) || 0) : 0;
+const totalBayar = total - potongan;
 rows.push({
 uid: k.uid, nama: k.nama || '-', idKaryawan: k.idKaryawan || '-',
 baseHarian: baseHarian, jamKerja: jamKerja, multiplierLembur: multiplierLembur,
@@ -2231,10 +2233,11 @@ ratePerJam: ratePerJam,
 hariHadir: hariHadir, hariParsial: hariParsial, hariLupaCO: hariLupaCO,
 totalJamKerja: totalJamKerja, totalJamLembur: totalJamLembur,
 upahPokok: upahPokok, upahLembur: upahLembur, total: total,
+potongan: potongan, totalBayar: totalBayar,
 namaBank: k.namaBank || '', atasNamaRek: k.atasNamaRek || '', nomorRekening: k.nomorRekening || '',
 dailyDetails: dailyDetails
 });
-totalBudget += total;
+totalBudget += totalBayar;
 totalHari += hariHadir + hariParsial;
 totalLemburJam += totalJamLembur;
 totalJamKerjaAll += totalJamKerja;
@@ -2322,13 +2325,42 @@ tr.innerHTML = '<td><b>' + r.nama + '</b><br><small class="muted">' + r.idKaryaw
 '<td class="num">' + r.totalJamLembur.toFixed(1) + '</td>' +
 '<td class="num">' + prFormatRp(r.upahPokok) + '</td>' +
 '<td class="num">' + prFormatRp(r.upahLembur) + '</td>' +
-'<td class="num"><b>' + prFormatRp(r.total) + '</b></td>' +
+'<td class="num">' + prFormatRp(r.total) + '</td>' +
+'<td class="num"><input type="number" class="pr-potongan" data-uid="' + r.uid + '" value="' + (r.potongan||0) + '" min="0" step="1000" title="Potongan / kasbon bulan ini" style="width:96px;padding:4px 6px;text-align:right;background:#26241f;color:#e6e3d8;border:1px solid #4a463f;border-radius:6px"></td>' +
+'<td class="num"><b class="pr-totalbayar" data-uid="' + r.uid + '" style="color:#34d399">' + prFormatRp(r.totalBayar!=null ? r.totalBayar : r.total) + '</b></td>' +
 __payStatusCell(r.uid) +
 '<td><button class="btn btn-sm btn-secondary pr-detail-btn" data-uid="' + r.uid + '">Detail</button><button class="btn btn-sm btn-success pr-slip-btn" data-uid="' + r.uid + '">Slip Gaji</button></td>';
 tbody.appendChild(tr);
 }
 document.querySelectorAll('.pr-detail-btn').forEach(b => { b.onclick = () => showPayrollDetail(b.dataset.uid); });
 document.querySelectorAll('.pr-paid-btn').forEach(b => { b.onclick = () => togglePayStatus(b.dataset.uid); });
+document.querySelectorAll('.pr-potongan').forEach(inp => { inp.onchange = () => savePotongan(inp); });
+}
+
+// Simpan potongan/kasbon bulan ini ke dokumen karyawan (map potonganBulan[yyyymm]). Display-only buat payroll.
+async function savePotongan(inp){
+  if (!__payrollData) return;
+  const uid = inp.dataset.uid;
+  const yyyymm = __payrollData.yyyymm;
+  const amount = Math.max(0, parseInt(inp.value, 10) || 0);
+  const row = __payrollData.rows.find(x => x.uid === uid);
+  if (!row) return;
+  inp.disabled = true;
+  try {
+    await setDoc(doc(db, 'karyawan', uid), { potonganBulan: { [yyyymm]: amount } }, { merge: true });
+    row.potongan = amount;
+    row.totalBayar = row.total - amount;
+    inp.value = amount;
+    const cell = document.querySelector('.pr-totalbayar[data-uid="' + uid + '"]');
+    if (cell) cell.textContent = prFormatRp(row.totalBayar);
+    const budget = __payrollData.rows.reduce((s, x) => s + (x.totalBayar != null ? x.totalBayar : x.total), 0);
+    const bEl = document.getElementById('prTotalBudget'); if (bEl) bEl.textContent = prFormatRp(budget);
+  } catch (e) {
+    alert('Gagal simpan potongan: ' + (e.message || 'unknown'));
+    inp.value = row.potongan || 0;
+  } finally {
+    inp.disabled = false;
+  }
 }
 
 // Popup rangkuman hari "Lupa Clock Out" (dipanggil saat banner peringatan di Payroll diklik).
@@ -2429,13 +2461,13 @@ $('payrollDetailModal').classList.remove('hidden');
 
 function exportPayrollCSV(){
 if (!__payrollData || !__payrollData.rows.length){ alert('Belum ada data. Hitung dulu.'); return; }
-const headers = ['Nama','ID Karyawan','Base Harian','Hari Hadir','Hari Parsial','Total Jam Kerja','Jam Lembur','Upah Pokok','Upah Lembur','Total','Bank','Atas Nama','Nomor Rekening'];
+const headers = ['Nama','ID Karyawan','Base Harian','Hari Hadir','Hari Parsial','Total Jam Kerja','Jam Lembur','Upah Pokok','Upah Lembur','Total','Potongan','Total Bayar','Bank','Atas Nama','Nomor Rekening'];
 const lines = [headers.join(',')];
 for (const r of __payrollData.rows){
 const cells = [
 r.nama, r.idKaryawan, r.baseHarian, r.hariHadir, r.hariParsial,
 r.totalJamKerja.toFixed(2), r.totalJamLembur.toFixed(2),
-Math.round(r.upahPokok), Math.round(r.upahLembur), Math.round(r.total),
+Math.round(r.upahPokok), Math.round(r.upahLembur), Math.round(r.total), Math.round(r.potongan||0), Math.round(r.totalBayar!=null?r.totalBayar:r.total),
 r.namaBank, r.atasNamaRek, r.nomorRekening
 ].map(v => '"' + String(v).replace(/"/g, '""') + '"');
 lines.push(cells.join(','));
@@ -2615,7 +2647,8 @@ function downloadSlipGaji(uid) {
     '<table class="calc">' +
     '<tr><td>Upah Pokok <span class="muted">(akumulasi kontribusi harian)</span></td><td class="r">' + __slipFmtRp(r.upahPokok) + '</td></tr>' +
     '<tr><td>Upah Lembur <span class="muted">(' + __slipJam(jamLembur) + ' &times; ' + __slipFmtRp(rateJam) + ')</span></td><td class="r">' + __slipFmtRp(r.upahLembur) + '</td></tr>' +
-    '<tr class="tot"><td>Total Diterima</td><td class="r">' + __slipFmtRp(r.total) + '</td></tr>' +
+    ((r.potongan && r.potongan > 0) ? '<tr><td>Potongan / Kasbon</td><td class="r">- ' + __slipFmtRp(r.potongan) + '</td></tr>' : '') +
+    '<tr class="tot"><td>Total Diterima</td><td class="r">' + __slipFmtRp(r.totalBayar != null ? r.totalBayar : r.total) + '</td></tr>' +
     '</table>' +
 
     '<div class="foot">Slip ini dibuat otomatis dari sistem absensi GoodGems pada ' + new Date().toLocaleString('id-ID') + '. Perhitungan transparan berdasarkan catatan kehadiran. Bukan bukti pembayaran resmi.</div>' +
