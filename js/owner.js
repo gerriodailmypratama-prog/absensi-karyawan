@@ -2388,8 +2388,10 @@ $('prDetailSub').textContent = 'Bulan: ' + __payrollData.label + ' \u2014 Total 
 const tb = document.querySelector('#tblPayrollDetail tbody');
 tb.innerHTML = '';
 if (!r.dailyDetails.length){
-tb.innerHTML = '<tr><td colspan="6" class="muted center">Tidak ada catatan kehadiran bulan ini.</td></tr>';
+tb.innerHTML = '<tr><td colspan="8" class="muted center">Tidak ada catatan kehadiran bulan ini.</td></tr>';
 } else {
+const _rate = r.ratePerJam || 0;
+const _mult = r.multiplierLembur || 1;
 for (const d of r.dailyDetails){
 const tr = document.createElement('tr');
 const kategoriBadge = d.kategori === 'hadir' ? '<span style="color:#16a34a">\u2713 Hadir</span>'
@@ -2398,9 +2400,26 @@ const kategoriBadge = d.kategori === 'hadir' ? '<span style="color:#16a34a">\u27
 : d.kategori === 'tidak-clockout' ? '<span style="color:#dc2626">Belum Clock Out</span>'
 : '<span class="muted">' + d.kategori + '</span>';
 const jamLabel = d.durJam + ' jam' + (parseFloat(d.effJam) < parseFloat(d.durJam) ? ' <small class="muted">(eff ' + d.effJam + ')</small>' : '');
-tr.innerHTML = '<td>' + d.date + '</td><td>' + d.jamMasuk + '</td><td>' + d.jamKeluar + '</td><td>' + jamLabel + '</td><td>' + kategoriBadge + '</td><td class="num">' + prFormatRp(d.kontribusi) + '</td>';
+const _lemJam = parseFloat(d.lemburJam) || 0;
+const _lemRp = _lemJam * _rate * _mult;
+const _lemJamCell = _lemJam > 0 ? (_lemJam.toFixed(2) + ' jam') : '<span class="muted">-</span>';
+const _lemRpCell = _lemJam > 0 ? prFormatRp(_lemRp) : '<span class="muted">-</span>';
+tr.innerHTML = '<td>' + d.date + '</td><td>' + d.jamMasuk + '</td><td>' + d.jamKeluar + '</td><td>' + jamLabel + '</td><td>' + kategoriBadge + '</td><td class="num">' + prFormatRp(d.kontribusi) + '</td><td class="num">' + _lemJamCell + '</td><td class="num">' + _lemRpCell + '</td>';
 tb.appendChild(tr);
 }
+// Baris TOTAL (subtotal per kolom) + TOTAL AKHIR (pokok + lembur)
+const trT = document.createElement('tr');
+trT.style.cssText = 'border-top:2px solid #a16207;font-weight:700';
+trT.innerHTML = '<td colspan="5" style="text-align:right">TOTAL</td>'
++ '<td class="num">' + prFormatRp(r.upahPokok) + '</td>'
++ '<td class="num">' + (r.totalJamLembur||0).toFixed(2) + ' jam</td>'
++ '<td class="num">' + prFormatRp(r.upahLembur) + '</td>';
+tb.appendChild(trT);
+const trG = document.createElement('tr');
+trG.style.cssText = 'font-weight:800';
+trG.innerHTML = '<td colspan="7" style="text-align:right">TOTAL AKHIR (Pokok + Lembur)</td>'
++ '<td class="num" style="color:#34d399;font-size:14px">' + prFormatRp(r.total) + '</td>';
+tb.appendChild(trG);
 }
 $('payrollDetailModal').classList.remove('hidden');
 }
