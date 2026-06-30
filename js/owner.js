@@ -2204,7 +2204,10 @@ kategori = 'tidak-clockout'; var __cut = ci.ts.getTime() + jamKerja*3600000; var
 totalJamKerja += effJamFinal;
 totalKontribusi += kontribusi;
 let lemburJam = 0;
-const __ovr = (ci && ci.lemburOverrideMin !== undefined && ci.lemburOverrideMin !== null && ci.lemburOverrideMin !== '') ? (Number(ci.lemburOverrideMin)/60) : null;
+// Lembur manual (lemburOverrideMin) disimpan di salah satu record hari itu (biasanya Clock In).
+// Baca dari record MANA SAJA yang punya nilainya, biar tidak ke-skip kalau ada >1 Clock In.
+const _ovrEv = events.find(e => e.lemburOverrideMin !== undefined && e.lemburOverrideMin !== null && e.lemburOverrideMin !== '');
+const __ovr = _ovrEv ? (Number(_ovrEv.lemburOverrideMin)/60) : null;
 if (__ovr !== null){ lemburJam = Math.max(0, __ovr); totalJamLembur += lemburJam; }
 else if (oo){ const __netH = Math.max(0, jamKerja - 1); lemburJam = Math.max(0, durJam - __netH); totalJamLembur += lemburJam; }
 dailyDetails.push({
