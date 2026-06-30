@@ -324,13 +324,13 @@
 </section>
 
 <div id="payrollDetailModal" class="modal hidden">
-  <div class="modal-content card" style="max-width:640px; width:90%">
+  <div class="modal-content card" style="max-width:640px; width:90%; max-height:90vh; display:flex; flex-direction:column">
     <div class="modal-head">
       <h3 id="prDetailTitle">Detail Payroll</h3>
       <button class="modal-close" id="btnPrDetailClose">&times;</button>
     </div>
     <p class="muted small" id="prDetailSub"></p>
-    <div class="table-wrap">
+    <div class="table-wrap" style="overflow-y:auto; min-height:0; flex:1">
       <table id="tblPayrollDetail" class="table table-sm">
         <thead><tr><th>Tanggal</th><th>Masuk</th><th>Keluar</th><th>Total Kerja</th><th>Kategori</th><th>Kontribusi</th></tr></thead>
         <tbody></tbody>
