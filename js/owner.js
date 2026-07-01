@@ -2428,13 +2428,17 @@ document.querySelectorAll('.pr-paid-btn').forEach(b => { b.onclick = () => toggl
 document.querySelectorAll('.pr-pot-edit').forEach(b => { b.onclick = () => startEditPotongan(b.dataset.uid); });
 document.querySelectorAll('.pr-bayar-btn').forEach(b => { b.onclick = () => openBayarModal(b.dataset.uid); });
 // Ringkasan status bayar (update tiap render, termasuk setelah tandai lunas).
-let _sudahBayar = 0, _belumBayar = 0;
+let _sudahBayar = 0, _belumBayar = 0, _grossTot = 0, _potTot = 0;
 for (const _r of __payrollData.rows){
   const _tb = _r.totalBayar != null ? _r.totalBayar : _r.total;
   if (window.__payStatus[_r.uid] === 'paid') _sudahBayar += _tb; else _belumBayar += _tb;
+  _grossTot += (_r.total || 0);
+  _potTot += (_r.potongan || 0);
 }
 const _seEl = document.getElementById('prSudahBayar'); if (_seEl) _seEl.textContent = prFormatRp(_sudahBayar);
 const _beEl = document.getElementById('prBelumBayar'); if (_beEl) _beEl.textContent = prFormatRp(_belumBayar);
+const _grEl = document.getElementById('prTotalGross'); if (_grEl) _grEl.textContent = prFormatRp(_grossTot);
+const _poEl = document.getElementById('prTotalPotongan'); if (_poEl) _poEl.textContent = prFormatRp(_potTot);
 }
 
 // Potongan/kasbon: tampil sebagai TEKS (font sama dgn tabel); klik "Edit" baru muncul input + Simpan/Batal,
