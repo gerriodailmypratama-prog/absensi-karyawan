@@ -2251,7 +2251,9 @@ totalJamKerjaAll += totalJamKerja;
 }
 rows.sort((a,b)=>(a.nama||'').localeCompare(b.nama||''));
 __payrollData = {yyyymm: yyyymm, label: label, rows: rows};
-await loadPayStatus(yyyymm);
+// Status lunas dibaca dari dokumen karyawan (bayarBulan[yyyymm]) — sama seperti potongan, tanpa collection terpisah.
+window.__payStatus = {};
+for (const _k of karyMap.values()){ if (_k.bayarBulan && _k.bayarBulan[yyyymm] === true) window.__payStatus[_k.uid] = 'paid'; }
 renderPayrollTable();
 $('prTotalKaryawan').textContent = rows.length;
 $('prTotalBudget').textContent = prFormatRp(totalBudget);
@@ -2297,8 +2299,7 @@ function __payStatusCell(uid){
   const badge = paid
     ? '<span class="badge" style="background:#14321f;color:#86efac">Lunas</span>'
     : '<span class="badge" style="background:#3a2f12;color:#fcd34d">Belum Bayar</span>';
-  const btn = '<button class="btn btn-sm ' + (paid ? 'btn-secondary' : 'btn-success') + ' pr-paid-btn" data-uid="' + uid + '">' + (paid ? 'Batalkan' : 'Tandai Lunas') + '</button>';
-  return '<td>' + badge + '<br>' + btn + '</td>';
+  return '<td>' + badge + '</td>';
 }
 
 // Set status bayar tanpa dialog konfirmasi ganda (dipakai flow modal Bayar).
@@ -2306,10 +2307,8 @@ async function setPaidStatus(uid, paid){
   if (!__payrollData || !__payrollData.yyyymm) return;
   const yyyymm = __payrollData.yyyymm;
   const row = (__payrollData.rows||[]).find(function(x){ return x.uid === uid; });
-  await setDoc(doc(db, 'payroll_status', __payStatusKey(yyyymm, uid)), {
-    uid: uid, yyyymm: yyyymm, status: paid ? 'paid' : 'unpaid', nama: row ? row.nama : '',
-    total: row ? row.total : null, updatedAt: serverTimestamp()
-  }, { merge: true });
+  void row;
+  await setDoc(doc(db, 'karyawan', uid), { bayarBulan: { [yyyymm]: !!paid } }, { merge: true });
   if (paid) window.__payStatus[uid] = 'paid'; else delete window.__payStatus[uid];
   renderPayrollTable();
 }
@@ -2354,7 +2353,7 @@ function openBayarModal(uid){
   }
   h += '</div>';
   if (paid){
-    h += '<div style="text-align:center;color:#86efac;font-weight:700;margin-bottom:12px">✓ Sudah ditandai LUNAS</div>';
+    h += '<div style="text-align:center;margin-bottom:12px"><span style="color:#86efac;font-weight:700">✓ Sudah ditandai LUNAS</span><br><button class="btn-link" id="btnBatalLunas" style="color:#9ca3af;font-size:12px">Batalkan status lunas</button></div>';
   } else {
     h += '<button class="btn btn-primary" id="btnSudahTransfer" style="width:100%;margin-bottom:10px">✓ Saya Sudah Transfer — Tandai Lunas</button>';
   }
@@ -2370,6 +2369,7 @@ function openBayarModal(uid){
   const st = document.getElementById('btnSudahTransfer'); if (st) st.onclick = async function(){ if (!confirm('Tandai LUNAS untuk ' + r.nama + '? Pastikan transfer sudah beneran masuk.')) return; st.disabled = true; st.textContent = 'Menyimpan...'; try { await setPaidStatus(uid, true); openBayarModal(uid); } catch(e){ alert('Gagal: ' + (e.message || e)); st.disabled = false; st.textContent = '✓ Saya Sudah Transfer — Tandai Lunas'; } };
   const sp = document.getElementById('btnBayarSlip'); if (sp) sp.onclick = function(){ downloadSlipGaji(uid); };
   const wa = document.getElementById('btnBayarWA'); if (wa) wa.onclick = function(){ kirimSlipWA(uid); };
+  const bl = document.getElementById('btnBatalLunas'); if (bl) bl.onclick = async function(){ if (!confirm('Batalkan status LUNAS untuk ' + r.nama + '?')) return; try { await setPaidStatus(uid, false); openBayarModal(uid); } catch(e){ alert('Gagal: ' + (e.message || e)); } };
 }
 
 function renderPayrollTable(){
