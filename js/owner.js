@@ -2055,6 +2055,16 @@ function prFormatRp(n){
   if (!n) return 'Rp 0';
   return 'Rp ' + Math.round(n).toLocaleString('id-ID');
 }
+// Format jam desimal -> "X jam Y mnt" biar enak dibaca manusia (1.52 -> "1 jam 31 mnt").
+function fmtLemburHM(hours){
+  const h = parseFloat(hours) || 0;
+  if (h <= 0) return '-';
+  const totalMin = Math.round(h * 60);
+  const jj = Math.floor(totalMin / 60), mm = totalMin % 60;
+  if (jj === 0) return mm + ' mnt';
+  if (mm === 0) return jj + ' jam';
+  return jj + ' jam ' + mm + ' mnt';
+}
 
 function prMonthRange(yyyymm){
   const parts = yyyymm.split('-').map(Number);
@@ -2258,7 +2268,7 @@ renderPayrollTable();
 $('prTotalKaryawan').textContent = rows.length;
 $('prTotalBudget').textContent = prFormatRp(totalBudget);
 $('prTotalHari').textContent = totalHari.toFixed(1);
-$('prTotalLembur').textContent = totalLemburJam.toFixed(1) + ' jam';
+$('prTotalLembur').textContent = fmtLemburHM(totalLemburJam);
 $('prLastCalc').textContent = 'Dihitung ' + new Date().toLocaleTimeString('id-ID') + ' \u2014 Bulan: ' + label;
 }
 
@@ -2400,7 +2410,7 @@ tr.innerHTML = '<td><b>' + r.nama + '</b><br><small class="muted">' + r.idKaryaw
 '<td class="num">' + prFormatRp(r.baseHarian) + '</td>' +
 '<td class="num">' + r.hariHadir + (r.hariParsial ? ' <small class="muted" title="Masuk tapi kerja kurang dari 75% jam standar - dibayar proporsional, bukan sehari penuh">(+' + r.hariParsial + ' parsial)</small>' : '') + '</td>' +
 '<td class="num">' + r.totalJamKerja.toFixed(1) + ' jam</td>' +
-'<td class="num">' + r.totalJamLembur.toFixed(1) + '</td>' +
+'<td class="num">' + fmtLemburHM(r.totalJamLembur) + '</td>' +
 '<td class="num">' + prFormatRp(r.upahPokok) + '</td>' +
 '<td class="num">' + prFormatRp(r.upahLembur) + '</td>' +
 '<td class="num">' + prFormatRp(r.total) + '</td>' +
@@ -2550,7 +2560,7 @@ const kategoriBadge = d.kategori === 'hadir' ? '<span style="color:#16a34a">\u27
 const jamLabel = d.durJam + ' jam' + (parseFloat(d.effJam) < parseFloat(d.durJam) ? ' <small class="muted">(eff ' + d.effJam + ')</small>' : '');
 const _lemJam = parseFloat(d.lemburJam) || 0;
 const _lemRp = _lemJam * _rate * _mult;
-const _lemJamCell = _lemJam > 0 ? (_lemJam.toFixed(2) + ' jam') : '<span class="muted">-</span>';
+const _lemJamCell = _lemJam > 0 ? fmtLemburHM(_lemJam) : '<span class="muted">-</span>';
 const _lemRpCell = _lemJam > 0 ? prFormatRp(_lemRp) : '<span class="muted">-</span>';
 tr.innerHTML = '<td>' + d.date + '</td><td>' + d.jamMasuk + '</td><td>' + d.jamKeluar + '</td><td>' + jamLabel + '</td><td>' + kategoriBadge + '</td><td class="num">' + prFormatRp(d.kontribusi) + '</td><td class="num">' + _lemJamCell + '</td><td class="num">' + _lemRpCell + '</td>';
 tb.appendChild(tr);
@@ -2560,7 +2570,7 @@ const trT = document.createElement('tr');
 trT.style.cssText = 'border-top:2px solid #a16207;font-weight:700';
 trT.innerHTML = '<td colspan="5" style="text-align:right">TOTAL</td>'
 + '<td class="num">' + prFormatRp(r.upahPokok) + '</td>'
-+ '<td class="num">' + (r.totalJamLembur||0).toFixed(2) + ' jam</td>'
++ '<td class="num">' + fmtLemburHM(r.totalJamLembur||0) + '</td>'
 + '<td class="num">' + prFormatRp(r.upahLembur) + '</td>';
 tb.appendChild(trT);
 const trG = document.createElement('tr');
