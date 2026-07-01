@@ -1438,12 +1438,14 @@ function renderKehadiranMatrix(){
       const _ciMs = _ci.ts.toDate().getTime();
       let _spanMs = _end.ts.toDate().getTime() - _ciMs;
       if (_spanMs < 0) _spanMs += 24*60*60*1000;
+      // Clamp: hanya hitung jeda yang DALAM sesi [clock-in .. clock-out], biar data nyangkut/rusak tidak salah hitung.
+      const _endMsC0 = _end.ts.toDate().getTime(); const _endMsC = (_endMsC0 < _ciMs) ? (_endMsC0 + 24*60*60*1000) : _endMsC0;
       function _sumPairs(inT, outT){
         let _tot = 0, _open = null, _maxOne = 0;
         const _list = (row.events||[]).slice().filter(function(e){return e.ts&&e.ts.toDate;}).sort(function(a,b){return a.ts.toDate()-b.ts.toDate();});
         _list.forEach(function(e){
           if (e.tipe===inT) _open = e.ts.toDate().getTime();
-          else if (e.tipe===outT && _open!=null){ const _dms = e.ts.toDate().getTime()-_open; if(_dms>0){ _tot+=_dms; if(_dms>_maxOne)_maxOne=_dms; } _open=null; }
+          else if (e.tipe===outT && _open!=null){ const _s=Math.max(_open,_ciMs), _e=Math.min(e.ts.toDate().getTime(),_endMsC); const _dms = _e-_s; if(_dms>0){ _tot+=_dms; if(_dms>_maxOne)_maxOne=_dms; } _open=null; }
         });
         return { tot:_tot, maxOne:_maxOne };
       }
@@ -2181,10 +2183,14 @@ durJam = (__end.ts - ci.ts) / 3600000;
 if (durJam < 0) durJam += 24;
 const breaks = [];
 events.forEach(e=>{ if (e.tipe==='break_in' || e.tipe==='break_out') breaks.push(e); });
-  const pauses = events.filter(e=>e.tipe==='pause_in' || e.tipe==='pause_out'); for (let pi=0; pi<pauses.length-1; pi++){ if (pauses[pi].tipe==='pause_in' && pauses[pi+1].tipe==='pause_out'){ durJam -= (pauses[pi+1].ts - pauses[pi].ts)/3600000; pi++; } }
+// Clamp: hanya potong istirahat/pause yang benar-benar DALAM sesi [clock-in .. clock-out].
+// Interval nyangkut/rusak (di luar rentang) diabaikan biar data kotor tidak salah potong gaji.
+const _ciMsP = ci.ts.getTime(); let _endMsP = __end.ts.getTime(); if (_endMsP < _ciMsP) _endMsP += 24*3600000;
+function _clampHrP(sMs, eMs){ const s = Math.max(sMs, _ciMsP); const e = Math.min(eMs, _endMsP); return e > s ? (e - s)/3600000 : 0; }
+  const pauses = events.filter(e=>e.tipe==='pause_in' || e.tipe==='pause_out'); for (let pi=0; pi<pauses.length-1; pi++){ if (pauses[pi].tipe==='pause_in' && pauses[pi+1].tipe==='pause_out'){ durJam -= _clampHrP(pauses[pi].ts.getTime(), pauses[pi+1].ts.getTime()); pi++; } }
 for (let i=0; i<breaks.length-1; i++){
 if (breaks[i].tipe==='break_in' && breaks[i+1].tipe==='break_out'){
-durJam -= (breaks[i+1].ts - breaks[i].ts)/3600000;
+durJam -= _clampHrP(breaks[i].ts.getTime(), breaks[i+1].ts.getTime());
 i++;
 }
 }
