@@ -825,6 +825,29 @@ body{ -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
 @keyframes gg-fade{ from{ opacity:0; transform:translateY(4px); } to{ opacity:1; transform:none; } }
 @media (max-width:768px){ .content{ padding:16px 14px !important; } }
 
+/* ===== Payroll: tiap baris jadi KARTU di HP (biar gampang bayar dari HP) ===== */
+@media (max-width:768px){
+  #tblPayroll, #tblPayroll tbody { display:block; width:100%; }
+  #tblPayroll thead { display:none; }
+  #tblPayroll tr { display:block; background:#221f1a; border:1px solid #3a362f; border-radius:12px; margin-bottom:12px; padding:12px 14px; }
+  #tblPayroll td { display:flex; justify-content:space-between; align-items:center; gap:12px; text-align:right; padding:5px 0; border:none; font-size:14px; }
+  #tblPayroll td::before { color:#9aa0a6; font-size:12px; text-align:left; white-space:nowrap; }
+  /* Nama = judul kartu */
+  #tblPayroll td:nth-child(1){ display:block; text-align:left; font-size:15px; padding-bottom:8px; margin-bottom:6px; border-bottom:1px solid #3a362f; }
+  /* Sembunyikan kolom detail kerja di HP (ada di tombol Detail) */
+  #tblPayroll td:nth-child(2), #tblPayroll td:nth-child(3), #tblPayroll td:nth-child(4), #tblPayroll td:nth-child(5){ display:none; }
+  #tblPayroll td:nth-child(6)::before { content:'Upah Pokok'; }
+  #tblPayroll td:nth-child(7)::before { content:'Upah Lembur'; }
+  #tblPayroll td:nth-child(8)::before { content:'Total'; }
+  #tblPayroll td:nth-child(9)::before { content:'Potongan'; }
+  #tblPayroll td:nth-child(10){ font-size:20px; padding-top:8px; margin-top:4px; border-top:1px dashed #3a362f; }
+  #tblPayroll td:nth-child(10)::before { content:'Total Bayar'; font-weight:700; font-size:13px; color:#cbd5c0; }
+  #tblPayroll td:nth-child(11)::before { content:'Status'; }
+  /* Aksi = tombol lebar berdampingan */
+  #tblPayroll td:nth-child(12){ display:flex; gap:8px; margin-top:10px; }
+  #tblPayroll td:nth-child(12) .btn { flex:1; }
+}
+
 /* ---- Typography hierarchy ---- */
 .page-title{ font-size:24px !important; font-weight:700 !important; letter-spacing:-.02em !important; }
 h3{ letter-spacing:-.01em; }
