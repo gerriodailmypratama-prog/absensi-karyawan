@@ -2417,6 +2417,14 @@ document.querySelectorAll('.pr-detail-btn').forEach(b => { b.onclick = () => sho
 document.querySelectorAll('.pr-paid-btn').forEach(b => { b.onclick = () => togglePayStatus(b.dataset.uid); });
 document.querySelectorAll('.pr-pot-edit').forEach(b => { b.onclick = () => startEditPotongan(b.dataset.uid); });
 document.querySelectorAll('.pr-bayar-btn').forEach(b => { b.onclick = () => openBayarModal(b.dataset.uid); });
+// Ringkasan status bayar (update tiap render, termasuk setelah tandai lunas).
+let _sudahBayar = 0, _belumBayar = 0;
+for (const _r of __payrollData.rows){
+  const _tb = _r.totalBayar != null ? _r.totalBayar : _r.total;
+  if (window.__payStatus[_r.uid] === 'paid') _sudahBayar += _tb; else _belumBayar += _tb;
+}
+const _seEl = document.getElementById('prSudahBayar'); if (_seEl) _seEl.textContent = prFormatRp(_sudahBayar);
+const _beEl = document.getElementById('prBelumBayar'); if (_beEl) _beEl.textContent = prFormatRp(_belumBayar);
 }
 
 // Potongan/kasbon: tampil sebagai TEKS (font sama dgn tabel); klik "Edit" baru muncul input + Simpan/Batal,
