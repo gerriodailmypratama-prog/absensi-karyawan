@@ -2241,6 +2241,7 @@ totalJamKerja: totalJamKerja, totalJamLembur: totalJamLembur,
 upahPokok: upahPokok, upahLembur: upahLembur, total: total,
 potongan: potongan, totalBayar: totalBayar,
 namaBank: k.namaBank || '', atasNamaRek: k.atasNamaRek || '', nomorRekening: k.nomorRekening || '',
+phone: k.phone || '', namaPanggilan: k.namaPanggilan || '',
 dailyDetails: dailyDetails
 });
 totalBudget += totalBayar;
@@ -2300,6 +2301,77 @@ function __payStatusCell(uid){
   return '<td>' + badge + '<br>' + btn + '</td>';
 }
 
+// Set status bayar tanpa dialog konfirmasi ganda (dipakai flow modal Bayar).
+async function setPaidStatus(uid, paid){
+  if (!__payrollData || !__payrollData.yyyymm) return;
+  const yyyymm = __payrollData.yyyymm;
+  const row = (__payrollData.rows||[]).find(function(x){ return x.uid === uid; });
+  await setDoc(doc(db, 'payroll_status', __payStatusKey(yyyymm, uid)), {
+    uid: uid, yyyymm: yyyymm, status: paid ? 'paid' : 'unpaid', nama: row ? row.nama : '',
+    total: row ? row.total : null, updatedAt: serverTimestamp()
+  }, { merge: true });
+  if (paid) window.__payStatus[uid] = 'paid'; else delete window.__payStatus[uid];
+  renderPayrollTable();
+}
+// Kirim ringkasan slip gaji via WhatsApp ke nomor HP karyawan.
+function kirimSlipWA(uid){
+  const r = __payrollData && __payrollData.rows.find(function(x){ return x.uid === uid; });
+  if (!r) return;
+  let phone = String(r.phone || '').replace(/[^0-9]/g, '');
+  if (!phone){ alert('Nomor HP karyawan belum diisi (menu Karyawan -> Edit).'); return; }
+  if (phone.charAt(0) === '0') phone = '62' + phone.slice(1);
+  else if (phone.slice(0,2) !== '62') phone = '62' + phone;
+  const tb = r.totalBayar != null ? r.totalBayar : r.total;
+  const L = ['Halo ' + (r.namaPanggilan || r.nama) + ',', '', 'Rincian gaji ' + __payrollData.label + ':',
+    '- Upah Pokok: ' + prFormatRp(r.upahPokok), '- Upah Lembur: ' + prFormatRp(r.upahLembur)];
+  if (r.potongan > 0) L.push('- Potongan: -' + prFormatRp(r.potongan));
+  L.push('- *Total Diterima: ' + prFormatRp(tb) + '*', '', 'Sudah ditransfer ya. Terima kasih! 🙏');
+  window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(L.join('\n')), '_blank');
+}
+// Flow "Bayar Gaji": lihat total -> rekening -> konfirmasi transfer -> tandai lunas -> slip.
+function openBayarModal(uid){
+  if (!__payrollData) return;
+  const r = __payrollData.rows.find(function(x){ return x.uid === uid; });
+  if (!r) return;
+  const paid = window.__payStatus[uid] === 'paid';
+  const tb = r.totalBayar != null ? r.totalBayar : r.total;
+  const titleEl = document.getElementById('bayarTitle'); if (titleEl) titleEl.textContent = 'Bayar Gaji — ' + r.nama;
+  const adaRek = r.namaBank || r.nomorRekening || r.atasNamaRek;
+  let h = '';
+  h += '<div style="text-align:center;margin:4px 0 14px"><div class="muted small">Total Bayar (' + __payrollData.label + ')</div>'
+     + '<div style="font-size:28px;font-weight:800;color:#34d399">' + prFormatRp(tb) + '</div>'
+     + (r.potongan > 0 ? '<div class="muted small">Gaji ' + prFormatRp(r.total) + ' &minus; potongan ' + prFormatRp(r.potongan) + '</div>' : '')
+     + '</div>';
+  h += '<div style="background:#26241f;border:1px solid #3a362f;border-radius:10px;padding:12px;margin-bottom:14px">';
+  if (adaRek){
+    h += '<div class="muted small" style="margin-bottom:6px">Transfer ke rekening:</div>'
+       + '<div style="font-size:15px;font-weight:700">' + (r.namaBank || '-') + '</div>'
+       + '<div style="font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:1px">' + (r.nomorRekening || '-') + '</div>'
+       + '<div class="muted">a/n ' + (r.atasNamaRek || '-') + '</div>'
+       + (r.nomorRekening ? '<button class="btn btn-sm btn-secondary" id="btnCopyRek" style="margin-top:8px">Salin No. Rekening</button>' : '');
+  } else {
+    h += '<div style="color:#fcd34d">⚠ Rekening belum diisi. Isi dulu di menu Karyawan -> Edit biar bisa transfer.</div>';
+  }
+  h += '</div>';
+  if (paid){
+    h += '<div style="text-align:center;color:#86efac;font-weight:700;margin-bottom:12px">✓ Sudah ditandai LUNAS</div>';
+  } else {
+    h += '<button class="btn btn-primary" id="btnSudahTransfer" style="width:100%;margin-bottom:10px">✓ Saya Sudah Transfer — Tandai Lunas</button>';
+  }
+  h += '<div style="display:flex;gap:8px">'
+     + '<button class="btn btn-secondary" id="btnBayarSlip" style="flex:1">Download Slip</button>'
+     + (r.phone ? '<button class="btn btn-success" id="btnBayarWA" style="flex:1">Kirim WhatsApp</button>' : '')
+     + '</div>';
+  const body = document.getElementById('bayarBody'); if (body) body.innerHTML = h;
+  const modal = document.getElementById('bayarModal');
+  if (modal){ modal.classList.remove('hidden'); modal.onclick = function(e){ if (e.target === modal) modal.classList.add('hidden'); }; }
+  const cl = document.getElementById('btnBayarClose'); if (cl) cl.onclick = function(){ if (modal) modal.classList.add('hidden'); };
+  const cp = document.getElementById('btnCopyRek'); if (cp) cp.onclick = function(){ try { navigator.clipboard.writeText(r.nomorRekening || ''); cp.textContent = 'Tersalin ✓'; setTimeout(function(){ cp.textContent = 'Salin No. Rekening'; }, 1500); } catch(e){} };
+  const st = document.getElementById('btnSudahTransfer'); if (st) st.onclick = async function(){ if (!confirm('Tandai LUNAS untuk ' + r.nama + '? Pastikan transfer sudah beneran masuk.')) return; st.disabled = true; st.textContent = 'Menyimpan...'; try { await setPaidStatus(uid, true); openBayarModal(uid); } catch(e){ alert('Gagal: ' + (e.message || e)); st.disabled = false; st.textContent = '✓ Saya Sudah Transfer — Tandai Lunas'; } };
+  const sp = document.getElementById('btnBayarSlip'); if (sp) sp.onclick = function(){ downloadSlipGaji(uid); };
+  const wa = document.getElementById('btnBayarWA'); if (wa) wa.onclick = function(){ kirimSlipWA(uid); };
+}
+
 function renderPayrollTable(){
 const tbody = document.querySelector('#tblPayroll tbody');
 if (!tbody || !__payrollData) return;
@@ -2335,12 +2407,13 @@ tr.innerHTML = '<td><b>' + r.nama + '</b><br><small class="muted">' + r.idKaryaw
 '<td class="num pr-pot-cell" data-uid="' + r.uid + '"><span class="pr-pot-val">' + (r.potongan ? prFormatRp(r.potongan) : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-pot-edit" data-uid="' + r.uid + '" style="color:#d97757">Edit</button></td>' +
 '<td class="num"><b class="pr-totalbayar" data-uid="' + r.uid + '" style="color:#34d399">' + prFormatRp(r.totalBayar!=null ? r.totalBayar : r.total) + '</b></td>' +
 __payStatusCell(r.uid) +
-'<td><button class="btn btn-sm btn-secondary pr-detail-btn" data-uid="' + r.uid + '">Detail</button><button class="btn btn-sm btn-success pr-slip-btn" data-uid="' + r.uid + '">Slip Gaji</button></td>';
+'<td><button class="btn btn-sm btn-primary pr-bayar-btn" data-uid="' + r.uid + '">Bayar</button> <button class="btn btn-sm btn-secondary pr-detail-btn" data-uid="' + r.uid + '">Detail</button></td>';
 tbody.appendChild(tr);
 }
 document.querySelectorAll('.pr-detail-btn').forEach(b => { b.onclick = () => showPayrollDetail(b.dataset.uid); });
 document.querySelectorAll('.pr-paid-btn').forEach(b => { b.onclick = () => togglePayStatus(b.dataset.uid); });
 document.querySelectorAll('.pr-pot-edit').forEach(b => { b.onclick = () => startEditPotongan(b.dataset.uid); });
+document.querySelectorAll('.pr-bayar-btn').forEach(b => { b.onclick = () => openBayarModal(b.dataset.uid); });
 }
 
 // Potongan/kasbon: tampil sebagai TEKS (font sama dgn tabel); klik "Edit" baru muncul input + Simpan/Batal,
