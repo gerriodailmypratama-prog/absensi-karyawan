@@ -143,18 +143,29 @@ function totalPausedMs(){
 function totalNonWorkMs(){
   // Total waktu non-kerja: pause + istirahat (break), termasuk yang masih aktif sampai sekarang.
   // Dipakai biar perhitungan jam efektif konsisten dgn payroll & lembur.
+  // PENTING: hanya hitung jeda yang benar-benar terjadi DALAM sesi ini [clock-in .. sekarang].
+  // Interval dgn timestamp di luar rentang itu (sisa sesi lama yang nyangkut / timestamp rusak)
+  // diabaikan, biar tidak "makan" jam kerja efektif (bug: istirahat > waktu sejak clock-in).
   let total = 0;
   let pauseStart = null, breakStart = null;
+  const _ciEntry = getFirstInSession('clock_in');
+  const _ciMs = (_ciEntry && _ciEntry.ts && _ciEntry.ts.toDate) ? _ciEntry.ts.toDate().getTime() : 0;
+  const _now = Date.now();
+  function _add(start, end){
+    if (start < _ciMs) return;         // jeda mulai sebelum clock-in = sisa lama, abaikan
+    if (end > _now + 1000) return;      // jeda berakhir di masa depan = timestamp rusak, abaikan
+    if (end > start) total += (end - start);
+  }
   for (const r of sessionCache){
     const tm = r.ts && r.ts.toDate ? r.ts.toDate().getTime() : (r.ts && r.ts.toMillis ? r.ts.toMillis() : null);
     if (tm === null) continue;
     if (r.tipe === 'pause_in') pauseStart = tm;
-    else if (r.tipe === 'pause_out' && pauseStart !== null){ total += (tm - pauseStart); pauseStart = null; }
+    else if (r.tipe === 'pause_out' && pauseStart !== null){ _add(pauseStart, tm); pauseStart = null; }
     else if (r.tipe === 'break_in') breakStart = tm;
-    else if (r.tipe === 'break_out' && breakStart !== null){ total += (tm - breakStart); breakStart = null; }
+    else if (r.tipe === 'break_out' && breakStart !== null){ _add(breakStart, tm); breakStart = null; }
   }
-  if (pauseStart !== null) total += (Date.now() - pauseStart);
-  if (breakStart !== null) total += (Date.now() - breakStart);
+  if (pauseStart !== null) _add(pauseStart, _now);
+  if (breakStart !== null) _add(breakStart, _now);
   return total;
 }
 
