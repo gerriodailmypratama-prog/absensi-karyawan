@@ -825,6 +825,11 @@ body{ -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
 @keyframes gg-fade{ from{ opacity:0; transform:translateY(4px); } to{ opacity:1; transform:none; } }
 @media (max-width:768px){ .content{ padding:16px 14px !important; } }
 
+/* Payroll stat cards: angka & label dipisah (block) biar ga nabrak */
+.pr-stat{ display:flex; flex-direction:column; gap:4px; }
+.pr-stat b{ display:block; font-size:19px; line-height:1.25; }
+.pr-stat small{ display:block; color:#9aa0a6; font-size:12px; line-height:1.35; }
+
 /* ===== Payroll: tiap baris jadi KARTU di HP (biar gampang bayar dari HP) ===== */
 @media (max-width:768px){
   #tblPayroll, #tblPayroll tbody { display:block; width:100%; }
