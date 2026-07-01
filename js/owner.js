@@ -2407,7 +2407,10 @@ tr.innerHTML = '<td><b>' + r.nama + '</b><br><small class="muted">' + r.idKaryaw
 '<td class="num pr-pot-cell" data-uid="' + r.uid + '"><span class="pr-pot-val">' + (r.potongan ? prFormatRp(r.potongan) : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-pot-edit" data-uid="' + r.uid + '" style="color:#d97757">Edit</button></td>' +
 '<td class="num"><b class="pr-totalbayar" data-uid="' + r.uid + '" style="color:#34d399">' + prFormatRp(r.totalBayar!=null ? r.totalBayar : r.total) + '</b></td>' +
 __payStatusCell(r.uid) +
-'<td><button class="btn btn-sm btn-primary pr-bayar-btn" data-uid="' + r.uid + '">Bayar</button> <button class="btn btn-sm btn-secondary pr-detail-btn" data-uid="' + r.uid + '">Detail</button></td>';
+'<td>' + (window.__payStatus[r.uid] === 'paid'
+  ? '<button class="btn btn-sm pr-bayar-btn" data-uid="' + r.uid + '" style="background:#14321f;color:#86efac;border:1px solid #2f6b43" title="Sudah dibayar. Klik untuk kirim slip / batalkan.">✓ Lunas</button>'
+  : '<button class="btn btn-sm btn-primary pr-bayar-btn" data-uid="' + r.uid + '">Bayar</button>')
+  + ' <button class="btn btn-sm btn-secondary pr-detail-btn" data-uid="' + r.uid + '">Detail</button></td>';
 tbody.appendChild(tr);
 }
 document.querySelectorAll('.pr-detail-btn').forEach(b => { b.onclick = () => showPayrollDetail(b.dataset.uid); });
