@@ -550,7 +550,7 @@ async function loadKaryawanList(){
             const tj = x.tanggalJoin ? (x.tanggalJoin.toDate ? x.tanggalJoin.toDate() : new Date(x.tanggalJoin)) : null;
             const tjStr = tj ? tj.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-';
             tr.innerHTML = '<td>'+(idx+1)+'</td>'+
-              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#d97757;text-decoration:underline;">'+(x.nama||'-')+'</span>'+(x.namaPanggilan?' <span class="muted" style="font-size:12px">('+x.namaPanggilan+')</span>':'')+((!x.updatedAt)?' <span class="tag warn" title="Karyawan baru / belum direview owner. Klik Edit untuk cek gaji & jam kerja.">baru</span>':'')+'</td>'+
+              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#f97316;text-decoration:underline;">'+(x.nama||'-')+'</span>'+(x.namaPanggilan?' <span class="muted" style="font-size:12px">('+x.namaPanggilan+')</span>':'')+((!x.updatedAt)?' <span class="tag warn" title="Karyawan baru / belum direview owner. Klik Edit untuk cek gaji & jam kerja.">baru</span>':'')+'</td>'+
               '<td>'+(x.email||'-')+'</td>'+
               '<td>'+(x.phone||'-')+'</td>'+
               '<td>'+idDisplay+'</td>'+
@@ -2351,7 +2351,7 @@ function openBayarModal(uid){
      + '<div style="font-size:28px;font-weight:800;color:#34d399">' + prFormatRp(tb) + '</div>'
      + (r.potongan > 0 ? '<div class="muted small">Gaji ' + prFormatRp(r.total) + ' &minus; potongan ' + prFormatRp(r.potongan) + '</div>' : '')
      + '</div>';
-  h += '<div style="background:#26241f;border:1px solid #3a362f;border-radius:10px;padding:12px;margin-bottom:14px">';
+  h += '<div style="background:#191919;border:1px solid #2a2a2a;border-radius:10px;padding:12px;margin-bottom:14px">';
   if (adaRek){
     h += '<div class="muted small" style="margin-bottom:6px">Transfer ke rekening:</div>'
        + '<div style="font-size:15px;font-weight:700">' + (r.namaBank || '-') + '</div>'
@@ -2414,7 +2414,7 @@ tr.innerHTML = '<td><b>' + r.nama + '</b><br><small class="muted">' + r.idKaryaw
 '<td class="num">' + prFormatRp(r.upahPokok) + '</td>' +
 '<td class="num">' + prFormatRp(r.upahLembur) + '</td>' +
 '<td class="num">' + prFormatRp(r.total) + '</td>' +
-'<td class="num pr-pot-cell" data-uid="' + r.uid + '"><span class="pr-pot-val">' + (r.potongan ? prFormatRp(r.potongan) : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-pot-edit" data-uid="' + r.uid + '" style="color:#d97757">Edit</button></td>' +
+'<td class="num pr-pot-cell" data-uid="' + r.uid + '"><span class="pr-pot-val">' + (r.potongan ? prFormatRp(r.potongan) : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-pot-edit" data-uid="' + r.uid + '" style="color:#f97316">Edit</button></td>' +
 '<td class="num"><b class="pr-totalbayar" data-uid="' + r.uid + '" style="color:#34d399">' + prFormatRp(r.totalBayar!=null ? r.totalBayar : r.total) + '</b></td>' +
 __payStatusCell(r.uid) +
 '<td>' + (window.__payStatus[r.uid] === 'paid'
@@ -2448,7 +2448,7 @@ function renderPotonganCell(uid){
   if (!cell) return;
   const row = __payrollData && __payrollData.rows.find(x => x.uid === uid);
   const pot = row ? (row.potongan || 0) : 0;
-  cell.innerHTML = '<span class="pr-pot-val">' + (pot ? prFormatRp(pot) : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-pot-edit" data-uid="' + uid + '" style="color:#d97757">Edit</button>';
+  cell.innerHTML = '<span class="pr-pot-val">' + (pot ? prFormatRp(pot) : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-pot-edit" data-uid="' + uid + '" style="color:#f97316">Edit</button>';
   const eb = cell.querySelector('.pr-pot-edit'); if (eb) eb.onclick = () => startEditPotongan(uid);
 }
 function startEditPotongan(uid){
@@ -2456,7 +2456,7 @@ function startEditPotongan(uid){
   if (!cell) return;
   const row = __payrollData && __payrollData.rows.find(x => x.uid === uid);
   const cur = row ? (row.potongan || 0) : 0;
-  cell.innerHTML = '<input type="number" class="pr-pot-input" min="0" step="1000" value="' + cur + '" style="width:90px;font:inherit;text-align:right;padding:3px 5px;background:#26241f;color:#e6e3d8;border:1px solid #d97757;border-radius:6px"> '
+  cell.innerHTML = '<input type="number" class="pr-pot-input" min="0" step="1000" value="' + cur + '" style="width:90px;font:inherit;text-align:right;padding:3px 5px;background:#191919;color:#e6e3d8;border:1px solid #f97316;border-radius:6px"> '
     + '<button class="btn-link pr-pot-save" style="color:#34d399">Simpan</button> '
     + '<button class="btn-link pr-pot-cancel" style="color:#9ca3af">Batal</button>';
   const inp = cell.querySelector('.pr-pot-input');
@@ -2731,8 +2731,8 @@ function downloadSlipGaji(uid) {
     '<style>' +
     'body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;margin:0;padding:24px;background:#f3f4f6;}' +
     '.slip{max-width:820px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:28px 32px;}' +
-    '.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #d97757;padding-bottom:14px;margin-bottom:18px;}' +
-    'h1{font-size:22px;margin:0;color:#d97757;}.brand{font-size:13px;color:#6b7280;margin-top:2px;}' +
+    '.head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #f97316;padding-bottom:14px;margin-bottom:18px;}' +
+    'h1{font-size:22px;margin:0;color:#f97316;}.brand{font-size:13px;color:#6b7280;margin-top:2px;}' +
     '.per{text-align:right;font-size:13px;color:#374151;}' +
     'h2{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;margin:22px 0 8px;}' +
     'table{width:100%;border-collapse:collapse;font-size:13px;}' +
@@ -2743,10 +2743,10 @@ function downloadSlipGaji(uid) {
     '.rincian td.c{text-align:center;}.rincian td.r{text-align:right;}' +
     '.rincian tr:nth-child(even) td{background:#fafafa;}' +
     '.calc td{padding:7px 4px;border-bottom:1px solid #f1f5f9;}.calc td.r{text-align:right;}' +
-    '.calc .tot td{border-top:2px solid #111827;font-weight:bold;font-size:17px;padding-top:12px;color:#d97757;}' +
+    '.calc .tot td{border-top:2px solid #111827;font-weight:bold;font-size:17px;padding-top:12px;color:#f97316;}' +
     '.muted{color:#6b7280;font-size:12px;}' +
     '.foot{margin-top:22px;color:#9ca3af;font-size:11px;text-align:center;}' +
-    '.kh-matrix td.kh-lembur-cell .kh_lembur_disp{cursor:pointer;display:inline-block;min-width:34px;padding:1px 4px;border-radius:4px;}.kh-matrix td.kh-lembur-cell .kh_lembur_disp:hover{background:rgba(217,119,87,.18);outline:1px dashed rgba(217,119,87,.5);}.kh-matrix td.kh-lembur-ovr .kh_lembur_disp{color:#d97757;font-weight:600;}.kh-matrix td.kh-lembur-cell input.kh_lembur{width:48px;text-align:center;}' +
+    '.kh-matrix td.kh-lembur-cell .kh_lembur_disp{cursor:pointer;display:inline-block;min-width:34px;padding:1px 4px;border-radius:4px;}.kh-matrix td.kh-lembur-cell .kh_lembur_disp:hover{background:rgba(217,119,87,.18);outline:1px dashed rgba(217,119,87,.5);}.kh-matrix td.kh-lembur-ovr .kh_lembur_disp{color:#f97316;font-weight:600;}.kh-matrix td.kh-lembur-cell input.kh_lembur{width:48px;text-align:center;}' +
     '@media print{body{background:#fff;padding:0;}.slip{border:none;}}' +
     '</style></head><body><div class="slip">' +
     '<div class="head"><div><h1>Slip Gaji</h1><div class="brand">GoodGems Absensi</div></div>' +

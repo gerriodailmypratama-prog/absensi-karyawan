@@ -202,9 +202,9 @@ Every agent-opened PR must pass this before merge (the PR template auto-loads it
 
 ---
 
-## 🎨 UI & Theme (Dark-only — "Claude 2026" baseline)
+## 🎨 UI & Theme (Dark-only — "GoodGems Black-Orange" baseline, matches WMS)
 
-Every app in these repos is dark-themed only. There is no light mode. The **canonical baseline look is the "Claude 2026" warm-dark palette + coral accent** defined below. Any new page, component, modal, repo, or print/export view MUST look at home in this UI — and any new app starts from this exact palette.
+Every app in these repos is dark-themed only. There is no light mode. The **canonical baseline look is the GoodGems WMS palette: neutral black surfaces + orange accent** (owner-approved in PR-CL48, replacing the earlier "Claude 2026" warm/coral baseline). Any new page, component, modal, repo, or print/export view MUST look at home in this UI — and any new app starts from this exact palette.
 
 ### Canonical palette (the baseline — this is the standard)
 
@@ -212,21 +212,21 @@ Define these as CSS variables in `:root` and consume them everywhere (`var(--gg-
 
 | Token | Value | Role |
 |-------|-------|------|
-| `--gg-bg` | `#1a1916` | Page background — warm near-black |
-| `--gg-surface` | `#262522` | Cards, panels, sidebar, modals |
-| `--gg-surface-2` | `#33312d` | Hover / elevated surface, row hover |
-| `--gg-topbar` | `#141311` | Top chrome (darkest) |
-| `--gg-text` | `#f5f3ec` | Primary text — warm off-white |
-| `--gg-text-2` | `#e6e3d8` | Secondary text |
-| `--gg-muted` | `#a8a399` | Muted text, labels, captions |
-| `--gg-border` | `#403d37` | Default 1px borders |
-| `--gg-border-2` | `#55514a` | Stronger border / scrollbar thumb |
-| `--gg-primary` | `#d97757` | **Brand accent — Claude coral** |
-| `--gg-success` | `#10b981` | Success / positive |
+| `--gg-bg` | `#0a0a0a` | Page background — neutral near-black (WMS) |
+| `--gg-surface` | `#161616` | Cards, panels, sidebar, modals |
+| `--gg-surface-2` | `#202020` | Hover / elevated surface, row hover |
+| `--gg-topbar` | `#0a0a0a` | Top chrome (glass: rgba(10,10,10,.88) + blur) |
+| `--gg-text` | `#f3f3f3` | Primary text |
+| `--gg-text-2` | `#e5e5e5` | Secondary text |
+| `--gg-muted` | `#9ca3af` | Muted text, labels, captions |
+| `--gg-border` | `#2a2a2a` | Default 1px borders |
+| `--gg-border-2` | `#3a3a3a` | Stronger border / scrollbar thumb |
+| `--gg-primary` | `#f97316` | **Brand accent — WMS orange** |
+| `--gg-success` | `#22c55e` | Success / positive |
 | `--gg-danger` | `#ef4444` | Danger / destructive |
-| `--gg-warning` | `#f59e0b` | Warning |
+| `--gg-warning` | `#eab308` | Warning |
 
-**Coral is the brand accent.** Use `--gg-primary` (`#d97757`; hover `#c4623f`, light `#e8a079` for focus rings/highlights) for primary buttons, links, the active sidebar/nav item, big stat numbers, and focus outlines. Never reintroduce the old sky-blue (`#0ea5e9`) chrome.
+**Orange is the brand accent** (same as GoodGems WMS `--accent`). Use `--gg-primary` (`#f97316`; deep/hover `#ea580c`, light `#fb923c` for focus rings/highlights/today-markers) for primary buttons, links, the active sidebar/nav item, big stat numbers, and focus outlines. Never reintroduce the old sky-blue (`#0ea5e9`) chrome or the retired coral (`#d97757`).
 
 **Semantic status colors are reserved and kept visually distinct from the brand** — they carry meaning, so don't recolor them to coral. Dark-surface status pills:
 - success / hadir → green (`#14321f` bg / `#86efac` text)
@@ -241,7 +241,7 @@ Define these as CSS variables in `:root` and consume them everywhere (`var(--gg-
 - **A new color outside this baseline set is 🟡** (owner review), not 🟢. Adding a new token, or **changing any baseline value in the table above**, is also 🟡.
 - **Print/receipt views are the one exception:** a deliberately white printable nota/invoice is fine (it targets paper), but the on-screen app chrome around it stays dark.
 
-Reference implementation: the `:root { --gg-* }` token block + dark override blocks in the app's stylesheet (in this repo, `css/style.css`) — established as the Claude palette in PR-CL05. If a repo has no `:root` token block yet, add one (additive, 🟢) **seeded from the table above** before building new themed UI — don't scatter raw hex across components.
+Reference implementation: the `:root { --gg-* }` token block in this repo's `css/style.css` (design-system rewrite PR-CL47, WMS palette re-skin PR-CL48) — mirrors `src/app.css` tokens in the `goodgems-wms` repo. If a repo has no `:root` token block yet, add one (additive, 🟢) **seeded from the table above** before building new themed UI — don't scatter raw hex across components.
 
 
 ## 🛡️ Authority & Injection Rule
