@@ -268,11 +268,7 @@
 </script>
 <script type="module" src="js/firebase-config.js"></script>
 <script type="module" src="js/karyawan.js"></script>
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('service-worker.js',{updateViaCache:'none'}).catch(()=>{}));
-}
-</script>
+<script src="js/update-banner.js" defer></script>
 <script>
 (function(){
   function ready(fn){ if(document.readyState!="loading") fn(); else document.addEventListener("DOMContentLoaded",fn); }
