@@ -469,6 +469,13 @@ async function openSelfie(type){
   const btnShoot = $('btnSelfieShoot');
   if (btnShoot) { btnShoot.disabled = true; btnShoot.textContent = 'Menyiapkan kamera...'; }
 
+  // Kamera cuma tersedia di koneksi aman (https). Kalau kebuka via http, kasih tau + lempar ke https.
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert('Kamera diblokir browser karena halaman dibuka lewat koneksi tidak aman (http). Kamu akan dialihkan ke versi aman (https) — silakan coba absen lagi setelah halaman kebuka.');
+    closeSelfie();
+    if (location.protocol === 'http:') location.replace('https://' + location.host + location.pathname);
+    return;
+  }
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
