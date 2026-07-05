@@ -541,16 +541,38 @@ async function loadKaryawanList(){
                 catch(e){ console.warn('Auto-isi default gagal untuk', r.id, e); if (_idBumped) _maxKid--; }
             }
         }
-        rows.forEach((x, idx) => {
+        // Aktif dulu (urut nama), lalu Nonaktif/resign dikelompokin di bawah (redup + bisa di-collapse, default keumpet biar rapi).
+        rows.sort((a,b)=> ((a.nonaktif===true)?1:0) - ((b.nonaktif===true)?1:0));
+        const _nonaktifCount = rows.filter(r=>r.nonaktif===true).length;
+        let _no = 0, _sepInserted = false;
+        rows.forEach((x) => {
+            const isNon = (x.nonaktif===true);
+            if (isNon && !_sepInserted){
+                _sepInserted = true;
+                const sep = document.createElement('tr');
+                sep.className = 'kry-nonaktif-sep';
+                sep.style.cursor = 'pointer';
+                sep.innerHTML = '<td colspan="9" style="padding:9px 12px;background:#161616;border-top:2px solid #2a2a2a;color:#9ca3af;font-size:12.5px;font-weight:600">'
+                  + '<span class="kry-non-caret">▸</span> Nonaktif / Resign (' + _nonaktifCount + ') — klik buat lihat/sembunyikan</td>';
+                sep.onclick = () => {
+                    const rowsN = tb.querySelectorAll('.kry-nonaktif-row');
+                    const show = rowsN.length && rowsN[0].style.display === 'none';
+                    rowsN.forEach(r => r.style.display = show ? '' : 'none');
+                    const c = sep.querySelector('.kry-non-caret'); if (c) c.textContent = show ? '▾' : '▸';
+                };
+                tb.appendChild(sep);
+            }
             const img = x.photoURL
                 ? '<img src="'+x.photoURL+'" alt="foto" style="width:40px;height:40px;border-radius:50%;object-fit:cover">'
                 : '<span class="muted">-</span>';
             const idDisplay = x.idKaryawan || x.nik || '-';
             const jamKerja = x.jamKerja || 9;
             const tr = document.createElement('tr');
+            if (isNon){ tr.className = 'kry-nonaktif-row'; tr.style.opacity = '.55'; tr.style.display = 'none'; }
+            _no++;
             const tj = x.tanggalJoin ? (x.tanggalJoin.toDate ? x.tanggalJoin.toDate() : new Date(x.tanggalJoin)) : null;
             const tjStr = tj ? tj.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-';
-            tr.innerHTML = '<td>'+(idx+1)+'</td>'+
+            tr.innerHTML = '<td>'+_no+'</td>'+
               '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#f97316;text-decoration:underline;">'+(x.nama||'-')+'</span>'+(x.namaPanggilan?' <span class="muted" style="font-size:12px">('+x.namaPanggilan+')</span>':'')+((!x.updatedAt)?' <span class="tag warn" title="Karyawan baru / belum direview owner. Klik Edit untuk cek gaji & jam kerja.">baru</span>':'')+(x.nonaktif===true?' <span class="tag" title="Sudah resign / dinonaktifkan. Tidak muncul di absensi harian & laporan Telegram.">Nonaktif</span>':'')+'</td>'+
               '<td>'+(x.email||'-')+'</td>'+
               '<td>'+(x.phone||'-')+'</td>'+
