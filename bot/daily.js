@@ -41,7 +41,7 @@ async function main() {
   hadirRows.sort((a, b) => a.ciMs - b.ciMs);
 
   const gaMasuk = [];
-  for (const [uid, info] of kary) if (!presentUids.has(uid)) gaMasuk.push(info.nama);
+  for (const [uid, info] of kary) if (!presentUids.has(uid) && !info.nonaktif) gaMasuk.push(info.nama); // karyawan resign (nonaktif) tidak dihitung "ga masuk"
   gaMasuk.sort((a, b) => a.localeCompare(b, 'id'));
 
   const lines = [];

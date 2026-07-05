@@ -389,6 +389,13 @@
         <div><label>Jabatan</label><input type="text" id="editJabatan" placeholder="contoh: Staff Operasional"></div>
         <div><label>Status</label><select id="editStatusKaryawan"><option value="">-</option><option value="tetap">Tetap</option><option value="kontrak">Kontrak</option><option value="freelance">Freelance</option><option value="magang">Magang</option></select></div>
         <div><label>Tanggal Join</label><input type="date" id="editTanggalJoin"></div>
+        <div style="border-top:1px solid var(--gg-border,#2a2a2a);padding-top:10px;margin-top:2px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;margin:0">
+            <input type="checkbox" id="editNonaktif" style="width:auto;margin:0;accent-color:#f97316">
+            Nonaktif (sudah resign — arsipkan)
+          </label>
+          <p class="muted" style="font-size:12px;margin:6px 0 0">Dicentang = karyawan dianggap resign: namanya ga muncul lagi di daftar "ga masuk" harian &amp; laporan Telegram. Histori absen &amp; payroll TETAP aman (masih muncul di bulan yang ada absennya). Un-ceklis kalau dia kerja lagi.</p>
+        </div>
       </details>
 
       <details open class="kry-section">
