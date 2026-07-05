@@ -1,0 +1,15 @@
+{
+  "name": "absensi-telegram-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "Laporan absensi GoodGems ke Telegram (GitHub Actions cron, baca-saja).",
+  "scripts": {
+    "daily": "node daily.js",
+    "gajian": "node payroll.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

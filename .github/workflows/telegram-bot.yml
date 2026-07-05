@@ -1,0 +1,66 @@
+name: Bot Absensi Telegram
+
+# Laporan absensi otomatis ke Telegram. BACA-SAJA dari Firestore — ga pernah
+# nyentuh flow absen karyawan. Kalau kirim gagal, teksnya kesimpen di koleksi
+# telegram_outbox (ga hilang), dan rerun bakal nyoba ulang.
+#
+# ON SWITCH: isi 3 secret di
+#   Settings -> Secrets and variables -> Actions -> New repository secret
+#     TELEGRAM_BOT_TOKEN         token bot BARU khusus absensi (dari @BotFather)
+#     TELEGRAM_CHAT_ID           id grup/chat tujuan
+#     FIREBASE_SERVICE_ACCOUNT   isi FULL JSON service account (Firebase Console
+#                                -> Project settings -> Service accounts ->
+#                                Generate new private key)
+# Sebelum secret diisi, job-nya SKIP diam (ga error) — aman di-merge duluan.
+
+on:
+  schedule:
+    - cron: '0 14 * * *'   # 14:00 UTC = 21:00 WIB tiap hari  -> laporan harian
+    - cron: '0 0 26 * *'   # 00:00 UTC = 07:00 WIB tanggal 26 -> rekap gajian
+  workflow_dispatch:
+    inputs:
+      report:
+        description: 'Laporan mana buat dites manual sekarang'
+        type: choice
+        options: [daily, gajian]
+        default: daily
+
+permissions:
+  contents: read
+
+concurrency:
+  group: telegram-bot
+  cancel-in-progress: false
+
+jobs:
+  laporan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps
+        working-directory: bot
+        run: npm install --no-audit --no-fund
+
+      - name: Kirim laporan
+        working-directory: bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          # Pilih laporan: manual pakai input; cron tgl-26 -> gajian; selain itu -> harian.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            REPORT="${{ github.event.inputs.report }}"
+          elif [ "${{ github.event.schedule }}" = "0 0 26 * *" ]; then
+            REPORT="gajian"
+          else
+            REPORT="daily"
+          fi
+          echo "Menjalankan laporan: $REPORT"
+          node "$REPORT.js"
