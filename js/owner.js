@@ -239,7 +239,8 @@ async function getTotalKaryawan(){
     try {
         const snap = await getDocs(collection(db, 'karyawan'));
         if (snap.empty) return TOTAL_KARYAWAN_DEFAULT;
-        return snap.size;
+        let n = 0; snap.forEach(d => { if ((d.data()||{}).nonaktif !== true) n++; }); // karyawan nonaktif (resign) tidak dihitung
+        return n;
     } catch (e) {
         return TOTAL_KARYAWAN_DEFAULT;
     }
@@ -550,7 +551,7 @@ async function loadKaryawanList(){
             const tj = x.tanggalJoin ? (x.tanggalJoin.toDate ? x.tanggalJoin.toDate() : new Date(x.tanggalJoin)) : null;
             const tjStr = tj ? tj.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-';
             tr.innerHTML = '<td>'+(idx+1)+'</td>'+
-              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#f97316;text-decoration:underline;">'+(x.nama||'-')+'</span>'+(x.namaPanggilan?' <span class="muted" style="font-size:12px">('+x.namaPanggilan+')</span>':'')+((!x.updatedAt)?' <span class="tag warn" title="Karyawan baru / belum direview owner. Klik Edit untuk cek gaji & jam kerja.">baru</span>':'')+'</td>'+
+              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#f97316;text-decoration:underline;">'+(x.nama||'-')+'</span>'+(x.namaPanggilan?' <span class="muted" style="font-size:12px">('+x.namaPanggilan+')</span>':'')+((!x.updatedAt)?' <span class="tag warn" title="Karyawan baru / belum direview owner. Klik Edit untuk cek gaji & jam kerja.">baru</span>':'')+(x.nonaktif===true?' <span class="tag" title="Sudah resign / dinonaktifkan. Tidak muncul di absensi harian & laporan Telegram.">Nonaktif</span>':'')+'</td>'+
               '<td>'+(x.email||'-')+'</td>'+
               '<td>'+(x.phone||'-')+'</td>'+
               '<td>'+idDisplay+'</td>'+
@@ -647,6 +648,7 @@ async function openEditKaryawan(uid){
         // Field baru: payroll + data pribadi + bank
         if ($('editJabatan')) $('editJabatan').value = d.jabatan || '';
         if ($('editStatusKaryawan')) $('editStatusKaryawan').value = d.statusKaryawan || '';
+        if ($('editNonaktif')) $('editNonaktif').checked = (d.nonaktif === true);
         if ($('editBaseHarian')) $('editBaseHarian').value = d.baseHarian || '';
         if ($('editMultiplierLembur')) $('editMultiplierLembur').value = d.multiplierLembur || 1;
         if ($('editGpsExempt')) $('editGpsExempt').checked = !!d.gpsExempt;
@@ -699,6 +701,7 @@ $('formEditKaryawan').onsubmit = async (e) => {
     const jamKerja = parseInt($('editJamKerja').value, 10) || 9;
     const jabatan = $('editJabatan') ? $('editJabatan').value.trim() : '';
     const statusKaryawan = $('editStatusKaryawan') ? $('editStatusKaryawan').value : '';
+    const nonaktif = $('editNonaktif') ? $('editNonaktif').checked : false;
     const baseHarian = $('editBaseHarian') ? (parseInt($('editBaseHarian').value, 10) || 0) : 0;
     const multiplierLembur = $('editMultiplierLembur') ? (parseFloat($('editMultiplierLembur').value) || 1) : 1;
     const gpsExempt = $('editGpsExempt') ? $('editGpsExempt').checked : false;
@@ -714,7 +717,7 @@ $('formEditKaryawan').onsubmit = async (e) => {
         const payload = {
             nama, namaPanggilan, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload,
             jabatan, statusKaryawan, baseHarian, multiplierLembur, gpsExempt,
-            namaBank, atasNamaRek, nomorRekening,
+            namaBank, atasNamaRek, nomorRekening, nonaktif,
             updatedAt: serverTimestamp()
         };
         await setDoc(doc(db,'karyawan',uid), payload, {merge:true});
@@ -1228,6 +1231,7 @@ async function loadKehadiranMatrix(){
           nama: k.nama || (k.email||'').split('@')[0] || '-',
           email: k.email || '',
           jamKerja: (k.jamKerja!=null ? Number(k.jamKerja) : 9),
+          nonaktif: (k.nonaktif===true),
           events: [],
           byTipe: {}
         };
@@ -1330,6 +1334,8 @@ async function loadKehadiranMatrix(){
       }
       byUid[u].byTipe = bt;
     });
+    // Karyawan nonaktif (resign): sembunyikan dari matrix kecuali dia memang ada absen di hari ini.
+    Object.keys(byUid).forEach(u=>{ const r = byUid[u]; if (r.nonaktif && (!r.events || r.events.length===0)) delete byUid[u]; });
     khRowsCache = byUid;
     renderKehadiranMatrix();
     renderKhSummary();
@@ -1459,7 +1465,7 @@ function renderKehadiranMatrix(){
       row._durAnom = (_brk.maxOne > 2*60*60*1000) || (_pse.maxOne > 2*60*60*1000) || (_efektifMs < 0);
     })();
     tr.dataset.uid = uid;
-    let cells = '<td class="col-nama">'+ gpsDotFor(row) +' '+ (row.nama||'-') +'</td>';
+    let cells = '<td class="col-nama">'+ gpsDotFor(row) +' '+ (row.nama||'-') + (row.nonaktif ? ' <span class="kh-badge" title="Sudah resign / dinonaktifkan">Nonaktif</span>' : '') +'</td>';
     cells += '<td>'+ statusBadgeFor(row) +'</td>';
     // Pairs untuk akumulasi durasi: durasi disisipkan setelah kolom *_out pasangannya
     const DUR_PAIRS = {
@@ -2242,8 +2248,10 @@ const upahLembur = totalJamLembur * ratePerJam * multiplierLembur;
 const total = upahPokok + upahLembur;
 const potongan = (k.potonganBulan && k.potonganBulan[yyyymm]) ? (Number(k.potonganBulan[yyyymm]) || 0) : 0;
 const totalBayar = total - potongan;
+// Karyawan nonaktif (resign) TANPA absensi bulan ini -> skip dari daftar payroll biar bersih. Yang masih ada absennya tetap tampil buat settle gaji terakhir.
+if ((k.nonaktif===true) && hariHadir===0 && hariParsial===0 && hariLupaCO===0) continue;
 rows.push({
-uid: k.uid, nama: k.nama || '-', idKaryawan: k.idKaryawan || '-',
+uid: k.uid, nama: k.nama || '-', idKaryawan: k.idKaryawan || '-', nonaktif: (k.nonaktif===true),
 baseHarian: baseHarian, jamKerja: jamKerja, multiplierLembur: multiplierLembur,
 ratePerJam: ratePerJam,
 hariHadir: hariHadir, hariParsial: hariParsial, hariLupaCO: hariLupaCO,
@@ -2406,7 +2414,7 @@ $('prEmpty').classList.add('hidden');
 })();
 for (const r of __payrollData.rows){
 const tr = document.createElement('tr');
-tr.innerHTML = '<td><b>' + r.nama + '</b><br><small class="muted">' + r.idKaryawan + '</small>' + ((r.hariLupaCO||0) > 0 ? '<br><small style="color:#fcd34d">⚠ ' + r.hariLupaCO + ' hr lupa clock-out</small>' : '') + '</td>' +
+tr.innerHTML = '<td><b>' + r.nama + '</b>' + (r.nonaktif ? ' <span class="tag" title="Sudah resign / dinonaktifkan. Muncul karena masih ada absen bulan ini.">Nonaktif</span>' : '') + '<br><small class="muted">' + r.idKaryawan + '</small>' + ((r.hariLupaCO||0) > 0 ? '<br><small style="color:#fcd34d">⚠ ' + r.hariLupaCO + ' hr lupa clock-out</small>' : '') + '</td>' +
 '<td class="num">' + prFormatRp(r.baseHarian) + '</td>' +
 '<td class="num">' + r.hariHadir + (r.hariParsial ? ' <small class="muted" title="Masuk tapi kerja kurang dari 75% jam standar - dibayar proporsional, bukan sehari penuh">(+' + r.hariParsial + ' parsial)</small>' : '') + '</td>' +
 '<td class="num">' + r.totalJamKerja.toFixed(1) + ' jam</td>' +

@@ -80,7 +80,8 @@ async function fetchKaryawan() {
     map.set(doc.id, {
       uid: doc.id,
       nama: (k.namaPanggilan || k.nama || '(tanpa nama)').trim(),
-      jamKerja: Number(k.jamKerja) || 9
+      jamKerja: Number(k.jamKerja) || 9,
+      nonaktif: k.nonaktif === true
     });
   });
   return map;
