@@ -44,6 +44,37 @@ Genuinely unsure which lane a change belongs to? Treat it as **one lane stricter
 
 ---
 
+## ⚙️ Effort Calibration
+
+Effort (`low` / `medium` / `high` / `xhigh` / `max`) is the reasoning-depth dial. It is set by the owner/harness **before** a turn — the model **cannot** change it mid-task. But the model is the best judge of how much a task actually needs, so it must surface that judgment:
+
+**At the start of any non-trivial task, open with one line** (the *why* in casual Indonesian, per TL;DR rule 9):
+
+```
+⚙️ Effort: <low|medium|high|xhigh|max> — <alasan singkat>
+```
+
+Principles:
+- **Recommend the LOWEST level that still delivers full quality.** Treat the owner's tokens as scarce even when the quota is full — bank them for the hard tasks. Effort **above** a task's needs does not improve output; it wastes tokens and can cause overthinking / overbuilding.
+- **Never inflate difficulty to justify more effort.** If it's easy, say `low` even though that means less work. `xhigh` / `max` require a concrete reason stated in the line.
+- **If a task turns out harder than estimated mid-run, stop and say so** ("ini warrant xhigh, mending bump + re-run") instead of grinding at the wrong level.
+- The line is a **recommendation** — the owner moves the dial. Never claim to have changed it yourself.
+- The model **usually cannot see its own current effort setting** (it feels the effect, not the label) and cannot change it. So recommend in **absolute** terms — what the task needs — not relative to a current value, unless the owner has stated what they set.
+
+Difficulty rubric (examples illustrative; the shapes are universal):
+
+| Level | Task shape | Examples |
+|-------|-----------|----------|
+| `low` | mechanical, single-step, unambiguous | status check, rename, simple `SELECT`, formatting/cleanup |
+| `medium` | routine multi-step, spec is clear | standard CRUD feature, a normal report, a routine receiving/PO flow |
+| `high` | multi-file, non-trivial logic, path is clear — **sensible default for real features** | new feature across files, a real hot-path bug fix, a normal migration |
+| `xhigh` | genuinely hard: architecture, ambiguous requirements, long-horizon agentic, subtle correctness | status-lifecycle redesign, reconciliation engine, pricing engine, cross-system reasoning |
+| `max` | extreme + latency-insensitive + `xhigh` already tried and fell short | almost never in practice |
+
+**Model choice follows the same logic.** A frontier model (e.g. Fable 5, ~2× the cost) earns its premium only on `xhigh`-shaped work. Routine and even most `high` work should run on the standard model to save quota — don't spend the premium model on a task the standard one handles at full quality.
+
+---
+
 ## 🔢 Numbering & Collision Rules
 
 **PR serials** (`PR-CL68`, …) — per-prefix, **per-repo**:
