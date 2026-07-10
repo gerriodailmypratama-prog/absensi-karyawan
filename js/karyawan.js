@@ -1,4 +1,4 @@
-import { auth, db, storage, OWNER_EMAILS, OFFICE_LOCATION } from './firebase-config.js';
+import { auth, db, storage, OWNER_EMAILS, OFFICE_LOCATION, kodeClockout, KODE_SLOT_MS } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { collection, addDoc, doc, query, where, orderBy, getDocs, getDoc, setDoc, Timestamp, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -65,7 +65,7 @@ function updateClockInLock(){
   }
 } // semua event sesi shift aktif, ASC by ts
 let isSubmitting = false; // global lock untuk mencegah double-submit (race condition)
-let userProfile = { nama:'', namaPanggilan:'', jamKerja:9, foto:'' };
+let userProfile = { nama:'', namaPanggilan:'', jamKerja:9, foto:'', wajibKode:false, kodeAdmin:false };
 
 function distanceMeters(lat1, lng1, lat2, lng2){
   const R = 6371000;
@@ -319,7 +319,7 @@ function fmtTime(d){ return d.toLocaleTimeString('id-ID',{hour12:false}); }
 
 async function loadUserProfile(uid){
   try{
-    let nama='', namaPanggilan='', jamKerja=9, foto='', gpsExempt=false;
+    let nama='', namaPanggilan='', jamKerja=9, foto='', gpsExempt=false, wajibKode=false, kodeAdmin=false;
     try{
       const snap = await getDoc(doc(db, 'karyawan', uid));
       if (snap.exists()){
@@ -328,6 +328,8 @@ async function loadUserProfile(uid){
         namaPanggilan = u.namaPanggilan || '';
         jamKerja = (u.jamKerja!=null) ? parseFloat(u.jamKerja) : 9;
         gpsExempt = !!u.gpsExempt;
+        wajibKode = (u.wajibKodeClockout === true);   // wajib kode admin saat Clock Out (pilot per orang)
+        kodeAdmin = (u.kodeAdmin === true);           // admin bertugas: kodenya tampil di halaman dia
       }
     }catch(e){ console.warn('karyawan profile load err:', e); }
     try{
@@ -338,7 +340,8 @@ async function loadUserProfile(uid){
         if (!nama && u2.nama) nama = u2.nama;
       }
     }catch(e){ console.warn('profil load err:', e); }
-    userProfile = { nama, namaPanggilan, jamKerja, foto, gpsExempt };
+    userProfile = { nama, namaPanggilan, jamKerja, foto, gpsExempt, wajibKode, kodeAdmin };
+    initAdminKodeCard();
     // (foto profil opsional) auto-popup wajib upload dihapus
     if (foto){
       $('avatarImg').src = foto;
@@ -580,6 +583,10 @@ $('btnSelfieShoot').onclick = async ()=>{
     extra.noBreak = true;
     window.__noBreak = false;
   }
+  if ((currentType === 'clock_out' || currentType === 'overtime_out') && window.__kodeVerif){
+    extra.kodeVerif = window.__kodeVerif; // 'ok' = terverifikasi admin, 'darurat' = tanpa kode (merah di owner)
+    window.__kodeVerif = null;
+  }
   isSubmitting = true;
   try {
     await saveAttendance(Object.assign({ tipe: currentType, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad, fotoSelfie:selfieUrl }, extra));
@@ -713,6 +720,63 @@ function askConfirm(title, message, okLabel){
   });
 }
 
+/* ===== Kode verifikasi Clock Out (PR-CL55) =====
+   Kartu kode untuk admin bertugas: kode 4 angka tampil di halaman mereka,
+   ganti otomatis tiap 10 menit (tidak perlu generate manual). */
+let __kodeCardTimer = null;
+function initAdminKodeCard(){
+  const card = $('adminKodeCard');
+  if (!card) return;
+  if (!userProfile.kodeAdmin){
+    card.classList.add('hidden');
+    if (__kodeCardTimer){ clearInterval(__kodeCardTimer); __kodeCardTimer = null; }
+    return;
+  }
+  card.classList.remove('hidden');
+  const render = ()=>{
+    $('adminKodeVal').textContent = kodeClockout(0);
+    const sisaMs = KODE_SLOT_MS - (Date.now() % KODE_SLOT_MS);
+    const m = Math.floor(sisaMs/60000), s = Math.floor((sisaMs%60000)/1000);
+    $('adminKodeTimer').textContent = 'Kode ganti otomatis dalam ' + m + ':' + String(s).padStart(2,'0');
+  };
+  render();
+  if (!__kodeCardTimer) __kodeCardTimer = setInterval(render, 1000);
+}
+
+// Modal minta kode saat mau pulang. Resolve: 'ok' (kode benar), 'darurat' (tanpa kode,
+// ditandai merah di dashboard owner), atau null (batal).
+function askKodeClockout(){
+  return new Promise(resolve => {
+    const modal = $('kodeModal'), inp = $('kodeInput'), err = $('kodeErr');
+    if (!modal || !inp){ resolve('ok'); return; } // fallback aman kalau elemen belum ada
+    inp.value = ''; if (err) err.style.display = 'none';
+    modal.classList.remove('hidden');
+    setTimeout(()=>{ try{ inp.focus(); }catch(e){} }, 60);
+    const cleanup = (v)=>{
+      modal.classList.add('hidden');
+      $('btnKodeOk').onclick = null; $('btnKodeCancel').onclick = null;
+      $('btnKodeDarurat').onclick = null; inp.onkeydown = null;
+      resolve(v);
+    };
+    const submit = ()=>{
+      const v = (inp.value||'').trim();
+      // Terima kode slot SEKARANG atau slot SEBELUMNYA (toleransi pas pergantian 10 menit).
+      if (v && (v === kodeClockout(0) || v === kodeClockout(-1))){ cleanup('ok'); }
+      else { if (err) err.style.display = 'block'; inp.value=''; try{ inp.focus(); }catch(e){} }
+    };
+    $('btnKodeOk').onclick = submit;
+    inp.onkeydown = (e)=>{ if (e.key === 'Enter'){ e.preventDefault(); submit(); } };
+    $('btnKodeCancel').onclick = ()=> cleanup(null);
+    $('btnKodeDarurat').onclick = async ()=>{
+      modal.classList.add('hidden');
+      const ok = await askConfirm('Clock Out Darurat?',
+        'Tanpa kode admin, Clock Out ini akan DITANDAI MERAH di dashboard owner dan akan dicek. Lanjutkan hanya kalau admin benar-benar tidak ada.',
+        'Ya, Darurat');
+      if (ok){ cleanup('darurat'); } else { modal.classList.remove('hidden'); }
+    };
+  });
+}
+
 async function handleAction(type){
   if (isSubmitting){ return; } // cegah double-tap race condition
   // (foto profil opsional) tidak lagi memblokir aksi kalau belum upload foto
@@ -753,6 +817,13 @@ async function handleAction(type){
   if (type === 'clock_out'){
     const ok = await askConfirm('Clock Out Sekarang?', 'Apakah Anda yakin ingin Clock Out? Aksi ini menandakan Anda selesai bekerja untuk sesi shift ini.', 'Ya, Clock Out');
     if (!ok) return;
+  }
+
+  // Kode verifikasi admin saat pulang (hanya untuk karyawan yang di-set wajib oleh owner).
+  if ((type === 'clock_out' || type === 'overtime_out') && userProfile.wajibKode){
+    const k = await askKodeClockout();
+    if (!k) return;
+    window.__kodeVerif = k; // 'ok' | 'darurat' -> nempel ke event pas disimpan
   }
 
   if (NO_SELFIE_TYPES.has(type)){

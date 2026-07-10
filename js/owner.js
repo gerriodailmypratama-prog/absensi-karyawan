@@ -139,7 +139,7 @@ async function saveSingleKehadiranCell(uid, inp){
     }
 }
 
-import { auth, db, storage, OWNER_EMAILS, firebaseConfig } from './firebase-config.js';
+import { auth, db, storage, OWNER_EMAILS, firebaseConfig, kodeClockout, KODE_SLOT_MS } from './firebase-config.js';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
 
@@ -671,6 +671,8 @@ async function openEditKaryawan(uid){
         if ($('editJabatan')) $('editJabatan').value = d.jabatan || '';
         if ($('editStatusKaryawan')) $('editStatusKaryawan').value = d.statusKaryawan || '';
         if ($('editNonaktif')) $('editNonaktif').checked = (d.nonaktif === true);
+        if ($('editWajibKode')) $('editWajibKode').checked = (d.wajibKodeClockout === true);
+        if ($('editKodeAdmin')) $('editKodeAdmin').checked = (d.kodeAdmin === true);
         if ($('editBaseHarian')) $('editBaseHarian').value = d.baseHarian || '';
         if ($('editMultiplierLembur')) $('editMultiplierLembur').value = d.multiplierLembur || 1;
         if ($('editGpsExempt')) $('editGpsExempt').checked = !!d.gpsExempt;
@@ -724,6 +726,8 @@ $('formEditKaryawan').onsubmit = async (e) => {
     const jabatan = $('editJabatan') ? $('editJabatan').value.trim() : '';
     const statusKaryawan = $('editStatusKaryawan') ? $('editStatusKaryawan').value : '';
     const nonaktif = $('editNonaktif') ? $('editNonaktif').checked : false;
+    const wajibKodeClockout = $('editWajibKode') ? $('editWajibKode').checked : false;
+    const kodeAdmin = $('editKodeAdmin') ? $('editKodeAdmin').checked : false;
     const baseHarian = $('editBaseHarian') ? (parseInt($('editBaseHarian').value, 10) || 0) : 0;
     const multiplierLembur = $('editMultiplierLembur') ? (parseFloat($('editMultiplierLembur').value) || 1) : 1;
     const gpsExempt = $('editGpsExempt') ? $('editGpsExempt').checked : false;
@@ -739,7 +743,7 @@ $('formEditKaryawan').onsubmit = async (e) => {
         const payload = {
             nama, namaPanggilan, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload,
             jabatan, statusKaryawan, baseHarian, multiplierLembur, gpsExempt,
-            namaBank, atasNamaRek, nomorRekening, nonaktif,
+            namaBank, atasNamaRek, nomorRekening, nonaktif, wajibKodeClockout, kodeAdmin,
             updatedAt: serverTimestamp()
         };
         await setDoc(doc(db,'karyawan',uid), payload, {merge:true});
@@ -1505,7 +1509,10 @@ function renderKehadiranMatrix(){
       const val = ev2 && ev2.ts && ev2.ts.toDate ? fmtHM(ev2.ts.toDate()) : '';
       const editedFlag = (ev2 && (ev2._autoLupa||ev2.editedByOwner||ev2.manualEdit)) ? ' kh-edited' : '';
       const autoTitle = (ev2 && ev2._autoLupa) ? ' title="Jam keluar OTOMATIS (lupa Clock Out >14 jam). Dihitung dari durasi kontrak + istirahat. Edit untuk koreksi."' : '';
-      if (col.tipe === 'clock_in' || col.tipe === 'clock_out') cells += '<td><input type="text" inputmode="numeric" maxlength="5" placeholder="--:--" class="kh-time'+editedFlag+'" data-tipe="'+col.tipe+'" value="'+val+'" data-orig="'+val+'"'+autoTitle+'></td>';
+      // Clock Out darurat tanpa kode admin -> tanda merah mencolok (PR-CL55).
+      const daruratFlag = (col.tipe === 'clock_out' && ev2 && ev2.kodeVerif === 'darurat')
+        ? '<span title="Clock Out DARURAT tanpa kode admin - wajib dicek" style="color:#f87171;font-weight:700;font-size:14px">&#9888;</span> ' : '';
+      if (col.tipe === 'clock_in' || col.tipe === 'clock_out') cells += '<td>'+daruratFlag+'<input type="text" inputmode="numeric" maxlength="5" placeholder="--:--" class="kh-time'+editedFlag+'" data-tipe="'+col.tipe+'" value="'+val+'" data-orig="'+val+'"'+autoTitle+'></td>';
       const pair = DUR_PAIRS[col.tipe];
       if (pair){
         const evIn = row.byTipe[pair.inTipe];
@@ -2875,4 +2882,30 @@ async function showProfilKaryawan(uid){
 (function(){
   var btn = document.getElementById('btnProfilViewClose');
   if(btn) btn.onclick = function(){ var m = document.getElementById('profilViewModal'); if(m) m.classList.add('hidden'); };
+})();
+
+/* ===== Kode Clock-out di sidebar owner (PR-CL55) =====
+   Kode yang sama dengan yang tampil di halaman admin bertugas.
+   Hanya dirender kalau yang login beneran owner (guard email). */
+(function initSidebarKode(){
+  const sb = document.getElementById('sidebar');
+  if (!sb) return;
+  const box = document.createElement('div');
+  box.style.cssText = 'margin:14px 12px;padding:10px 12px;border-radius:10px;background:#141414;border:1px solid #2a2a2a;display:none';
+  box.innerHTML = '<div style="font-size:11px;color:#9ca3af;font-weight:600;letter-spacing:.05em">&#x1F511; KODE CLOCK-OUT</div>'
+    + '<div id="sbKodeVal" style="font-size:22px;font-weight:800;letter-spacing:.3em;color:#f97316">----</div>'
+    + '<div id="sbKodeTimer" style="font-size:11px;color:#9ca3af">-</div>';
+  sb.appendChild(box);
+  const render = ()=>{
+    const u = auth.currentUser;
+    const isOwner = !!(u && u.email && OWNER_EMAILS.includes(u.email.toLowerCase()));
+    box.style.display = isOwner ? '' : 'none';
+    if (!isOwner) return;
+    const v = document.getElementById('sbKodeVal'); if (v) v.textContent = kodeClockout(0);
+    const sisa = KODE_SLOT_MS - (Date.now() % KODE_SLOT_MS);
+    const t = document.getElementById('sbKodeTimer');
+    if (t) t.textContent = 'ganti dalam ' + Math.floor(sisa/60000) + ':' + String(Math.floor((sisa%60000)/1000)).padStart(2,'0');
+  };
+  render();
+  setInterval(render, 1000);
 })();
