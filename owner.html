@@ -413,6 +413,16 @@
           Lewati cek GPS (HP lokasi bermasalah)
         </label>
         <p class="muted" style="font-size:12px;margin:6px 0 0">Nyalakan HANYA kalau HP karyawan ini lokasinya rusak. Absensinya tidak akan ditandai "luar radius", tapi lokasinya jadi tidak diverifikasi (berbasis kepercayaan).</p>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500;margin:12px 0 0">
+          <input type="checkbox" id="editWajibKode" style="width:auto;margin:0;accent-color:#f97316">
+          Wajib kode admin saat Clock Out (uji coba)
+        </label>
+        <p class="muted" style="font-size:12px;margin:6px 0 0">Karyawan ini harus minta kode 4 angka ke admin bertugas tiap mau pulang (cek fisik). Kode ganti otomatis tiap 10 menit. Clock Out darurat tanpa kode tetap bisa, tapi ditandai MERAH di Kehadiran Harian.</p>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500;margin:12px 0 0">
+          <input type="checkbox" id="editKodeAdmin" style="width:auto;margin:0;accent-color:#f97316">
+          Admin kode (bisa lihat &amp; kasih kode Clock Out)
+        </label>
+        <p class="muted" style="font-size:12px;margin:6px 0 0">Untuk admin bertugas/nginap (mis. Ila, Mila, Desty). Kode aktif tampil otomatis di halaman absensi mereka.</p>
       </details>
 
       <details class="kry-section">

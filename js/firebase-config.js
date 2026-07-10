@@ -31,6 +31,21 @@ export const OFFICE_LOCATION = {
         radiusMeters: 300
 };
 
+// === Kode verifikasi Clock Out (PR-CL55) ===
+// Kode 4 angka yang GANTI OTOMATIS tiap 10 menit, dihitung dari slot waktu + secret.
+// Dipakai bersama: owner & admin bertugas NAMPILIN kode, halaman karyawan VERIFIKASI input.
+// Catatan: ini "pager" bukan gembok baja — cukup untuk disiplin staf non-teknis.
+export const KODE_SLOT_MS = 10 * 60 * 1000; // kode ganti tiap 10 menit
+export function kodeClockout(slotOffset) {
+    const slot = Math.floor(Date.now() / KODE_SLOT_MS) + (slotOffset || 0);
+    const s = 'gg-absensi-kode-2026:' + slot;
+    let h = 0;
+    for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+    // Avalanche mixing: biar kode slot BERURUTAN tidak berurutan juga (ga bisa ditebak dari kode sebelumnya).
+    h ^= h >>> 15; h = Math.imul(h, 2246822519); h ^= h >>> 13; h = Math.imul(h, 3266489917); h ^= h >>> 16;
+    return String(Math.abs(h) % 10000).padStart(4, '0');
+}
+
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
