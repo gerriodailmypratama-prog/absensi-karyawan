@@ -2464,8 +2464,31 @@ $('prEmpty').classList.add('hidden');
     if (_warn){ _warn.innerHTML = '⚠ Ada <b>'+_totalLupa+' hari “Lupa Clock Out”</b> di '+_orangLupa+' karyawan — hari itu dibayar penuh otomatis. Cek manual dulu sebelum transfer gaji. <u>Klik untuk lihat detail &amp; edit ▸</u>'; _warn.onclick = openLupaModal; _warn.style.display=''; }
   } else if (_warn){ _warn.style.display = 'none'; }
 })();
-for (const r of __payrollData.rows){
+// Aktif dulu, lalu Nonaktif/resign dikelompokin di bawah (bisa di-collapse) biar daftar aktif bersih.
+const _prRows = __payrollData.rows.slice().sort((a,b)=> ((a.nonaktif===true)?1:0) - ((b.nonaktif===true)?1:0));
+const _prNon = _prRows.filter(r=>r.nonaktif===true);
+const _prNonUnpaidRp = _prNon.reduce((s,r)=> s + ((window.__payStatus[r.uid]==='paid')?0:(r.totalBayar!=null?r.totalBayar:r.total)), 0);
+let _prSepDone = false;
+for (const r of _prRows){
+if (r.nonaktif===true && !_prSepDone){
+  _prSepDone = true;
+  const sep = document.createElement('tr');
+  sep.className = 'pr-nonaktif-sep';
+  sep.style.cursor = 'pointer';
+  sep.innerHTML = '<td colspan="12" style="padding:10px 14px;background:#161616;border-top:2px solid #2a2a2a;color:#9ca3af;font-size:13px;font-weight:600">'
+    + '<span class="pr-non-caret">▸</span> Nonaktif / Resign (' + _prNon.length + ') — klik buat lihat/sembunyikan'
+    + (_prNonUnpaidRp>0 ? ' <span style="color:#fcd34d">· belum dibayar ' + prFormatRp(_prNonUnpaidRp) + '</span>' : '')
+    + '</td>';
+  sep.onclick = ()=>{
+    const rowsN = tbody.querySelectorAll('.pr-nonaktif-row');
+    const show = rowsN.length && rowsN[0].style.display === 'none';
+    rowsN.forEach(x=> x.style.display = show ? '' : 'none');
+    const c = sep.querySelector('.pr-non-caret'); if (c) c.textContent = show ? '▾' : '▸';
+  };
+  tbody.appendChild(sep);
+}
 const tr = document.createElement('tr');
+if (r.nonaktif){ tr.className = 'pr-nonaktif-row'; tr.style.opacity = '.6'; tr.style.display = 'none'; }
 tr.innerHTML = '<td><b>' + r.nama + '</b>' + (r.nonaktif ? ' <span class="tag" title="Sudah resign / dinonaktifkan. Muncul karena masih ada absen bulan ini.">Nonaktif</span>' : '') + '<br><small class="muted">' + r.idKaryawan + '</small>' + ((r.hariLupaCO||0) > 0 ? '<br><small style="color:#fcd34d">⚠ ' + r.hariLupaCO + ' hr lupa clock-out</small>' : '') + '</td>' +
 '<td class="num">' + prFormatRp(r.baseHarian) + '</td>' +
 '<td class="num">' + r.hariHadir + (r.hariParsial ? ' <small class="muted" title="Masuk tapi kerja kurang dari 75% jam standar - dibayar proporsional, bukan sehari penuh">(+' + r.hariParsial + ' parsial)</small>' : '') + '</td>' +
