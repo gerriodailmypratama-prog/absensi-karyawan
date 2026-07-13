@@ -247,10 +247,12 @@ if (btnRegister) {
     }
   };
   btnRegister.onclick = doRegister;
-  // Auto-normalisasi panggilan saat diketik: paksa huruf kecil, buang spasi/simbol.
+  // Biar user boleh ketik huruf besar (mis. "Andi") — case dibiarkan apa adanya di layar,
+  // sistem yang huruf-kecilin otomatis saat simpan (normalizePanggilan). Di sini cuma buang
+  // spasi/simbol biar tetap satu kata.
   const pgInput = $('regPanggilan');
   if (pgInput) pgInput.addEventListener('input', () => {
-    const cleaned = (pgInput.value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cleaned = (pgInput.value || '').replace(/[^a-zA-Z0-9]/g, '');
     if (cleaned !== pgInput.value) pgInput.value = cleaned;
   });
   ['regNama','regPanggilan','regPhone','regEmail','regPassword','regCode'].forEach(id => {
