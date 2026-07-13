@@ -46,6 +46,28 @@ export function kodeClockout(slotOffset) {
     return String(Math.abs(h) % 10000).padStart(4, '0');
 }
 
+// ===== Sinkron identitas dengan WMS GoodGems =====
+// WMS mengidentifikasi karyawan lewat NAMA PANGGILAN: satu kata, huruf kecil semua
+// (mis. "mila", "fian"). Field `nama` di dokumen karyawan diisi panggilan ini supaya
+// sync WMS match otomatis. Helper di bawah dipakai bersama oleh form daftar & owner.
+
+// Normalisasi input panggilan -> { ok, value, error }.
+// Aturan: wajib satu kata, huruf kecil, tanpa spasi/simbol/aksen.
+export function normalizePanggilan(raw){
+  const trimmed = (raw || '').trim();
+  if (!trimmed) return { ok:false, value:'', error:'Nama panggilan wajib diisi.' };
+  const lower = trimmed.toLowerCase();
+  if (/\s/.test(lower)) return { ok:false, value:'', error:'Nama panggilan harus SATU kata (tanpa spasi).' };
+  if (!/^[a-z0-9]+$/.test(lower)) return { ok:false, value:'', error:'Nama panggilan hanya boleh huruf/angka, tanpa simbol atau tanda baca.' };
+  return { ok:true, value:lower, error:'' };
+}
+
+// Saran panggilan dari nama lengkap: ambil kata pertama, buang karakter non-alfanumerik.
+export function suggestPanggilan(fullName){
+  const first = (fullName || '').trim().split(/\s+/)[0] || '';
+  return first.toLowerCase().replace(/[^a-z0-9]/g,'');
+}
+
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);

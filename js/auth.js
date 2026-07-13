@@ -1,4 +1,4 @@
-import { auth, db, OWNER_EMAILS } from './firebase-config.js';
+import { auth, db, OWNER_EMAILS, normalizePanggilan } from './firebase-config.js';
 
 import {
   signInWithEmailAndPassword, GoogleAuthProvider,
@@ -6,7 +6,7 @@ import {
   sendPasswordResetEmail, onAuthStateChanged,
   createUserWithEmailAndPassword, updateProfile
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { doc, setDoc, serverTimestamp, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // Kode rahasia pendaftaran karyawan. Ganti nilai ini kapan saja kalau mau ganti kode.
 const REGISTRATION_CODE = 'GOODGEMS2026';
@@ -39,6 +39,15 @@ const ERR_MAP = {
 };
 
 const friendlyErr = (err) => ERR_MAP[err.code] || ('Login gagal: ' + (err.code || err.message || 'unknown'));
+
+// Normalisasi nomor HP ke format WhatsApp (62xxx, tanpa spasi/simbol) supaya wa.me langsung jalan.
+function waPhone(raw){
+  let p = String(raw || '').replace(/[^\d+]/g, '');
+  p = p.replace(/^\+/, '');
+  if (p.startsWith('0')) p = '62' + p.slice(1);
+  else if (p.startsWith('8')) p = '62' + p; // orang sering ketik 8xxx tanpa 0
+  return p;
+}
 
 // Deteksi in-app browser (FB/IG/Line/WA) - popup Google sering gagal di sini
 const UA = navigator.userAgent || '';
@@ -177,11 +186,17 @@ const regMsg = (t, ok=false) => {
 const btnRegister = $('btnRegister');
 if (btnRegister) {
   const doRegister = async () => {
-    const nama = ($('regNama').value || '').trim();
+    const fullName = ($('regNama').value || '').trim();
     const email = ($('regEmail').value || '').trim();
     const pass = $('regPassword').value || '';
     const code = ($('regCode').value || '').trim();
-    if (!nama || !email || !pass) return regMsg('Lengkapi nama, email, dan password dulu ya.');
+    const pgRaw = $('regPanggilan') ? ($('regPanggilan').value || '') : '';
+    const phone = $('regPhone') ? waPhone($('regPhone').value || '') : '';
+    if (!fullName || !email || !pass) return regMsg('Lengkapi nama, email, dan password dulu ya.');
+    // Nama panggilan: satu kata huruf kecil, dipakai sebagai identitas sync WMS.
+    const pg = normalizePanggilan(pgRaw);
+    if (!pg.ok) return regMsg(pg.error);
+    if (phone.length < 8) return regMsg('No. HP (WhatsApp) wajib diisi dengan benar — buat kirim slip gaji & notifikasi.');
     if (pass.length < 6) return regMsg('Password minimal 6 karakter.');
     if (code.toUpperCase() !== REGISTRATION_CODE.toUpperCase()) {
       return regMsg('Kode pendaftaran salah. Minta kode yang benar ke admin/owner.');
@@ -193,9 +208,33 @@ if (btnRegister) {
     window.__registering = true; // cegah auto-redirect sebelum dokumen karyawan dibuat
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
-      try { await updateProfile(cred.user, { displayName: nama }); } catch (_) {}
+      // Validasi UNIK panggilan (butuh sesi login -> dilakukan setelah akun dibuat).
+      // Kalau bentrok, rollback akun yang baru dibuat biar bisa daftar ulang.
+      try {
+        const snap = await getDocs(collection(db, 'karyawan'));
+        let taken = false;
+        snap.forEach(docSnap => {
+          if (docSnap.id === cred.user.uid) return;
+          const dd = docSnap.data() || {};
+          const other = String(dd.nama || dd.namaPanggilan || '').trim().toLowerCase();
+          if (other && other === pg.value) taken = true;
+        });
+        if (taken) {
+          try { await cred.user.delete(); } catch (_) {}
+          window.__registering = false;
+          btnRegister.disabled = false;
+          btnRegister.textContent = orig || 'Daftar';
+          return regMsg('Nama panggilan "' + pg.value + '" sudah dipakai karyawan lain. Pilih panggilan lain ya.');
+        }
+      } catch (permErr) {
+        // Rules mungkin melarang baca semua karyawan -> keunikan tak bisa dicek di sini.
+        // Lanjut simpan; owner tetap bisa cek/koreksi lewat panel karyawan.
+        console.warn('Cek unik panggilan dilewati:', permErr && permErr.code);
+      }
+      try { await updateProfile(cred.user, { displayName: fullName }); } catch (_) {}
       await setDoc(doc(db, 'karyawan', cred.user.uid), {
-        nama, email, selfRegistered: true,
+        nama: pg.value, namaPanggilan: pg.value, full_name: fullName,
+        email, phone, selfRegistered: true,
         createdAt: serverTimestamp(), tanggalJoin: serverTimestamp()
       }, { merge: true });
       window.__registering = false;
@@ -208,7 +247,13 @@ if (btnRegister) {
     }
   };
   btnRegister.onclick = doRegister;
-  ['regNama','regEmail','regPassword','regCode'].forEach(id => {
+  // Auto-normalisasi panggilan saat diketik: paksa huruf kecil, buang spasi/simbol.
+  const pgInput = $('regPanggilan');
+  if (pgInput) pgInput.addEventListener('input', () => {
+    const cleaned = (pgInput.value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (cleaned !== pgInput.value) pgInput.value = cleaned;
+  });
+  ['regNama','regPanggilan','regPhone','regEmail','regPassword','regCode'].forEach(id => {
     const el = $(id);
     if (el) el.addEventListener('keydown', ev => { if (ev.key === 'Enter') doRegister(); });
   });

@@ -139,7 +139,7 @@ async function saveSingleKehadiranCell(uid, inp){
     }
 }
 
-import { auth, db, storage, OWNER_EMAILS, firebaseConfig, kodeClockout, KODE_SLOT_MS } from './firebase-config.js';
+import { auth, db, storage, OWNER_EMAILS, firebaseConfig, kodeClockout, KODE_SLOT_MS, normalizePanggilan, suggestPanggilan } from './firebase-config.js';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
 
@@ -573,7 +573,7 @@ async function loadKaryawanList(){
             const tj = x.tanggalJoin ? (x.tanggalJoin.toDate ? x.tanggalJoin.toDate() : new Date(x.tanggalJoin)) : null;
             const tjStr = tj ? tj.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-';
             tr.innerHTML = '<td>'+_no+'</td>'+
-              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#f97316;text-decoration:underline;">'+(x.nama||'-')+'</span>'+(x.namaPanggilan?' <span class="muted" style="font-size:12px">('+x.namaPanggilan+')</span>':'')+((!x.updatedAt)?' <span class="tag warn" title="Karyawan baru / belum direview owner. Klik Edit untuk cek gaji & jam kerja.">baru</span>':'')+(x.nonaktif===true?' <span class="tag" title="Sudah resign / dinonaktifkan. Tidak muncul di absensi harian & laporan Telegram.">Nonaktif</span>':'')+'</td>'+
+              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#f97316;text-decoration:underline;">'+(x.nama||'-')+'</span>'+(x.full_name?' <span class="muted" style="font-size:12px">('+x.full_name+')</span>':'')+((!x.updatedAt)?' <span class="tag warn" title="Karyawan baru / belum direview owner. Klik Edit untuk cek gaji & jam kerja.">baru</span>':'')+(x.nonaktif===true?' <span class="tag" title="Sudah resign / dinonaktifkan. Tidak muncul di absensi harian & laporan Telegram.">Nonaktif</span>':'')+'</td>'+
               '<td>'+(x.email||'-')+'</td>'+
               '<td>'+(x.phone||'-')+'</td>'+
               '<td>'+idDisplay+'</td>'+
@@ -595,6 +595,19 @@ async function loadKaryawanList(){
     } catch(e){ console.error('loadKaryawanList:', e); }
 }
 
+// Cek apakah panggilan (huruf kecil) sudah dipakai karyawan lain. excludeUid = lewati dirinya sendiri.
+async function panggilanTaken(pgValue, excludeUid){
+    const snap = await getDocs(collection(db,'karyawan'));
+    let taken = false;
+    snap.forEach(d => {
+        if (d.id === excludeUid) return;
+        const dd = d.data() || {};
+        const other = String(dd.nama || dd.namaPanggilan || '').trim().toLowerCase();
+        if (other && other === pgValue) taken = true;
+    });
+    return taken;
+}
+
 $('formAddUser').onsubmit = async (e) => {
     e.preventDefault();
     const btn = $('btnAddUser');
@@ -608,18 +621,22 @@ $('formAddUser').onsubmit = async (e) => {
         const tanggalJoinVal = $('newTanggalJoin') ? $('newTanggalJoin').value : '';
     if (!nama || !email || !password) { alert('Name, Email, Password are required.'); return; }
     if (password.length < 6) { alert('Password must be at least 6 characters.'); return; }
+    // Nama panggilan (identitas sync WMS): satu kata huruf kecil, unik.
+    const pg = normalizePanggilan($('newNamaPanggilan') ? $('newNamaPanggilan').value : '');
+    if (!pg.ok) { alert(pg.error); return; }
     btn.disabled = true;
     btn.textContent = 'Adding...';
     let secondaryApp = null;
     try {
+        if (await panggilanTaken(pg.value, null)) { alert('Nama panggilan "' + pg.value + '" sudah dipakai karyawan lain. Pilih panggilan lain.'); return; }
         // Init secondary app supaya session owner tidak terganggu
         secondaryApp = initializeApp(firebaseConfig, 'Secondary_' + Date.now());
         const secondaryAuth = getAuth(secondaryApp);
         const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
         const uid = cred.user.uid;
-        // Tulis ke Firestore koleksi 'karyawan'
+        // Tulis ke Firestore koleksi 'karyawan'. nama = panggilan (dibaca WMS), full_name = nama lengkap.
         await setDoc(doc(db,'karyawan',uid), {
-            uid, email, nama,
+            uid, email, nama: pg.value, namaPanggilan: pg.value, full_name: nama,
             phone: phone || '',
             idKaryawan: idKaryawanRaw || ('EMP-' + Math.random().toString(36).slice(2,6).toUpperCase()),
             jamKerja: jamKerja,
@@ -658,8 +675,9 @@ async function openEditKaryawan(uid){
         if (!snap.exists()) { alert('Employee data not found.'); return; }
         const d = snap.data();
         $('editUid').value = uid;
-        $('editNama').value = d.nama || '';
-        if ($('editNamaPanggilan')) $('editNamaPanggilan').value = d.namaPanggilan || '';
+        // editNama = nama lengkap (full_name), editNamaPanggilan = panggilan (field `nama`).
+        $('editNama').value = d.full_name || d.nama || '';
+        if ($('editNamaPanggilan')) $('editNamaPanggilan').value = d.namaPanggilan || d.nama || '';
         $('editPhone').value = d.phone || '';
         $('editIdKaryawan').value = d.idKaryawan || d.nik || '';
         $('editJamKerja').value = d.jamKerja || 9;
@@ -718,8 +736,8 @@ $('btnEditCancel').onclick = () => $('editKaryawanModal').classList.add('hidden'
 $('formEditKaryawan').onsubmit = async (e) => {
     e.preventDefault();
     const uid = $('editUid').value;
-    const nama = $('editNama').value.trim();
-    const namaPanggilan = $('editNamaPanggilan') ? $('editNamaPanggilan').value.trim() : '';
+    const fullName = $('editNama').value.trim();      // nama lengkap -> full_name
+    const pg = normalizePanggilan($('editNamaPanggilan') ? $('editNamaPanggilan').value : '');
     const phone = $('editPhone').value.trim();
     const idKaryawan = $('editIdKaryawan').value.trim();
     const jamKerja = parseInt($('editJamKerja').value, 10) || 9;
@@ -734,14 +752,17 @@ $('formEditKaryawan').onsubmit = async (e) => {
     const namaBank = $('editNamaBank') ? $('editNamaBank').value.trim() : '';
     const atasNamaRek = $('editAtasNamaRek') ? $('editAtasNamaRek').value.trim() : '';
     const nomorRekening = $('editNomorRekening') ? $('editNomorRekening').value.trim() : '';
-    if (!nama) { alert('Nama wajib diisi.'); return; }
+    if (!fullName) { alert('Nama lengkap wajib diisi.'); return; }
+    if (!pg.ok) { alert(pg.error); return; }
     const submitBtn = e.target.querySelector('button[type="submit"]');
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Menyimpan...'; }
     try {
+        if (await panggilanTaken(pg.value, uid)) { alert('Nama panggilan "' + pg.value + '" sudah dipakai karyawan lain. Pilih panggilan lain.'); if (submitBtn){ submitBtn.disabled=false; submitBtn.textContent='Simpan'; } return; }
         const tanggalJoinVal = $('editTanggalJoin') ? $('editTanggalJoin').value : '';
         const tjPayload = tanggalJoinVal ? Timestamp.fromDate(new Date(tanggalJoinVal)) : null;
+        // nama = panggilan (dibaca WMS), full_name = nama lengkap.
         const payload = {
-            nama, namaPanggilan, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload,
+            nama: pg.value, namaPanggilan: pg.value, full_name: fullName, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload,
             jabatan, statusKaryawan, baseHarian, multiplierLembur, gpsExempt,
             namaBank, atasNamaRek, nomorRekening, nonaktif, wajibKodeClockout, kodeAdmin,
             updatedAt: serverTimestamp()
@@ -2277,8 +2298,10 @@ const upahLembur = totalJamLembur * ratePerJam * multiplierLembur;
 const total = upahPokok + upahLembur;
 const potongan = (k.potonganBulan && k.potonganBulan[yyyymm]) ? (Number(k.potonganBulan[yyyymm]) || 0) : 0;
 const totalBayar = total - potongan;
-// Karyawan nonaktif (resign) TANPA absensi bulan ini -> skip dari daftar payroll biar bersih. Yang masih ada absennya tetap tampil buat settle gaji terakhir.
-if ((k.nonaktif===true) && hariHadir===0 && hariParsial===0 && hariLupaCO===0) continue;
+// Sembunyikan karyawan tanpa kehadiran bulan ini (belum bergabung / nonaktif / tidak hadir sama sekali).
+// Aktif = ada hari hadir/parsial atau lembur; hariHadir sudah termasuk hari "lupa clock out".
+// Yang aktif walau gaji Rp0 tetap tampil biar owner sadar. Ini juga menutup kasus nonaktif tanpa absensi.
+if (hariHadir === 0 && hariParsial === 0 && totalJamLembur === 0) continue;
 rows.push({
 uid: k.uid, nama: k.nama || '-', idKaryawan: k.idKaryawan || '-', nonaktif: (k.nonaktif===true),
 baseHarian: baseHarian, jamKerja: jamKerja, multiplierLembur: multiplierLembur,
@@ -2853,7 +2876,8 @@ async function showProfilKaryawan(uid){
     const sec = (title)=>'<h4 style="margin:14px 0 4px;color:#e2e8f0;">'+title+'</h4>';
     let html = '';
     html += sec('Data Pribadi');
-    html += row('Nama', esc(d.nama));
+    html += row('Nama Lengkap', esc(d.full_name || d.nama));
+    html += row('Nama Panggilan', esc(d.namaPanggilan || d.nama));
     html += row('No. HP', esc(d.phone));
     html += row('ID Karyawan', esc(d.idKaryawan||d.nik));
     html += row('Jabatan', esc(d.jabatan));
@@ -2874,7 +2898,7 @@ async function showProfilKaryawan(uid){
     const body = document.getElementById('profilViewBody');
     if(body) body.innerHTML = html;
     const ttl = document.getElementById('pvTitle');
-    if(ttl) ttl.textContent = 'Profil: ' + (d.nama || '-');
+    if(ttl) ttl.textContent = 'Profil: ' + (d.full_name || d.nama || '-');
     const modal = document.getElementById('profilViewModal');
     if(modal) modal.classList.remove('hidden');
   } catch(e){ console.error('showProfilKaryawan', e); alert('Gagal memuat profil: ' + (e && e.message ? e.message : e)); }
@@ -2908,4 +2932,94 @@ async function showProfilKaryawan(uid){
   };
   render();
   setInterval(render, 1000);
+})();
+
+// ===== Backfill nama existing -> panggilan lowercase (1 kata) + full_name, untuk sync WMS =====
+// Hanya menyentuh field nama; data kehadiran (keyed by uid) tidak diubah. Konfirmasi per orang (klik Simpan).
+(function(){
+  const openBtn = document.getElementById('btnSyncNama');
+  if (!openBtn) return;
+  let modal = null;
+  const escHtml = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const escAttr = s => escHtml(s).replace(/"/g,'&quot;');
+
+  function buildModal(){
+    modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:9999;padding:16px';
+    modal.innerHTML =
+      '<div style="background:var(--gg-surface,#262522);color:var(--gg-text,#f5f3ec);border:1px solid var(--gg-border,#403d37);border-radius:12px;max-width:840px;width:100%;max-height:88vh;overflow:auto;padding:18px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px"><h3 style="margin:0">Sinkronkan Nama ke WMS</h3><button type="button" id="syncNamaClose" class="btn btn-secondary">Tutup</button></div>'
+      + '<p class="muted" style="font-size:13px;margin:0 0 12px">Cek tiap baris. <b>Panggilan</b> = 1 kata huruf kecil (dibaca WMS). <b>Nama Lengkap</b> tampil di profil. Klik <b>Simpan</b> per orang. Data kehadiran tidak tersentuh.</p>'
+      + '<div id="syncNamaWarn" style="color:#fca5a5;font-size:13px;margin-bottom:8px"></div>'
+      + '<div id="syncNamaList"></div>'
+      + '</div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
+    modal.querySelector('#syncNamaClose').onclick = () => { modal.style.display = 'none'; };
+  }
+
+  function checkDupes(){
+    const seen = {}, dupes = new Set();
+    modal.querySelectorAll('.syncRow').forEach(r => {
+      const v = (r.querySelector('.sync-pg').value||'').trim().toLowerCase();
+      if (!v) return;
+      if (seen[v]) dupes.add(v); else seen[v] = true;
+    });
+    modal.querySelectorAll('.syncRow').forEach(r => {
+      const inp = r.querySelector('.sync-pg');
+      const v = (inp.value||'').trim().toLowerCase();
+      inp.style.outline = (v && dupes.has(v)) ? '2px solid #ef4444' : '';
+    });
+    modal.querySelector('#syncNamaWarn').textContent = dupes.size
+      ? ('Panggilan kembar: ' + Array.from(dupes).join(', ') + ' — bikin unik dulu sebelum simpan.') : '';
+  }
+
+  async function saveRow(btnEl){
+    const row = btnEl.closest('.syncRow');
+    const uid = row.dataset.uid;
+    const full = (row.querySelector('.sync-full').value||'').trim();
+    const pg = normalizePanggilan(row.querySelector('.sync-pg').value||'');
+    if (!pg.ok){ alert(pg.error); return; }
+    if (!full){ alert('Nama lengkap wajib diisi.'); return; }
+    btnEl.disabled = true; btnEl.textContent = '...';
+    try {
+      if (await panggilanTaken(pg.value, uid)){ alert('Panggilan "' + pg.value + '" sudah dipakai karyawan lain.'); btnEl.disabled = false; btnEl.textContent = 'Simpan'; return; }
+      await setDoc(doc(db,'karyawan',uid), { nama: pg.value, namaPanggilan: pg.value, full_name: full, updatedAt: serverTimestamp() }, { merge:true });
+      btnEl.textContent = 'Tersimpan ✓'; btnEl.classList.remove('btn-primary'); btnEl.classList.add('btn-success');
+      row.querySelector('.sync-cur').textContent = 'skrg: ' + pg.value;
+    } catch(e){ alert('Gagal simpan: ' + (e && e.message ? e.message : e)); btnEl.disabled = false; btnEl.textContent = 'Simpan'; }
+  }
+
+  async function open(){
+    if (!modal) buildModal();
+    modal.style.display = 'flex';
+    const list = modal.querySelector('#syncNamaList');
+    list.innerHTML = '<p class="muted">Memuat...</p>';
+    let rows = [];
+    try {
+      const snap = await getDocs(collection(db,'karyawan'));
+      snap.forEach(d => rows.push(Object.assign({ id:d.id }, d.data()||{})));
+    } catch(e){ list.innerHTML = '<p style="color:#fca5a5">Gagal memuat: ' + (e && e.message ? e.message : e) + '</p>'; return; }
+    rows.sort((a,b)=>String(a.nama||'').localeCompare(String(b.nama||'')));
+    list.innerHTML = rows.map(r => {
+      const full = r.full_name || r.nama || '';
+      const nrm = normalizePanggilan(r.namaPanggilan || '');
+      const sugg = nrm.ok ? nrm.value : suggestPanggilan(full || r.nama || '');
+      return '<div class="syncRow" data-uid="' + escAttr(r.id) + '" style="display:grid;grid-template-columns:1.2fr 1fr auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--gg-border,#403d37)">'
+        + '<input class="sync-full" type="text" value="' + escAttr(full) + '" placeholder="Nama lengkap" style="padding:6px 8px">'
+        + '<input class="sync-pg" type="text" maxlength="20" value="' + escAttr(sugg) + '" placeholder="panggilan" style="padding:6px 8px">'
+        + '<span class="sync-cur muted" style="font-size:12px;white-space:nowrap">skrg: ' + escHtml(r.nama||'-') + '</span>'
+        + '<button type="button" class="btn btn-sm btn-primary sync-save">Simpan</button>'
+        + '</div>';
+    }).join('') || '<p class="muted">Belum ada karyawan.</p>';
+    checkDupes();
+    list.querySelectorAll('.sync-pg').forEach(inp => inp.addEventListener('input', () => {
+      const cleaned = (inp.value||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+      if (cleaned !== inp.value) inp.value = cleaned;
+      checkDupes();
+    }));
+    list.querySelectorAll('.sync-save').forEach(b => b.onclick = () => saveRow(b));
+  }
+
+  openBtn.onclick = open;
 })();

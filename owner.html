@@ -259,7 +259,8 @@
         <h3>Tambah Karyawan Baru</h3>
         <p class="muted" id="addUserNote">Owner tetap login. User baru dibuat via secondary Auth instance (session owner tidak terganggu).</p>
         <form id="formAddUser" class="form-grid" autocomplete="off">
-          <div><label>Nama</label><input type="text" id="newNama" required></div>
+          <div><label>Nama Lengkap</label><input type="text" id="newNama" required></div>
+          <div><label>Nama Panggilan</label><input type="text" id="newNamaPanggilan" placeholder="1 kata, huruf kecil — cth: mila" maxlength="20" required></div>
           <div><label>Email</label><input type="email" id="newEmail" required></div>
           <div><label>No. HP</label><input type="text" id="newPhone" placeholder="+62..."></div>
           <div><label>ID Karyawan</label><input type="text" id="newIdKaryawan" placeholder="auto (EMP-XXX) jika kosong"></div>
@@ -272,6 +273,10 @@
           </div>
         </form>
         <p id="addUserMsg" class="msg"></p>
+        <div style="margin-top:10px;border-top:1px solid var(--gg-border,#403d37);padding-top:10px">
+          <button type="button" id="btnSyncNama" class="btn btn-secondary">🔗 Sinkronkan Nama ke WMS</button>
+          <small style="color:#9ca3af;display:block;margin-top:4px">Rapikan nama karyawan lama jadi panggilan huruf kecil (1 kata) + isi nama lengkap. Data kehadiran tidak tersentuh.</small>
+        </div>
       </div>
 
       <div class="card">
@@ -382,8 +387,8 @@
 
       <details open class="kry-section">
         <summary>Data Pribadi</summary>
-        <div><label>Nama</label><input type="text" id="editNama" required></div>
-        <div><label>Nama Panggilan</label><input type="text" id="editNamaPanggilan" placeholder="contoh: Mila"></div>
+        <div><label>Nama Lengkap</label><input type="text" id="editNama" required></div>
+        <div><label>Nama Panggilan <small style="color:#9ca3af">(1 kata, huruf kecil — dipakai sync WMS)</small></label><input type="text" id="editNamaPanggilan" placeholder="cth: mila" maxlength="20" required></div>
         <div><label>No. HP</label><input type="text" id="editPhone" inputmode="numeric"></div>
         <div><label>ID Karyawan</label><input type="text" id="editIdKaryawan"></div>
         <div><label>Jabatan</label><input type="text" id="editJabatan" placeholder="contoh: Staff Operasional"></div>
