@@ -1436,12 +1436,12 @@ function statusBadgeFor(row){
   if (bt.clock_out || bt.overtime_out) return '<span class="kh-badge kh-finish">Finished</span>';
   if (bt.break_in && !bt.break_out) return '<span class="kh-badge kh-break">Break</span>';
   if (bt.pause_in && !bt.pause_out) return '<span class="kh-badge kh-pause">Paused</span>';
-  // Sesi nyangkut: clock_in tanpa clock_out yang umurnya > 14 jam = lupa Clock Out.
+  // Sesi nyangkut: clock_in tanpa clock_out yang umurnya > 18 jam = lupa Clock Out.
   if ((bt.clock_in || bt.overtime_in) && !bt.clock_out && !bt.overtime_out) {
     const ciEv = bt.clock_in || bt.overtime_in;
     const ciMs = (ciEv && ciEv.ts) ? (ciEv.ts.toMillis ? ciEv.ts.toMillis() : (ciEv.ts.toDate ? ciEv.ts.toDate().getTime() : 0)) : 0;
     if (ciMs && (Date.now() - ciMs) > 18 * 60 * 60 * 1000) {
-      return '<span class="kh-badge kh-lupa" title="Clock In lebih dari 14 jam tanpa Clock Out. Kemungkinan lupa Clock Out. Isi jam pulang di kolom Clock Out untuk koreksi.">\u26A0 Lupa Clock Out</span>';
+      return '<span class="kh-badge kh-lupa" title="Clock In lebih dari 18 jam tanpa Clock Out. Kemungkinan lupa Clock Out. Isi jam pulang di kolom Clock Out untuk koreksi.">\u26A0 Lupa Clock Out</span>';
     }
   }
   if (bt.clock_in || bt.overtime_in) return '<span class="kh-badge kh-working">Working</span>';
@@ -1465,7 +1465,7 @@ function renderKehadiranMatrix(){
   uids.forEach(uid=>{
     const row = khRowsCache[uid];
     const tr = document.createElement('tr');
-    // Lupa Clock Out: clock_in > 14 jam tanpa clock_out/overtime_out -> hitung jam keluar otomatis.
+    // Lupa Clock Out: clock_in > 18 jam tanpa clock_out/overtime_out -> hitung jam keluar otomatis.
     // Rumus: clock_in + (kontrak-1 jam kerja efektif) + min(istirahat aktual, 1 jam). Display-only, tidak tulis DB.
     (function(){
       const _bt = row.byTipe || {};
@@ -1534,7 +1534,7 @@ function renderKehadiranMatrix(){
       if (col.tipe === 'clock_out' && !ev2 && row._autoOut) ev2 = row._autoOut;
       const val = ev2 && ev2.ts && ev2.ts.toDate ? fmtHM(ev2.ts.toDate()) : '';
       const editedFlag = (ev2 && (ev2._autoLupa||ev2.editedByOwner||ev2.manualEdit)) ? ' kh-edited' : '';
-      const autoTitle = (ev2 && ev2._autoLupa) ? ' title="Jam keluar OTOMATIS (lupa Clock Out >14 jam). Dihitung dari durasi kontrak + istirahat. Edit untuk koreksi."' : '';
+      const autoTitle = (ev2 && ev2._autoLupa) ? ' title="Jam keluar OTOMATIS (lupa Clock Out >18 jam). Dihitung dari durasi kontrak + istirahat. Edit untuk koreksi."' : '';
       // Clock Out darurat tanpa kode admin -> tanda merah mencolok (PR-CL55).
       const daruratFlag = (col.tipe === 'clock_out' && ev2 && ev2.kodeVerif === 'darurat')
         ? '<span title="Clock Out DARURAT tanpa kode admin - wajib dicek" style="color:#f87171;font-weight:700;font-size:14px">&#9888;</span> ' : '';
