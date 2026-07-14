@@ -428,6 +428,20 @@
           Admin kode (bisa lihat &amp; kasih kode Clock Out)
         </label>
         <p class="muted" style="font-size:12px;margin:6px 0 0">Untuk admin bertugas/nginap (mis. Ila, Mila, Desty). Kode aktif tampil otomatis di halaman absensi mereka.</p>
+        <div style="border-top:1px solid var(--gg-border,#2a2a2a);padding-top:10px;margin-top:12px">
+          <label style="font-weight:600">🌴 Hari Libur Mingguan</label>
+          <select id="editLiburHari" style="margin-top:4px">
+            <option value="">Tidak ada</option>
+            <option value="0">Minggu</option>
+            <option value="1">Senin</option>
+            <option value="2">Selasa</option>
+            <option value="3">Rabu</option>
+            <option value="4">Kamis</option>
+            <option value="5">Jumat</option>
+            <option value="6">Sabtu</option>
+          </select>
+          <p class="muted" id="editLiburHint" style="font-size:12px;margin:6px 0 0">Maks 2 orang/hari. Hari libur = ga dianggap mangkir (ga dibayar, ga ubah gaji). Kuota tiap hari muncul di daftar pilihan.</p>
+        </div>
       </details>
 
       <details class="kry-section">

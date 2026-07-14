@@ -41,14 +41,21 @@ async function main() {
   hadirRows.sort((a, b) => a.ciMs - b.ciMs);
 
   const gaMasuk = [];
-  for (const [uid, info] of kary) if (!presentUids.has(uid) && !info.nonaktif) gaMasuk.push(info.nama); // karyawan resign (nonaktif) tidak dihitung "ga masuk"
+  const liburHariIni = [];
+  for (const [uid, info] of kary) {
+    if (presentUids.has(uid) || info.nonaktif) continue;
+    if (info.liburHari === p.wd) liburHariIni.push(info.nama); // dijadwalkan libur hari ini -> bukan mangkir
+    else gaMasuk.push(info.nama);
+  }
   gaMasuk.sort((a, b) => a.localeCompare(b, 'id'));
+  liburHariIni.sort((a, b) => a.localeCompare(b, 'id'));
 
   const lines = [];
   lines.push('🕐 ABSENSI — ' + L.wibTanggalPanjang(now));
   lines.push('Hadir: ' + hadirRows.length + ' orang');
   for (const r of hadirRows) lines.push(r.line);
   if (telat.length) lines.push('⏰ Telat: ' + telat.join(', '));
+  if (liburHariIni.length) lines.push('🌴 Libur: ' + liburHariIni.join(', '));
   if (gaMasuk.length) lines.push('❌ Ga masuk: ' + gaMasuk.join(', '));
   lines.push('📊 Total tim: ' + L.fmtDur(totalEfektif) + ' efektif');
 

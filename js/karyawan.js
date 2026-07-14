@@ -1,4 +1,4 @@
-import { auth, db, storage, OWNER_EMAILS, OFFICE_LOCATION, kodeClockout, KODE_SLOT_MS } from './firebase-config.js';
+import { auth, db, storage, OWNER_EMAILS, OFFICE_LOCATION, kodeClockout, KODE_SLOT_MS, LIBUR_HARI, LIBUR_MAX } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { collection, addDoc, doc, query, where, orderBy, getDocs, getDoc, setDoc, Timestamp, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -65,7 +65,7 @@ function updateClockInLock(){
   }
 } // semua event sesi shift aktif, ASC by ts
 let isSubmitting = false; // global lock untuk mencegah double-submit (race condition)
-let userProfile = { nama:'', namaPanggilan:'', jamKerja:9, foto:'', wajibKode:false, kodeAdmin:false };
+let userProfile = { nama:'', namaPanggilan:'', jamKerja:9, foto:'', wajibKode:false, kodeAdmin:false, liburHari:null, liburPilihan:null };
 
 function distanceMeters(lat1, lng1, lat2, lng2){
   const R = 6371000;
@@ -319,7 +319,7 @@ function fmtTime(d){ return d.toLocaleTimeString('id-ID',{hour12:false}); }
 
 async function loadUserProfile(uid){
   try{
-    let nama='', namaPanggilan='', jamKerja=9, foto='', gpsExempt=false, wajibKode=false, kodeAdmin=false;
+    let nama='', namaPanggilan='', jamKerja=9, foto='', gpsExempt=false, wajibKode=false, kodeAdmin=false, liburHari=null, liburPilihan=null;
     try{
       const snap = await getDoc(doc(db, 'karyawan', uid));
       if (snap.exists()){
@@ -330,6 +330,8 @@ async function loadUserProfile(uid){
         gpsExempt = !!u.gpsExempt;
         wajibKode = (u.wajibKodeClockout === true);   // wajib kode admin saat Clock Out (pilot per orang)
         kodeAdmin = (u.kodeAdmin === true);           // admin bertugas: kodenya tampil di halaman dia
+        liburHari = (u.liburHari != null ? Number(u.liburHari) : null);
+        liburPilihan = Array.isArray(u.liburPilihan) ? u.liburPilihan.map(Number) : null;
       }
     }catch(e){ console.warn('karyawan profile load err:', e); }
     try{
@@ -340,7 +342,7 @@ async function loadUserProfile(uid){
         if (!nama && u2.nama) nama = u2.nama;
       }
     }catch(e){ console.warn('profil load err:', e); }
-    userProfile = { nama, namaPanggilan, jamKerja, foto, gpsExempt, wajibKode, kodeAdmin };
+    userProfile = { nama, namaPanggilan, jamKerja, foto, gpsExempt, wajibKode, kodeAdmin, liburHari, liburPilihan };
     initAdminKodeCard();
     // (foto profil opsional) auto-popup wajib upload dihapus
     if (foto){
@@ -776,6 +778,55 @@ function askKodeClockout(){
     };
   });
 }
+
+/* ===== Hari Libur Mingguan — karyawan pilih sendiri 3 prioritas (PR-CL60) ===== */
+function _liburOptionsHtml(sel){
+  let h = '<option value="">— pilih hari —</option>';
+  for (let i=0;i<7;i++) h += '<option value="'+i+'"'+(String(sel)===String(i)?' selected':'')+'>'+LIBUR_HARI[i]+'</option>';
+  return h;
+}
+function openLiburModal(){
+  const modal = $('liburModal'); if (!modal) return;
+  const cur = userProfile.liburHari;
+  const cc = $('liburCurrent');
+  if (cc) cc.innerHTML = (cur!=null && cur>=0)
+    ? 'Hari libur kamu sekarang: <b style="color:#6ee7b7">'+LIBUR_HARI[cur]+'</b>'
+    : 'Kamu belum punya hari libur. Pilih di bawah ya.';
+  const pref = Array.isArray(userProfile.liburPilihan) ? userProfile.liburPilihan : [];
+  $('liburPil1').innerHTML = _liburOptionsHtml(pref[0]!=null?pref[0]:cur);
+  $('liburPil2').innerHTML = _liburOptionsHtml(pref[1]);
+  $('liburPil3').innerHTML = _liburOptionsHtml(pref[2]);
+  const err=$('liburErr'); if(err) err.style.display='none';
+  modal.classList.remove('hidden');
+}
+async function saveLiburPilihan(){
+  const picks=[$('liburPil1').value, $('liburPil2').value, $('liburPil3').value].filter(v=>v!=='').map(Number);
+  const err=$('liburErr');
+  if (picks.length < 1){ if(err){err.textContent='Minimal pilih 1 hari.';err.style.display='block';} return; }
+  if (new Set(picks).size !== picks.length){ if(err){err.textContent='Pilihan harus hari yang berbeda-beda.';err.style.display='block';} return; }
+  const btn=$('btnLiburSave'); btn.disabled=true; btn.textContent='Menyimpan...';
+  try {
+    // Hitung slot tiap hari (kecuali diri sendiri & yang nonaktif). Maks LIBUR_MAX per hari.
+    const snap = await getDocs(collection(db,'karyawan'));
+    const cnt=[0,0,0,0,0,0,0];
+    snap.forEach(s => { if (s.id===currentUser.uid) return; const k=s.data()||{}; if (k.nonaktif===true) return; if (k.liburHari!=null){ const h=Number(k.liburHari); if(h>=0&&h<=6) cnt[h]++; } });
+    let assigned=null, rank=0;
+    for (let i=0;i<picks.length;i++){ if (cnt[picks[i]] < LIBUR_MAX){ assigned=picks[i]; rank=i+1; break; } }
+    if (assigned==null){
+      alert('Maaf, semua pilihan hari kamu udah penuh (maks '+LIBUR_MAX+' orang/hari). Coba pilih hari lain, atau hubungi admin.');
+      btn.disabled=false; btn.textContent='Simpan Pilihan'; return;
+    }
+    await setDoc(doc(db,'karyawan',currentUser.uid), { liburHari: assigned, liburPilihan: picks, liburSetBy:'self', updatedAt: serverTimestamp() }, { merge:true });
+    userProfile.liburHari = assigned; userProfile.liburPilihan = picks;
+    $('liburModal').classList.add('hidden');
+    alert('✅ Hari libur kamu: ' + LIBUR_HARI[assigned] + (rank>1 ? '\n(Pilihan utama penuh, kamu dapat pilihan ke-'+rank+'.)' : ' (pilihan utama).') + '\nBerlaku tiap minggu.');
+  } catch(e){ console.error('saveLibur', e); alert('Gagal menyimpan: ' + (e && e.message ? e.message : e)); btn.disabled=false; btn.textContent='Simpan Pilihan'; }
+}
+(function wireLibur(){
+  const b=$('btnLibur'); if (b) b.onclick=openLiburModal;
+  const c=$('btnLiburCancel'); if (c) c.onclick=()=>$('liburModal').classList.add('hidden');
+  const s=$('btnLiburSave'); if (s) s.onclick=saveLiburPilihan;
+})();
 
 async function handleAction(type){
   if (isSubmitting){ return; } // cegah double-tap race condition

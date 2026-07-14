@@ -139,7 +139,7 @@ async function saveSingleKehadiranCell(uid, inp){
     }
 }
 
-import { auth, db, storage, OWNER_EMAILS, firebaseConfig, kodeClockout, KODE_SLOT_MS, normalizePanggilan, suggestPanggilan } from './firebase-config.js';
+import { auth, db, storage, OWNER_EMAILS, firebaseConfig, kodeClockout, KODE_SLOT_MS, normalizePanggilan, suggestPanggilan, LIBUR_HARI, LIBUR_MAX } from './firebase-config.js';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
 
@@ -526,6 +526,20 @@ async function loadKaryawanList(){
         const rows = [];
         snap.forEach(d => rows.push({id:d.id, ...d.data()}));
         rows.sort((a,b)=>(a.nama||'').localeCompare(b.nama||''));
+        // === Jadwal Libur Mingguan (ringkasan + kuota) ===
+        (function(){
+          const _tbl = document.getElementById('tblKaryawan');
+          const _wrap = _tbl ? _tbl.closest('.card') : null;
+          let _box = document.getElementById('liburSchedule');
+          if (!_box && _wrap && _wrap.parentElement){ _box=document.createElement('div'); _box.id='liburSchedule'; _box.className='card'; _wrap.parentElement.insertBefore(_box, _wrap); }
+          if (!_box) return;
+          const byDay=[[],[],[],[],[],[],[]];
+          rows.forEach(r => { if (r.nonaktif===true) return; if (r.liburHari!=null){ const h=Number(r.liburHari); if(h>=0&&h<=6) byDay[h].push(r.namaPanggilan||r.nama||'?'); } });
+          window.__liburByDay = byDay;
+          let html='<h3 style="margin:0 0 8px">🌴 Jadwal Libur Mingguan <small class="muted" style="font-weight:400;font-size:12px">— maks '+LIBUR_MAX+'/hari, ga dianggap mangkir</small></h3><div style="display:flex;flex-wrap:wrap;gap:8px">';
+          for (let h=0;h<7;h++){ const full=byDay[h].length>=LIBUR_MAX; const col=byDay[h].length===0?'#6b7280':full?'#f97316':'#9ca3af'; html+='<div style="flex:1 1 120px;min-width:110px;padding:8px 10px;border:1px solid #2a2a2a;border-radius:10px;background:#141414"><div style="font-size:12px;font-weight:700;color:'+col+'">'+LIBUR_HARI[h]+' ('+byDay[h].length+'/'+LIBUR_MAX+')</div><div style="font-size:12px;color:#d1d5db;margin-top:2px">'+(byDay[h].length?byDay[h].join(', '):'<span class="muted">—</span>')+'</div></div>'; }
+          html+='</div>'; _box.innerHTML=html;
+        })();
         // === Auto-isi default buat yang belum punya: ID (GG-####), jam kerja 9, base 100rb, tanggal join ===
         let _maxKid = 0;
         rows.forEach(r => { const m = /^GG-(\d+)$/i.exec(r.idKaryawan || ''); if (m){ const n = parseInt(m[1],10); if (n > _maxKid) _maxKid = n; } });
@@ -573,7 +587,7 @@ async function loadKaryawanList(){
             const tj = x.tanggalJoin ? (x.tanggalJoin.toDate ? x.tanggalJoin.toDate() : new Date(x.tanggalJoin)) : null;
             const tjStr = tj ? tj.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-';
             tr.innerHTML = '<td>'+_no+'</td>'+
-              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#f97316;text-decoration:underline;">'+(x.nama||'-')+'</span>'+(x.full_name?' <span class="muted" style="font-size:12px">('+x.full_name+')</span>':'')+((!x.updatedAt)?' <span class="tag warn" title="Karyawan baru / belum direview owner. Klik Edit untuk cek gaji & jam kerja.">baru</span>':'')+(x.nonaktif===true?' <span class="tag" title="Sudah resign / dinonaktifkan. Tidak muncul di absensi harian & laporan Telegram.">Nonaktif</span>':'')+'</td>'+
+              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#f97316;text-decoration:underline;">'+(x.nama||'-')+'</span>'+(x.full_name?' <span class="muted" style="font-size:12px">('+x.full_name+')</span>':'')+((!x.updatedAt)?' <span class="tag warn" title="Karyawan baru / belum direview owner. Klik Edit untuk cek gaji & jam kerja.">baru</span>':'')+(x.nonaktif===true?' <span class="tag" title="Sudah resign / dinonaktifkan. Tidak muncul di absensi harian & laporan Telegram.">Nonaktif</span>':'')+(x.liburHari!=null?' <span class="tag" style="background:#12291f;color:#6ee7b7" title="Hari libur mingguan">🌴 '+LIBUR_HARI[Number(x.liburHari)]+'</span>':'')+'</td>'+
               '<td>'+(x.email||'-')+'</td>'+
               '<td>'+(x.phone||'-')+'</td>'+
               '<td>'+idDisplay+'</td>'+
@@ -691,6 +705,18 @@ async function openEditKaryawan(uid){
         if ($('editNonaktif')) $('editNonaktif').checked = (d.nonaktif === true);
         if ($('editWajibKode')) $('editWajibKode').checked = (d.wajibKodeClockout === true);
         if ($('editKodeAdmin')) $('editKodeAdmin').checked = (d.kodeAdmin === true);
+        if ($('editLiburHari')) {
+          $('editLiburHari').value = (d.liburHari != null ? String(d.liburHari) : '');
+          try {
+            const _all = await getDocs(collection(db,'karyawan'));
+            const _cnt=[0,0,0,0,0,0,0], _nm=[[],[],[],[],[],[],[]];
+            _all.forEach(s2 => { if (s2.id===uid) return; const k2=s2.data()||{}; if (k2.nonaktif===true) return; if (k2.liburHari!=null){ const h=Number(k2.liburHari); if(h>=0&&h<=6){ _cnt[h]++; _nm[h].push(k2.namaPanggilan||k2.nama||'?'); } } });
+            Array.from($('editLiburHari').options).forEach(opt => {
+              if (opt.value==='') return; const h=Number(opt.value);
+              opt.textContent = LIBUR_HARI[h] + (_cnt[h]>=LIBUR_MAX ? ' — PENUH ('+_nm[h].join(', ')+')' : _cnt[h]>0 ? ' — '+_cnt[h]+'/'+LIBUR_MAX+' ('+_nm[h].join(', ')+')' : ' — kosong');
+            });
+          } catch(e){ console.warn('libur quota label err', e); }
+        }
         if ($('editBaseHarian')) $('editBaseHarian').value = d.baseHarian || '';
         if ($('editMultiplierLembur')) $('editMultiplierLembur').value = d.multiplierLembur || 1;
         if ($('editGpsExempt')) $('editGpsExempt').checked = !!d.gpsExempt;
@@ -746,6 +772,7 @@ $('formEditKaryawan').onsubmit = async (e) => {
     const nonaktif = $('editNonaktif') ? $('editNonaktif').checked : false;
     const wajibKodeClockout = $('editWajibKode') ? $('editWajibKode').checked : false;
     const kodeAdmin = $('editKodeAdmin') ? $('editKodeAdmin').checked : false;
+    const liburHari = ($('editLiburHari') && $('editLiburHari').value !== '') ? parseInt($('editLiburHari').value, 10) : null;
     const baseHarian = $('editBaseHarian') ? (parseInt($('editBaseHarian').value, 10) || 0) : 0;
     const multiplierLembur = $('editMultiplierLembur') ? (parseFloat($('editMultiplierLembur').value) || 1) : 1;
     const gpsExempt = $('editGpsExempt') ? $('editGpsExempt').checked : false;
@@ -758,6 +785,12 @@ $('formEditKaryawan').onsubmit = async (e) => {
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Menyimpan...'; }
     try {
         if (await panggilanTaken(pg.value, uid)) { alert('Nama panggilan "' + pg.value + '" sudah dipakai karyawan lain. Pilih panggilan lain.'); if (submitBtn){ submitBtn.disabled=false; submitBtn.textContent='Simpan'; } return; }
+        if (liburHari != null) {
+          const _allL = await getDocs(collection(db,'karyawan'));
+          let _c=0; const _nm=[];
+          _allL.forEach(s2 => { if (s2.id===uid) return; const k2=s2.data()||{}; if (k2.nonaktif===true) return; if (Number(k2.liburHari)===liburHari){ _c++; _nm.push(k2.namaPanggilan||k2.nama||'?'); } });
+          if (_c >= LIBUR_MAX && !confirm('Hari ' + LIBUR_HARI[liburHari] + ' sudah penuh (' + _c + ' orang: ' + _nm.join(', ') + '). Yakin tetap tambah jadi ' + (_c+1) + '?')) { if (submitBtn){ submitBtn.disabled=false; submitBtn.textContent='Simpan'; } return; }
+        }
         const tanggalJoinVal = $('editTanggalJoin') ? $('editTanggalJoin').value : '';
         const tjPayload = tanggalJoinVal ? Timestamp.fromDate(new Date(tanggalJoinVal)) : null;
         // nama = panggilan (dibaca WMS), full_name = nama lengkap.
@@ -765,6 +798,7 @@ $('formEditKaryawan').onsubmit = async (e) => {
             nama: pg.value, namaPanggilan: pg.value, full_name: fullName, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload,
             jabatan, statusKaryawan, baseHarian, multiplierLembur, gpsExempt,
             namaBank, atasNamaRek, nomorRekening, nonaktif, wajibKodeClockout, kodeAdmin,
+            liburHari, liburSetBy: (liburHari != null ? 'owner' : null),
             updatedAt: serverTimestamp()
         };
         await setDoc(doc(db,'karyawan',uid), payload, {merge:true});
@@ -1284,6 +1318,8 @@ async function loadKehadiranMatrix(){
           email: k.email || '',
           jamKerja: (k.jamKerja!=null ? Number(k.jamKerja) : 9),
           nonaktif: (k.nonaktif===true),
+          liburHari: (k.liburHari!=null ? Number(k.liburHari) : null),
+          libur: (k.liburHari!=null && Number(k.liburHari) === d.getDay()),
           events: [],
           byTipe: {}
         };
@@ -1400,11 +1436,11 @@ async function loadKehadiranMatrix(){
 function renderKhSummary(){
   const sum = $('khSummary'); if (!sum) return;
   const uids = Object.keys(khRowsCache);
-  let working=0, onBreak=0, paused=0, finish=0, belum=0, hadir=0;
+  let working=0, onBreak=0, paused=0, finish=0, belum=0, hadir=0, libur=0;
   uids.forEach(u=>{
     const bt = khRowsCache[u].byTipe || {};
     const hasAny = Object.keys(bt).length > 0;
-    if (!hasAny){ belum++; return; }
+    if (!hasAny){ if (khRowsCache[u].libur) libur++; else belum++; return; }
     hadir++;
     if (bt.clock_out || bt.overtime_out) finish++;
     else if (bt.break_in && !bt.break_out) onBreak++;
@@ -1417,7 +1453,8 @@ function renderKhSummary(){
     '<div class="kh-stat"><b>'+onBreak+'</b><small>On Break</small></div>'+
     '<div class="kh-stat"><b>'+paused+'</b><small>Paused</small></div>'+
     '<div class="kh-stat"><b>'+finish+'</b><small>Finish</small></div>'+
-    '<div class="kh-stat"><b>'+belum+'</b><small>Belum Hadir</small></div>';
+    '<div class="kh-stat"><b>'+belum+'</b><small>Belum Hadir</small></div>'+
+    '<div class="kh-stat"><b>'+libur+'</b><small>🌴 Libur</small></div>';
 }
 
 function gpsDotFor(row){
@@ -1517,7 +1554,7 @@ function renderKehadiranMatrix(){
       row._durAnom = (_brk.maxOne > 2*60*60*1000) || (_pse.maxOne > 2*60*60*1000) || (_efektifMs < 0);
     })();
     tr.dataset.uid = uid;
-    let cells = '<td class="col-nama">'+ gpsDotFor(row) +' '+ (row.nama||'-') + (row.nonaktif ? ' <span class="kh-badge" title="Sudah resign / dinonaktifkan">Nonaktif</span>' : '') +'</td>';
+    let cells = '<td class="col-nama">'+ gpsDotFor(row) +' '+ (row.nama||'-') + (row.nonaktif ? ' <span class="kh-badge" title="Sudah resign / dinonaktifkan">Nonaktif</span>' : '') + (row.libur ? ' <span class="kh-badge" style="background:#12291f;color:#6ee7b7" title="Dijadwalkan libur hari ini">🌴 Libur</span>' : '') +'</td>';
     cells += '<td>'+ statusBadgeFor(row) +'</td>';
     // Pairs untuk akumulasi durasi: durasi disisipkan setelah kolom *_out pasangannya
     const DUR_PAIRS = {

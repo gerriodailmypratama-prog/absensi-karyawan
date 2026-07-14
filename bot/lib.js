@@ -81,7 +81,8 @@ async function fetchKaryawan() {
       uid: doc.id,
       nama: (k.namaPanggilan || k.nama || '(tanpa nama)').trim(),
       jamKerja: Number(k.jamKerja) || 9,
-      nonaktif: k.nonaktif === true
+      nonaktif: k.nonaktif === true,
+      liburHari: (k.liburHari != null ? Number(k.liburHari) : null)
     });
   });
   return map;
