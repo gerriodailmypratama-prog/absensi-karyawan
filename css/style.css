@@ -643,7 +643,53 @@ input.kh-time.kh-save-err{background:var(--gg-danger-bg) !important;border-color
   #tblPayroll td:nth-child(12) .btn{flex:1}
 }
 
-/* ---------- 16. MISC ---------- */
+/* ---------- 16. EDIT KARYAWAN v2 (PR-CL62) ---------- */
+#editKaryawanModal .modal-content.kedit{max-width:760px;width:100%;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:92vh}
+.kedit form{display:flex;flex-direction:column;flex:1;min-height:0}
+.kedit-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--gg-border);flex-shrink:0}
+.kedit-head h3{margin:0;font-size:17px;color:var(--gg-text)}
+.kedit-sub{margin:3px 0 0;font-size:12px;color:var(--gg-muted)}
+.kedit-sub b{color:var(--gg-primary-2)}
+.kedit-body{overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:14px;min-height:0;overscroll-behavior:contain}
+.ksec{background:rgba(255,255,255,.02);border:1px solid #242424;border-radius:14px;padding:14px 16px;box-shadow:none}
+.ksec-head{display:flex;align-items:center;gap:11px;margin-bottom:13px}
+.ksec-ico{width:34px;height:34px;border-radius:10px;background:rgba(249,115,22,.12);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.ksec-head b{font-size:13.5px;color:var(--gg-text);display:block;line-height:1.3}
+.ksec-head small{font-size:11.5px;color:var(--gg-muted);display:block;line-height:1.4;margin-top:1px}
+.kgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+.kgrid-3{grid-template-columns:1fr 1fr 1fr}
+.kgrid .kfull{grid-column:1/-1}
+.kfield label{display:block;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--gg-muted);margin-bottom:5px}
+.kfield input,.kfield select{width:100%;padding:11px 12px;font-size:14px;background:#101010;border:1px solid #2c2c2c;border-radius:10px;color:var(--gg-text);transition:border-color .15s,box-shadow .15s}
+.kfield input:focus,.kfield select:focus{border-color:var(--gg-primary);outline:none;box-shadow:0 0 0 3px rgba(249,115,22,.16)}
+.kfield-note{display:block;font-size:11.5px;color:var(--gg-muted);margin-top:5px;line-height:1.45}
+.ktog-list{display:flex;flex-direction:column;gap:10px}
+.ktog{display:flex;gap:13px;align-items:flex-start;padding:12px 14px;border:1px solid #262626;border-radius:12px;background:#101010;cursor:pointer;transition:border-color .15s,background .15s;margin:0}
+.ktog:hover{border-color:#3d3d3d}
+.ktog:has(input:checked){border-color:rgba(249,115,22,.5);background:rgba(249,115,22,.05)}
+.ktog input{appearance:none;-webkit-appearance:none;width:42px;height:24px;border-radius:999px;background:#2e2e2e;position:relative;flex-shrink:0;cursor:pointer;transition:background .18s;margin:1px 0 0;border:none}
+.ktog input::before{content:'';position:absolute;width:18px;height:18px;border-radius:50%;background:#9ca3af;top:3px;left:3px;transition:transform .18s,background .18s}
+.ktog input:checked{background:var(--gg-primary)}
+.ktog input:checked::before{transform:translateX(18px);background:#fff}
+.ktog span b{display:block;font-size:13.5px;color:var(--gg-text);line-height:1.35}
+.ktog span small{display:block;font-size:12px;color:var(--gg-muted);line-height:1.5;margin-top:2px}
+.ktog.kwarn:has(input:checked){border-color:rgba(220,38,38,.5);background:rgba(220,38,38,.06)}
+.ktog.kwarn input:checked{background:#dc2626}
+.ksec.kdanger{border-color:rgba(220,38,38,.3)}
+.ksec.kdanger .ksec-ico{background:rgba(220,38,38,.14)}
+.kedit-foot{display:flex;gap:10px;justify-content:flex-end;align-items:center;padding:13px 22px;border-top:1px solid var(--gg-border);background:rgba(0,0,0,.25);flex-shrink:0}
+.kedit-foot .btn{width:auto;padding:11px 20px;font-size:14px}
+@media (max-width:640px){
+  #editKaryawanModal{padding:8px}
+  #editKaryawanModal .modal-content.kedit{max-height:96vh;border-radius:16px}
+  .kgrid,.kgrid-3{grid-template-columns:1fr}
+  .kedit-body{padding:14px;gap:12px}
+  .kedit-head{padding:14px 16px}
+  .kedit-foot{padding:12px 16px}
+  .kedit-foot .btn{flex:1}
+}
+
+/* ---------- 17. MISC ---------- */
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
 }
