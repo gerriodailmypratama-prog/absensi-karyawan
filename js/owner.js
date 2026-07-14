@@ -1352,44 +1352,30 @@ async function loadKehadiranMatrix(){
         if (!byUid[uid].byTipe[r.tipe]) byUid[uid].byTipe[r.tipe] = r;
       }
     });
-    // Look-ahead: clock_out (atau _out lain) di awal besok yang muncul SEBELUM _in besok pertama -> klaim sebagai overnight shift hari ini
+    // Look-ahead: kalau shift HARI INI masih terbuka saat lewat tengah malam, klaim EKOR-nya di pagi besok.
+    // Ekor = semua event besok SEBELUM clock_in pertama besok (clock_in besok = mulai shift baru, bukan lanjutan).
+    // Ini nangkep kasus lembur yang di-tap "Selesai Lembur" lewat tengah malam (overtime_in/out jam 00:xx).
     Object.keys(byUid).forEach(u=>{
       const next = byUid[u]._nextDayEvents || [];
-      if (!next.length){ delete byUid[u]._nextDayEvents; return; }
-      next.sort((a,b)=>{
-        const ta = a.ts && a.ts.toDate ? a.ts.toDate().getTime() : 0;
-        const tb = b.ts && b.ts.toDate ? b.ts.toDate().getTime() : 0;
-        return ta - tb;
-      });
-      const OUT_IN = { clock_out:'clock_in', break_out:'break_in', pause_out:'pause_in', overtime_out:'overtime_in' };
-      const firstInTs = {};
-      for (const e of next){
-        if (!e.tipe.endsWith('_in')) continue;
-        if (firstInTs[e.tipe] === undefined){
-          firstInTs[e.tipe] = e.ts && e.ts.toDate ? e.ts.toDate().getTime() : 0;
-        }
-      }
-      for (const e of next){
-        if (!e.tipe.endsWith('_out')) continue;
-        const inTipe = OUT_IN[e.tipe];
-        const inTsNext = firstInTs[inTipe];
-        const eTs = e.ts && e.ts.toDate ? e.ts.toDate().getTime() : 0;
-        if (inTsNext === undefined || eTs < inTsNext){
-          byUid[u].events.push(e);
-          const existing = byUid[u].byTipe[e.tipe];
-          if (!existing){
-            byUid[u].byTipe[e.tipe] = e;
-          } else {
-            const inEvToday = byUid[u].byTipe[inTipe];
-            if (inEvToday && inEvToday.ts && inEvToday.ts.toDate){
-              const inMs = inEvToday.ts.toDate().getTime();
-              const existingTs = existing.ts && existing.ts.toDate ? existing.ts.toDate().getTime() : 0;
-              if (existingTs < inMs) byUid[u].byTipe[e.tipe] = e;
-            }
-          }
-        }
-      }
       delete byUid[u]._nextDayEvents;
+      if (!next.length) return;
+      const _ms = e => (e.ts && e.ts.toDate ? e.ts.toDate().getTime() : 0);
+      next.sort((a,b)=> _ms(a) - _ms(b));
+      // Shift hari ini masih terbuka? (ada clock_in/overtime_in yang belum ditutup clock_out/overtime_out hari ini)
+      let lastInToday = 0, lastOutToday = 0;
+      (byUid[u].events||[]).forEach(e=>{
+        const ms = _ms(e);
+        if (e.tipe === 'clock_in' || e.tipe === 'overtime_in'){ if (ms > lastInToday) lastInToday = ms; }
+        if (e.tipe === 'clock_out' || e.tipe === 'overtime_out'){ if (ms > lastOutToday) lastOutToday = ms; }
+      });
+      if (!(lastInToday > 0 && lastInToday > lastOutToday)) return; // hari ini sudah tutup -> jangan klaim apa pun dari besok
+      // Batas: clock_in PERTAMA besok = mulai shift baru besok. Event besok sebelum itu = lanjutan shift hari ini.
+      let firstClockInNext = Infinity;
+      for (const e of next){ if (e.tipe === 'clock_in'){ firstClockInNext = _ms(e); break; } }
+      for (const e of next){
+        if (_ms(e) >= firstClockInNext) break;
+        byUid[u].events.push(e); // byTipe dibangun ulang di tahap normalisasi
+      }
     });
     // ===== Look-behind: buang EKOR shift kemarin yang jatuh di dini hari ini =====
     // Kalau kemarin ada sesi yang MASIH TERBUKA saat lewat tengah malam (jam masuk terakhir > jam keluar
