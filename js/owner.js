@@ -566,7 +566,7 @@ async function loadKaryawanList(){
                 const sep = document.createElement('tr');
                 sep.className = 'kry-nonaktif-sep';
                 sep.style.cursor = 'pointer';
-                sep.innerHTML = '<td colspan="9" style="padding:9px 12px;background:#161616;border-top:2px solid #2a2a2a;color:#9ca3af;font-size:12.5px;font-weight:600">'
+                sep.innerHTML = '<td colspan="10" style="padding:9px 12px;background:#161616;border-top:2px solid #2a2a2a;color:#9ca3af;font-size:12.5px;font-weight:600">'
                   + '<span class="kry-non-caret">▸</span> Nonaktif / Resign (' + _nonaktifCount + ') — klik buat lihat/sembunyikan</td>';
                 sep.onclick = () => {
                     const rowsN = tb.querySelectorAll('.kry-nonaktif-row');
@@ -587,7 +587,8 @@ async function loadKaryawanList(){
             const tj = x.tanggalJoin ? (x.tanggalJoin.toDate ? x.tanggalJoin.toDate() : new Date(x.tanggalJoin)) : null;
             const tjStr = tj ? tj.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-';
             tr.innerHTML = '<td>'+_no+'</td>'+
-              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#f97316;text-decoration:underline;">'+(x.nama||'-')+'</span>'+(x.full_name?' <span class="muted" style="font-size:12px">('+x.full_name+')</span>':'')+((!x.updatedAt)?' <span class="tag warn" title="Karyawan baru / belum direview owner. Klik Edit untuk cek gaji & jam kerja.">baru</span>':'')+(x.nonaktif===true?' <span class="tag" title="Sudah resign / dinonaktifkan. Tidak muncul di absensi harian & laporan Telegram.">Nonaktif</span>':'')+(x.liburHari!=null?' <span class="tag" style="background:#12291f;color:#6ee7b7" title="Hari libur mingguan">🌴 '+LIBUR_HARI[Number(x.liburHari)]+'</span>':'')+'</td>'+
+              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#f97316;text-decoration:underline;">'+((x.full_name||x.nama)||'-')+'</span>'+((!x.updatedAt)?' <span class="tag warn" title="Karyawan baru / belum direview owner. Klik Edit untuk cek gaji & jam kerja.">baru</span>':'')+(x.nonaktif===true?' <span class="tag" title="Sudah resign / dinonaktifkan. Tidak muncul di absensi harian & laporan Telegram.">Nonaktif</span>':'')+(x.liburHari!=null?' <span class="tag" style="background:#12291f;color:#6ee7b7" title="Hari libur mingguan">🌴 '+LIBUR_HARI[Number(x.liburHari)]+'</span>':'')+'</td>'+
+              '<td><span style="color:var(--gg-text-2)">'+((x.namaPanggilan||x.nama)||'-')+'</span></td>'+
               '<td>'+(x.email||'-')+'</td>'+
               '<td>'+(x.phone||'-')+'</td>'+
               '<td>'+idDisplay+'</td>'+
