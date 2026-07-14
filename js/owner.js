@@ -1575,12 +1575,18 @@ function renderKehadiranMatrix(){
       }
       const _brk = _sumPairs('break_in','break_out');
       const _pse = _sumPairs('pause_in','pause_out');
-      const _efektifMs = _spanMs - _brk.tot - _pse.tot;
+      // Override istirahat manual (owner) — buat kasus "lupa tap selesai istirahat". Disimpan di clock_in doc.
+      let _brkTot = _brk.tot, _brkOvr = false;
+      const _bio = _bt.clock_in && _bt.clock_in.istirahatOverrideMin;
+      if (_bio !== undefined && _bio !== null && _bio !== ''){ const _n = Math.round(Number(_bio)); if (Number.isFinite(_n)){ _brkTot = Math.max(0, _n) * 60000; _brkOvr = true; } }
+      row._istirahatMs = _brkTot;
+      row._istirahatOverridden = _brkOvr;
+      const _efektifMs = _spanMs - _brkTot - _pse.tot;
       const _kontrak = Number(row.jamKerja) || 9;
       const _netMs = Math.max(0, (_kontrak-1)) * 60*60*1000;
       row._efektifMs = _efektifMs;
       row._lemburCalcMs = Math.max(0, _efektifMs - _netMs);
-      row._durAnom = (_brk.maxOne > 2*60*60*1000) || (_pse.maxOne > 2*60*60*1000) || (_efektifMs < 0);
+      row._durAnom = (!_brkOvr && _brk.maxOne > 2*60*60*1000) || (_pse.maxOne > 2*60*60*1000) || (_efektifMs < 0);
     })();
     tr.dataset.uid = uid;
     let cells = '<td class="col-nama">'+ gpsDotFor(row) +' '+ (row.nama||'-') + (row.nonaktif ? ' <span class="kh-badge" title="Sudah resign / dinonaktifkan">Nonaktif</span>' : '') + (row.libur ? ' <span class="kh-badge" style="background:#12291f;color:#6ee7b7" title="Dijadwalkan libur hari ini">🌴 Libur</span>' : '') +'</td>';
@@ -1635,6 +1641,14 @@ function renderKehadiranMatrix(){
           const _lemVal = (_lemMin!==null)? _lemHHMM(_lemMin) : '';
           const _lemShow = _lemVal ? _lemVal : '0:00';
           cells += '<td class="kh-dur kh-lembur-cell'+_anomMark+(_lemOverridden?' kh-lembur-ovr':'')+'" title="'+pair.label+_anomTitle+(_lemOverridden?' (di-set MANUAL oleh owner)':'')+'">'+(_anomMark?'\u26a0 ':'')+'<span class="kh_lembur_disp" title="Klik untuk edit lembur">'+_lemShow+'</span><input type="text" inputmode="numeric" maxlength="5" placeholder="0:00" class="kh_lembur" data-tipe="lembur_override" value="'+_lemVal+'" data-orig="'+_lemVal+'" style="display:none"></td>';
+        } else if (col.tipe === 'break_out'){
+          // Dur. Istirahat: bisa di-override manual owner (mirror lembur) buat kasus "lupa tap selesai istirahat".
+          let _brkMs = row._istirahatMs;
+          if (_brkMs == null){ _brkMs = (evIn && evEnd && evIn.ts && evEnd.ts && evIn.ts.toDate && evEnd.ts.toDate) ? Math.max(0, evEnd.ts.toDate().getTime() - evIn.ts.toDate().getTime()) : 0; }
+          const _brkOvr = !!row._istirahatOverridden;
+          const _brkShow = _fmtMs(_brkMs);
+          const _brkVal = _lemHHMM(Math.round(_brkMs/60000));
+          cells += '<td class="kh-dur kh-istirahat-cell'+(_brkOvr?' kh-istirahat-ovr':'')+'" title="Dur. Istirahat'+(_brkOvr?' (di-set MANUAL oleh owner)':'')+' \u2014 klik untuk edit"><span class="kh_ist_disp" title="Klik untuk edit istirahat">'+_brkShow+'</span><input type="text" inputmode="numeric" maxlength="5" placeholder="0:00" class="kh_istirahat" data-tipe="istirahat_override" value="'+_brkVal+'" data-orig="'+_brkVal+'" style="display:none"></td>';
         } else {
           cells += '<td class="kh-dur'+_anomMark+'" title="'+pair.label+_anomTitle+'">'+(_anomMark?'\u26a0 ':'')+durTxt+'</td>';
         }
@@ -1673,13 +1687,24 @@ function renderKehadiranMatrix(){
             inp.addEventListener('blur', function(){ showDisp(); });
             inp.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); inp.blur(); } });
         });
+        // === Dur. Istirahat: klik buat edit (override manual owner) ===
+        tb.querySelectorAll('td.kh-istirahat-cell').forEach(function(td){
+            const disp = td.querySelector('.kh_ist_disp');
+            const inp  = td.querySelector('input.kh_istirahat');
+            if (!disp || !inp) return;
+            function showInput(){ disp.style.display='none'; inp.style.display=''; inp.focus(); inp.select(); }
+            function showDisp(){ const v=(inp.value||'').trim(); disp.textContent = v ? v : '0'; inp.style.display='none'; disp.style.display=''; }
+            disp.addEventListener('click', showInput);
+            inp.addEventListener('blur', function(){ showDisp(); });
+            inp.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); inp.blur(); } });
+        });
         });
 }
 
 async function saveKehadiranRow(uid, tr){
   const row = khRowsCache[uid];
   if (!row){ alert('Data karyawan tidak ditemukan.'); return; }
-  const inputs = tr.querySelectorAll('input.kh-time, input.kh_lembur');
+  const inputs = tr.querySelectorAll('input.kh-time, input.kh_lembur, input.kh_istirahat');
   const changes = [];
   inputs.forEach(inp=>{
     const tipe = inp.dataset.tipe;
@@ -1706,6 +1731,20 @@ async function saveKehadiranRow(uid, tr){
           else { alert('Format lembur harus H:MM (contoh 0:38).'); errCount++; continue; }
         }
         await updateDoc(doc(db,'absensi', _ciDoc._id), { lemburOverrideMin: (_mins===null? null : _mins), editedByOwner: true, editedAt: serverTimestamp() });
+        okCount++; continue;
+      }
+      if (ch.tipe === 'istirahat_override'){
+        const _ciDoc = row.byTipe && row.byTipe['clock_in'];
+        if (!_ciDoc){ alert('Tidak bisa set istirahat manual: tidak ada Clock In di hari ini.'); errCount++; continue; }
+        let _mins = null;
+        const _v = (ch.newVal||'').trim().replace(/[.,]/g, ':');
+        if (_v !== ''){
+          const _mm = _v.match(/^(\d{1,2}):([0-5]?\d)$/);
+          if (_mm){ _mins = parseInt(_mm[1],10)*60 + parseInt(_mm[2],10); }
+          else if (/^\d{1,3}$/.test(_v)){ _mins = parseInt(_v,10); }
+          else { alert('Format istirahat harus H:MM (contoh 1:02).'); errCount++; continue; }
+        }
+        await updateDoc(doc(db,'absensi', _ciDoc._id), { istirahatOverrideMin: (_mins===null? null : _mins), editedByOwner: true, editedAt: serverTimestamp() });
         okCount++; continue;
       }
       const existing = row.byTipe[ch.tipe];
@@ -2251,7 +2290,7 @@ const personMap = byPerson.get(key);
 const ts = r.ts && r.ts.toDate ? r.ts.toDate() : new Date();
 const dateStr = _localDay(ts);
 if (!personMap.has(dateStr)) personMap.set(dateStr, []);
-personMap.get(dateStr).push({tipe: r.tipe, ts: ts, id: d.id, lemburOverrideMin: r.lemburOverrideMin});
+personMap.get(dateStr).push({tipe: r.tipe, ts: ts, id: d.id, lemburOverrideMin: r.lemburOverrideMin, istirahatOverrideMin: r.istirahatOverrideMin});
 });
 const rows = [];
 let totalBudget = 0, totalHari = 0, totalLemburJam = 0, totalJamKerjaAll = 0;
@@ -2325,12 +2364,17 @@ events.forEach(e=>{ if (e.tipe==='break_in' || e.tipe==='break_out') breaks.push
 const _ciMsP = ci.ts.getTime(); let _endMsP = __end.ts.getTime(); if (_endMsP < _ciMsP) _endMsP += 24*3600000;
 function _clampHrP(sMs, eMs){ const s = Math.max(sMs, _ciMsP); const e = Math.min(eMs, _endMsP); return e > s ? (e - s)/3600000 : 0; }
   const pauses = events.filter(e=>e.tipe==='pause_in' || e.tipe==='pause_out'); for (let pi=0; pi<pauses.length-1; pi++){ if (pauses[pi].tipe==='pause_in' && pauses[pi+1].tipe==='pause_out'){ durJam -= _clampHrP(pauses[pi].ts.getTime(), pauses[pi+1].ts.getTime()); pi++; } }
+let _brkHrP = 0;
 for (let i=0; i<breaks.length-1; i++){
 if (breaks[i].tipe==='break_in' && breaks[i+1].tipe==='break_out'){
-durJam -= _clampHrP(breaks[i].ts.getTime(), breaks[i+1].ts.getTime());
+_brkHrP += _clampHrP(breaks[i].ts.getTime(), breaks[i+1].ts.getTime());
 i++;
 }
 }
+// Override istirahat manual owner (istirahatOverrideMin) menang atas hitungan tap — buat kasus "lupa tap selesai istirahat".
+const _brkOvrEv = events.find(e => e.istirahatOverrideMin !== undefined && e.istirahatOverrideMin !== null && e.istirahatOverrideMin !== '');
+if (_brkOvrEv){ _brkHrP = Math.max(0, Number(_brkOvrEv.istirahatOverrideMin)/60); }
+durJam -= _brkHrP;
 }
 if (durJam < 0) durJam = 0;
 const effJam = Math.min(durJam, netJamKerja);
@@ -2901,6 +2945,7 @@ function downloadSlipGaji(uid) {
     '.muted{color:#6b7280;font-size:12px;}' +
     '.foot{margin-top:22px;color:#9ca3af;font-size:11px;text-align:center;}' +
     '.kh-matrix td.kh-lembur-cell .kh_lembur_disp{cursor:pointer;display:inline-block;min-width:34px;padding:1px 4px;border-radius:4px;}.kh-matrix td.kh-lembur-cell .kh_lembur_disp:hover{background:rgba(217,119,87,.18);outline:1px dashed rgba(217,119,87,.5);}.kh-matrix td.kh-lembur-ovr .kh_lembur_disp{color:#f97316;font-weight:600;}.kh-matrix td.kh-lembur-cell input.kh_lembur{width:48px;text-align:center;}' +
+    '.kh-matrix td.kh-istirahat-cell .kh_ist_disp{cursor:pointer;display:inline-block;min-width:34px;padding:1px 4px;border-radius:4px;}.kh-matrix td.kh-istirahat-cell .kh_ist_disp:hover{background:rgba(217,119,87,.18);outline:1px dashed rgba(217,119,87,.5);}.kh-matrix td.kh-istirahat-ovr .kh_ist_disp{color:#f97316;font-weight:600;}.kh-matrix td.kh-istirahat-cell input.kh_istirahat{width:48px;text-align:center;}' +
     '@media print{body{background:#fff;padding:0;}.slip{border:none;}}' +
     '</style></head><body><div class="slip">' +
     '<div class="head"><div><h1>Slip Gaji</h1><div class="brand">GoodGems Absensi</div></div>' +
