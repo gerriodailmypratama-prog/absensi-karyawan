@@ -380,95 +380,113 @@
 </div>
 
 <div id="editKaryawanModal" class="modal hidden">
-  <div class="modal-content card" style="max-width:560px;max-height:90vh;overflow-y:auto">
-    <h3>Edit Karyawan</h3>
-    <form id="formEditKaryawan" class="form-grid">
+  <div class="modal-content kedit">
+    <form id="formEditKaryawan">
       <input type="hidden" id="editUid">
 
-      <details open class="kry-section">
-        <summary>Data Pribadi</summary>
-        <div><label>Nama Lengkap</label><input type="text" id="editNama" required></div>
-        <div><label>Nama Panggilan <small style="color:#9ca3af">(1 kata, huruf kecil — dipakai sync WMS)</small></label><input type="text" id="editNamaPanggilan" placeholder="cth: mila" maxlength="20" required></div>
-        <div><label>No. HP</label><input type="text" id="editPhone" inputmode="numeric"></div>
-        <div><label>ID Karyawan</label><input type="text" id="editIdKaryawan"></div>
-        <div><label>Jabatan</label><input type="text" id="editJabatan" placeholder="contoh: Staff Operasional"></div>
-        <div><label>Status</label><select id="editStatusKaryawan"><option value="">-</option><option value="tetap">Tetap</option><option value="kontrak">Kontrak</option><option value="freelance">Freelance</option><option value="magang">Magang</option></select></div>
-        <div><label>Tanggal Join</label><input type="date" id="editTanggalJoin"></div>
-        <div style="border-top:1px solid var(--gg-border,#2a2a2a);padding-top:10px;margin-top:2px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;margin:0">
-            <input type="checkbox" id="editNonaktif" style="width:auto;margin:0;accent-color:#f97316">
-            Nonaktif (sudah resign — arsipkan)
+      <div class="kedit-head">
+        <div>
+          <h3>Edit Karyawan</h3>
+          <p class="kedit-sub">Perubahan baru tersimpan setelah tekan <b>Simpan</b> di bawah</p>
+        </div>
+        <button type="button" class="modal-close" id="btnEditCancel" aria-label="Tutup">&times;</button>
+      </div>
+
+      <div class="kedit-body">
+
+        <section class="ksec">
+          <div class="ksec-head"><span class="ksec-ico">&#x1F464;</span><div><b>Data Pribadi</b><small>Identitas &amp; kontak karyawan</small></div></div>
+          <div class="kgrid">
+            <div class="kfield kfull"><label>Nama Lengkap</label><input type="text" id="editNama" required></div>
+            <div class="kfield"><label>Nama Panggilan</label><input type="text" id="editNamaPanggilan" placeholder="cth: mila" maxlength="20" required><small class="kfield-note">1 kata huruf kecil &mdash; dipakai sync WMS</small></div>
+            <div class="kfield"><label>No. HP</label><input type="text" id="editPhone" inputmode="numeric" placeholder="+62..."></div>
+            <div class="kfield"><label>ID Karyawan</label><input type="text" id="editIdKaryawan"></div>
+            <div class="kfield"><label>Jabatan</label><input type="text" id="editJabatan" placeholder="cth: Staff Operasional"></div>
+            <div class="kfield"><label>Status Kerja</label><select id="editStatusKaryawan"><option value="">-</option><option value="tetap">Tetap</option><option value="kontrak">Kontrak</option><option value="freelance">Freelance</option><option value="magang">Magang</option></select></div>
+            <div class="kfield"><label>Tanggal Join</label><input type="date" id="editTanggalJoin"></div>
+          </div>
+        </section>
+
+        <section class="ksec">
+          <div class="ksec-head"><span class="ksec-ico">&#x1F4B0;</span><div><b>Payroll</b><small>Gaji harian, dibayar bulanan &mdash; total = base &times; hari hadir + lembur</small></div></div>
+          <div class="kgrid kgrid-3">
+            <div class="kfield"><label>Base Harian (Rp)</label><input type="number" id="editBaseHarian" min="0" step="1000" placeholder="100000"></div>
+            <div class="kfield"><label>Jam Kerja / Hari</label><input type="number" id="editJamKerja" min="1" max="24" value="9"></div>
+            <div class="kfield"><label>Multiplier Lembur</label><input type="number" id="editMultiplierLembur" min="1" max="5" step="0.1" value="1.5" placeholder="1.5"></div>
+          </div>
+        </section>
+
+        <section class="ksec">
+          <div class="ksec-head"><span class="ksec-ico">&#x1F334;</span><div><b>Hari Libur Mingguan</b><small>Maks 2 orang/hari &middot; ga dianggap mangkir &middot; ga mengubah gaji</small></div></div>
+          <div class="kfield"><label>Hari Libur</label>
+            <select id="editLiburHari">
+              <option value="">Tidak ada</option>
+              <option value="0">Minggu</option>
+              <option value="1">Senin</option>
+              <option value="2">Selasa</option>
+              <option value="3">Rabu</option>
+              <option value="4">Kamis</option>
+              <option value="5">Jumat</option>
+              <option value="6">Sabtu</option>
+            </select>
+            <small class="kfield-note" id="editLiburHint">Kuota tiap hari muncul di daftar pilihan.</small>
+          </div>
+        </section>
+
+        <section class="ksec">
+          <div class="ksec-head"><span class="ksec-ico">&#x1F6F0;</span><div><b>Absensi &amp; Verifikasi</b><small>Aturan khusus untuk karyawan ini</small></div></div>
+          <div class="ktog-list">
+            <label class="ktog">
+              <input type="checkbox" id="editGpsExempt">
+              <span><b>Lewati cek GPS</b><small>HANYA kalau HP-nya lokasinya rusak. Absen tidak ditandai "luar radius", berbasis kepercayaan.</small></span>
+            </label>
+            <label class="ktog">
+              <input type="checkbox" id="editWajibKode">
+              <span><b>Wajib kode admin saat Clock Out</b><small>Harus minta kode 4 angka ke admin tiap pulang (cek fisik). Darurat tanpa kode tetap bisa, tapi ditandai merah.</small></span>
+            </label>
+            <label class="ktog">
+              <input type="checkbox" id="editKodeAdmin">
+              <span><b>Admin kode</b><small>Bisa lihat &amp; kasih kode Clock Out (admin bertugas/nginap, mis. Ila, Mila, Desty).</small></span>
+            </label>
+          </div>
+        </section>
+
+        <section class="ksec">
+          <div class="ksec-head"><span class="ksec-ico">&#x1F3E6;</span><div><b>Rekening Bank</b><small>Tujuan transfer gaji</small></div></div>
+          <div class="kgrid kgrid-3">
+            <div class="kfield"><label>Nama Bank</label><input type="text" id="editNamaBank" placeholder="cth: BCA"></div>
+            <div class="kfield"><label>Atas Nama</label><input type="text" id="editAtasNamaRek" placeholder="Sesuai buku tabungan"></div>
+            <div class="kfield"><label>No. Rekening</label><input type="text" inputmode="numeric" id="editNomorRekening" placeholder="1234567890"></div>
+          </div>
+        </section>
+
+        <section class="ksec">
+          <div class="ksec-head"><span class="ksec-ico">&#x1FAAA;</span><div><b>Dokumen (Privat)</b><small>KTP diupload karyawan lewat menu Profil &mdash; owner hanya melihat</small></div></div>
+          <div style="font-size:13px;color:var(--gg-text-2)">Foto KTP: <span id="ktpStatus" class="muted"></span></div>
+          <div id="editKtpPreviewWrap" style="margin-top:10px;display:none">
+            <a id="editKtpLink" href="#" target="_blank" rel="noopener">
+              <img id="editKtpPreview" alt="Foto KTP" style="max-width:100%;max-height:220px;border-radius:12px;border:1px solid #2a2a2a" />
+            </a>
+          </div>
+          <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span id="profilLockStatus" class="muted" style="font-size:12.5px"></span>
+            <button type="button" id="btnResetLockProfil" class="btn btn-ghost btn-sm" style="display:none">Reset Lock Profil</button>
+          </div>
+        </section>
+
+        <section class="ksec kdanger">
+          <div class="ksec-head"><span class="ksec-ico">&#x1F4E6;</span><div><b>Arsip Karyawan</b><small>Untuk yang sudah resign &mdash; data &amp; histori tetap aman</small></div></div>
+          <label class="ktog kwarn">
+            <input type="checkbox" id="editNonaktif">
+            <span><b>Nonaktif (sudah resign)</b><small>Hilang dari daftar "ga masuk" harian &amp; laporan Telegram. Payroll bulan berjalan tetap muncul buat settle gaji terakhir. Un-ceklis kalau kerja lagi.</small></span>
           </label>
-          <p class="muted" style="font-size:12px;margin:6px 0 0">Dicentang = karyawan dianggap resign: namanya ga muncul lagi di daftar "ga masuk" harian &amp; laporan Telegram. Histori absen &amp; payroll TETAP aman (masih muncul di bulan yang ada absennya). Un-ceklis kalau dia kerja lagi.</p>
-        </div>
-      </details>
+        </section>
 
-      <details open class="kry-section">
-        <summary>Payroll (Gaji Harian, Bayar Bulanan)</summary>
-        <div><label>Base Harian (Rp)</label><input type="number" id="editBaseHarian" min="0" step="1000" placeholder="100000"></div>
-        <div><label>Jam Kerja Standar / hari</label><input type="number" id="editJamKerja" min="1" max="24" value="9"></div>
-        <div><label>Multiplier Lembur</label><input type="number" id="editMultiplierLembur" min="1" max="5" step="0.1" value="1.5" placeholder="1.5"></div>
-        <p class="muted" style="font-size:12px;margin:6px 0 0">Total bulanan = base harian × hari hadir + lembur. Setengah hari otomatis 0.5 × base.</p>
-      </details>
+      </div>
 
-      <details class="kry-section">
-        <summary>Absensi / GPS</summary>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500;margin:0">
-          <input type="checkbox" id="editGpsExempt" style="width:auto;margin:0;accent-color:#f97316">
-          Lewati cek GPS (HP lokasi bermasalah)
-        </label>
-        <p class="muted" style="font-size:12px;margin:6px 0 0">Nyalakan HANYA kalau HP karyawan ini lokasinya rusak. Absensinya tidak akan ditandai "luar radius", tapi lokasinya jadi tidak diverifikasi (berbasis kepercayaan).</p>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500;margin:12px 0 0">
-          <input type="checkbox" id="editWajibKode" style="width:auto;margin:0;accent-color:#f97316">
-          Wajib kode admin saat Clock Out (uji coba)
-        </label>
-        <p class="muted" style="font-size:12px;margin:6px 0 0">Karyawan ini harus minta kode 4 angka ke admin bertugas tiap mau pulang (cek fisik). Kode ganti otomatis tiap 10 menit. Clock Out darurat tanpa kode tetap bisa, tapi ditandai MERAH di Kehadiran Harian.</p>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500;margin:12px 0 0">
-          <input type="checkbox" id="editKodeAdmin" style="width:auto;margin:0;accent-color:#f97316">
-          Admin kode (bisa lihat &amp; kasih kode Clock Out)
-        </label>
-        <p class="muted" style="font-size:12px;margin:6px 0 0">Untuk admin bertugas/nginap (mis. Ila, Mila, Desty). Kode aktif tampil otomatis di halaman absensi mereka.</p>
-        <div style="border-top:1px solid var(--gg-border,#2a2a2a);padding-top:10px;margin-top:12px">
-          <label style="font-weight:600">🌴 Hari Libur Mingguan</label>
-          <select id="editLiburHari" style="margin-top:4px">
-            <option value="">Tidak ada</option>
-            <option value="0">Minggu</option>
-            <option value="1">Senin</option>
-            <option value="2">Selasa</option>
-            <option value="3">Rabu</option>
-            <option value="4">Kamis</option>
-            <option value="5">Jumat</option>
-            <option value="6">Sabtu</option>
-          </select>
-          <p class="muted" id="editLiburHint" style="font-size:12px;margin:6px 0 0">Maks 2 orang/hari. Hari libur = ga dianggap mangkir (ga dibayar, ga ubah gaji). Kuota tiap hari muncul di daftar pilihan.</p>
-        </div>
-      </details>
-
-      <details class="kry-section">
-        <summary>Rekening Bank</summary>
-        <div><label>Nama Bank</label><input type="text" id="editNamaBank" placeholder="contoh: BCA, Mandiri, BRI"></div>
-        <div><label>Atas Nama Rekening</label><input type="text" id="editAtasNamaRek" placeholder="Sesuai buku tabungan"></div>
-        <div><label>Nomor Rekening</label><input type="text" inputmode="numeric" id="editNomorRekening" placeholder="contoh: 1234567890"></div>
-      </details>
-
-      <details class="kry-section">
-        <summary>Upload Dokumen (Privat)</summary>
-        <div><label>Foto KTP <span id="ktpStatus" class="muted"></span></label><p class="muted" style="font-size:12px;margin:4px 0 0">KTP diupload sendiri oleh karyawan lewat menu Profil. Di sini owner hanya bisa melihat.</p></div>
-        <div id="editKtpPreviewWrap" style="margin-top:8px;display:none">
-          <a id="editKtpLink" href="#" target="_blank" rel="noopener">
-            <img id="editKtpPreview" alt="Foto KTP" style="max-width:100%;border-radius:8px;border:1px solid #2a2a2a" />
-          </a>
-        </div>
-        <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
-          <span id="profilLockStatus" class="muted"></span>
-          <button type="button" id="btnResetLockProfil" class="btn btn-ghost" style="display:none">Reset Lock Profil</button>
-        </div>
-        <p class="muted" style="margin:6px 0 0">File KTP disimpan di Firebase Storage privat, hanya owner yang bisa akses. Reset Lock memperbolehkan karyawan mengisi ulang data 1x.</p>
-      </details>
-
-      <div class="form-actions" style="display:flex;gap:8px;margin-top:12px">
-        <button type="submit" class="btn btn-primary">Simpan</button>
-        <button type="button" class="btn btn-secondary" id="btnEditCancel">Batal</button>
+      <div class="kedit-foot">
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('editKaryawanModal').classList.add('hidden')">Batal</button>
+        <button type="submit" class="btn btn-primary">&#x1F4BE; Simpan Perubahan</button>
       </div>
     </form>
   </div>
