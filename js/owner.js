@@ -963,44 +963,39 @@ async function renderHadirFloating(rows){
     const breakStartByUid = new Map();
     const finishUids = [];
 
-    // Karyawan "Hadir hari ini" hanya jika punya event clock_in dengan timestamp >= hari ini 00:00
+    // Tentukan siapa yang tampil di dashboard hari ini (termasuk shift lintas hari yang masih aktif).
     const _today0HF = new Date(); _today0HF.setHours(0,0,0,0);
     const _todayMsHF = _today0HF.getTime();
+    const _LUPA_CO_MS = 18 * 60 * 60 * 1000; // sesi terbuka > 18 jam = "lupa clock out", bukan sedang kerja (selaras Kehadiran Harian)
     for (const [uid, arr] of byUid){
-        const hasClockInToday = arr.some(r=>{
-            if (r.tipe!=='clock_in') return false;
-            const ms = (r.ts && r.ts.toMillis) ? r.ts.toMillis() : 0;
-            return ms >= _todayMsHF;
-        });
-        if (!hasClockInToday) continue;
-        hadirUids.push(uid);
-
-        // State machine: prioritas presence-based (selaras dengan Kehadiran Matrix)
-        // Cari clock_out & clock_in terakhir; jika clock_out terakhir lebih baru dari clock_in terakhir => Finished
-        let lastClockOutMs = 0;
-        let lastClockInMs = 0;
-        let lastBreakInMs = 0;
-        let lastBreakOutMs = 0;
+        // Satu lintasan: cari event masuk/keluar/istirahat TERAKHIR + apakah clock_in hari ini.
+        let lastClockOutMs = 0, lastClockInMs = 0, lastBreakInMs = 0, lastBreakOutMs = 0;
+        let hasClockInToday = false;
         for (const r of arr){
             const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0;
-            if (r.tipe === 'clock_out' || r.tipe === 'overtime_out'){
-                if (ms > lastClockOutMs) lastClockOutMs = ms;
-            }
-            if (r.tipe === 'clock_in' || r.tipe === 'overtime_in'){
-                if (ms > lastClockInMs) lastClockInMs = ms;
-            }
+            if (r.tipe === 'clock_out' || r.tipe === 'overtime_out'){ if (ms > lastClockOutMs) lastClockOutMs = ms; }
+            if (r.tipe === 'clock_in' || r.tipe === 'overtime_in'){ if (ms > lastClockInMs) lastClockInMs = ms; }
             if (r.tipe === 'break_in' && ms > lastBreakInMs) lastBreakInMs = ms;
             if (r.tipe === 'break_out' && ms > lastBreakOutMs) lastBreakOutMs = ms;
+            if (r.tipe === 'clock_in' && ms >= _todayMsHF) hasClockInToday = true;
         }
+        // Sesi masih terbuka (jam masuk terakhir > jam keluar terakhir) = sedang kerja/istirahat SEKARANG.
+        // Termasuk shift lintas hari (mis. lembur nembus tengah malam). Tapi kalau sesinya sudah > 18 jam,
+        // itu "lupa clock out" (mis. Bahren) — jangan dihitung sebagai sedang kerja.
+        const sesiStart = workStartMs(uid);
+        const sesiAktif = lastClockInMs > lastClockOutMs && sesiStart > 0 && (Date.now() - sesiStart <= _LUPA_CO_MS);
+        // Baru selesai (clock out dalam 6 jam terakhir) tetap tampil di "Finish Working" walau clock in kemarin.
+        const baruSelesai = lastClockOutMs > 0 && lastClockOutMs >= lastClockInMs && (Date.now() - lastClockOutMs <= 6 * 60 * 60 * 1000);
+        if (!hasClockInToday && !sesiAktif && !baruSelesai) continue;
+        hadirUids.push(uid);
+
+        // State machine: prioritas presence-based (selaras dengan Kehadiran Matrix).
         if (lastClockOutMs > 0 && lastClockOutMs >= lastClockInMs){
-            // hanya tampilkan di 'Finish Working' jika clock_out terjadi dalam 6 jam terakhir
-            if (Date.now() - lastClockOutMs <= 6 * 60 * 60 * 1000){
-                finishUids.push(uid);
-            }
+            if (baruSelesai) finishUids.push(uid);
         } else if (lastBreakInMs > 0 && lastBreakInMs > lastBreakOutMs){
             breakUids.push(uid);
             breakStartByUid.set(uid, lastBreakInMs);
-        } else {
+        } else if (sesiAktif || hasClockInToday){
             workingUids.push(uid);
         }
     }
@@ -1059,6 +1054,16 @@ async function renderHadirFloating(rows){
         }
         return 0;
     }
+    // Mulai sesi kerja yang SEDANG berjalan (boleh lintas hari): clock_in/overtime_in paling awal
+    // setelah clock_out terakhir. Dipakai timer "On Working" biar shift lembur nembus tengah malam benar.
+    function workStartMs(uid){
+        const arr = byUid.get(uid) || [];
+        let lastOut = 0;
+        for (const r of arr){ const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0; if ((r.tipe === 'clock_out' || r.tipe === 'overtime_out') && ms > lastOut) lastOut = ms; }
+        let start = 0;
+        for (const r of arr){ const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0; if ((r.tipe === 'clock_in' || r.tipe === 'overtime_in') && ms >= lastOut){ if (start === 0 || ms < start) start = ms; } }
+        return start;
+    }
     // Format durasi ms -> H:MM:SS atau M:SS
     function fmtDurMs(ms){
         const _sec = Math.max(0, Math.floor(ms/1000));
@@ -1102,7 +1107,7 @@ async function renderHadirFloating(rows){
     const _workBox = $('workTimers');
     if (_workBox){
         _workBox.innerHTML = workingUids.map(function(u){
-            const _ci = firstClockInMsToday(u);
+            const _ci = workStartMs(u); // pakai mulai-sesi (boleh lintas hari) biar timer lembur tembus tengah malam benar
             if (!_ci) return '';
             const _rest = restMsToday(u);
             return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;margin-top:3px">'
