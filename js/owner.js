@@ -538,7 +538,12 @@ async function loadKaryawanList(){
           window.__liburByDay = byDay;
           let html='<h3 style="margin:0 0 8px">🌴 Jadwal Libur Mingguan <small class="muted" style="font-weight:400;font-size:12px">— maks '+LIBUR_MAX+'/hari, ga dianggap mangkir</small></h3><div style="display:flex;flex-wrap:wrap;gap:8px">';
           for (let h=0;h<7;h++){ const full=byDay[h].length>=LIBUR_MAX; const col=byDay[h].length===0?'#6b7280':full?'#f97316':'#9ca3af'; html+='<div style="flex:1 1 120px;min-width:110px;padding:8px 10px;border:1px solid #2a2a2a;border-radius:10px;background:#141414"><div style="font-size:12px;font-weight:700;color:'+col+'">'+LIBUR_HARI[h]+' ('+byDay[h].length+'/'+LIBUR_MAX+')</div><div style="font-size:12px;color:#d1d5db;margin-top:2px">'+(byDay[h].length?byDay[h].join(', '):'<span class="muted">—</span>')+'</div></div>'; }
-          html+='</div>'; _box.innerHTML=html;
+          html+='</div>';
+          const _pend = rows.filter(r=>r.liburRequestPending===true && r.nonaktif!==true);
+          if (_pend.length){
+            html += '<div style="margin-top:10px;padding:9px 12px;border:1px solid #a16207;border-radius:10px;background:#3a2f12;font-size:12.5px;color:#fcd34d">📩 <b>'+_pend.length+' usulan libur nunggu di-assign:</b> ' + _pend.map(r=>{ const rq=Array.isArray(r.liburRequest)?r.liburRequest:[]; return (r.namaPanggilan||r.nama||'?')+' ('+rq.map(x=>LIBUR_HARI[Number(x)]).join('›')+')'; }).join(' · ') + ' — buka <b>Edit</b> karyawannya buat nentuin harinya.</div>';
+          }
+          _box.innerHTML=html;
         })();
         // === Auto-isi default buat yang belum punya: ID (GG-####), jam kerja 9, base 100rb, tanggal join ===
         let _maxKid = 0;
@@ -717,6 +722,14 @@ async function openEditKaryawan(uid){
               opt.textContent = LIBUR_HARI[h] + (_cnt[h]>=LIBUR_MAX ? ' — PENUH ('+_nm[h].join(', ')+')' : _cnt[h]>0 ? ' — '+_cnt[h]+'/'+LIBUR_MAX+' ('+_nm[h].join(', ')+')' : ' — kosong');
             });
           } catch(e){ console.warn('libur quota label err', e); }
+          const _reqEl = $('editLiburReq');
+          if (_reqEl){
+            const _req = Array.isArray(d.liburRequest) ? d.liburRequest : [];
+            if (_req.length){
+              _reqEl.innerHTML = '📩 <b>Usulan karyawan:</b> ' + _req.map(x=>LIBUR_HARI[Number(x)]).join(' › ') + (d.liburRequestPending ? ' <b style="color:#fbbf24">(nunggu di-assign)</b>' : ' <span style="color:#9ca3af">(sudah diproses)</span>');
+              _reqEl.style.display = '';
+            } else { _reqEl.style.display = 'none'; }
+          }
         }
         if ($('editBaseHarian')) $('editBaseHarian').value = d.baseHarian || '';
         if ($('editMultiplierLembur')) $('editMultiplierLembur').value = d.multiplierLembur || 1;
@@ -799,7 +812,7 @@ $('formEditKaryawan').onsubmit = async (e) => {
             nama: pg.value, namaPanggilan: pg.value, full_name: fullName, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload,
             jabatan, statusKaryawan, baseHarian, multiplierLembur, gpsExempt,
             namaBank, atasNamaRek, nomorRekening, nonaktif, wajibKodeClockout, kodeAdmin,
-            liburHari, liburSetBy: (liburHari != null ? 'owner' : null),
+            liburHari, liburSetBy: (liburHari != null ? 'owner' : null), liburRequestPending: false,
             updatedAt: serverTimestamp()
         };
         await setDoc(doc(db,'karyawan',uid), payload, {merge:true});
