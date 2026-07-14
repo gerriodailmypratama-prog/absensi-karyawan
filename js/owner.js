@@ -1300,8 +1300,11 @@ async function loadKehadiranMatrix(){
     const start = new Date(d); start.setHours(0,0,0,0);
     const end   = new Date(d); end.setHours(23,59,59,999);
     const lookAhead = new Date(d); lookAhead.setDate(lookAhead.getDate()+1); lookAhead.setHours(11,59,59,999);
+    // Look-behind: muat juga KEMARIN, biar bisa deteksi sesi lintas tengah malam yang MULAI kemarin
+    // (mis. lembur nembus jam 00:xx). Ekornya jangan dihitung sebagai kehadiran hari ini.
+    const lookBehind = new Date(d); lookBehind.setDate(lookBehind.getDate()-1); lookBehind.setHours(0,0,0,0);
     const q = query(collection(db,'absensi'),
-      where('ts','>=', Timestamp.fromDate(start)),
+      where('ts','>=', Timestamp.fromDate(lookBehind)),
       where('ts','<=', Timestamp.fromDate(lookAhead)),
       orderBy('ts','asc'));
     // 1) Load semua karyawan terdaftar sebagai master list (semua harus muncul, hadir/belum)
@@ -1328,6 +1331,7 @@ async function loadKehadiranMatrix(){
     // 2) Merge events absensi tanggal terpilih ke master list
     const snap = await getDocs(q);
     const _endMs = end.getTime();
+    const _startMs = start.getTime();
     snap.forEach(docSnap => {
       const r = Object.assign({ _id:docSnap.id }, docSnap.data());
       const uid = r.uid || r.email || '';
@@ -1336,7 +1340,11 @@ async function loadKehadiranMatrix(){
       if (!byUid[uid].nama || byUid[uid].nama==='-') byUid[uid].nama = r.nama || byUid[uid].nama;
       if (!byUid[uid].email) byUid[uid].email = r.email || '';
       const rTs = r.ts && r.ts.toDate ? r.ts.toDate().getTime() : 0;
-      if (rTs > _endMs){
+      if (rTs < _startMs){
+        // Event KEMARIN — dipakai hanya untuk deteksi sesi lintas tengah malam, bukan kehadiran hari ini.
+        byUid[uid]._prevEvents = byUid[uid]._prevEvents || [];
+        byUid[uid]._prevEvents.push(r);
+      } else if (rTs > _endMs){
         byUid[uid]._nextDayEvents = byUid[uid]._nextDayEvents || [];
         byUid[uid]._nextDayEvents.push(r);
       } else {
@@ -1382,6 +1390,40 @@ async function loadKehadiranMatrix(){
         }
       }
       delete byUid[u]._nextDayEvents;
+    });
+    // ===== Look-behind: buang EKOR shift kemarin yang jatuh di dini hari ini =====
+    // Kalau kemarin ada sesi yang MASIH TERBUKA saat lewat tengah malam (jam masuk terakhir > jam keluar
+    // terakhir kemarin), maka event hari ini SAMPAI penutup shift itu (clock_out/overtime_out pertama) adalah
+    // ekor shift kemarin. Shift diikat ke hari MULAI-nya, jadi ekornya tidak dihitung sebagai kehadiran hari ini.
+    // (Kalau ada clock_in BARU hari ini, biarkan logika "buang sisa" di bawah yang urus — jangan disentuh di sini.)
+    Object.keys(byUid).forEach(u=>{
+      const prev = byUid[u]._prevEvents || [];
+      delete byUid[u]._prevEvents;
+      if (!prev.length) return;
+      let lastInPrev = 0, lastOutPrev = 0;
+      for (const e of prev){
+        const ms = e.ts && e.ts.toDate ? e.ts.toDate().getTime() : 0;
+        if (e.tipe === 'clock_in' || e.tipe === 'overtime_in'){ if (ms > lastInPrev) lastInPrev = ms; }
+        if (e.tipe === 'clock_out' || e.tipe === 'overtime_out'){ if (ms > lastOutPrev) lastOutPrev = ms; }
+      }
+      const sesiTerbukaKemarin = lastInPrev > 0 && lastInPrev > lastOutPrev;
+      if (!sesiTerbukaKemarin) return;
+      const today = (byUid[u].events || []).slice().sort((a,b)=>{
+        const ta = a.ts && a.ts.toDate ? a.ts.toDate().getTime() : 0;
+        const tb = b.ts && b.ts.toDate ? b.ts.toDate().getTime() : 0;
+        return ta - tb;
+      });
+      // Ada clock_in baru hari ini = shift baru -> serahkan ke "buang sisa" di bawah, jangan diutak-atik.
+      if (today.some(e => e.tipe === 'clock_in')) return;
+      // Penutup shift kemarin = clock_out/overtime_out PERTAMA hari ini. Kalau tak ada, sesi masih "lupa clock out".
+      let penutupMs = Infinity;
+      for (const e of today){ if (e.tipe === 'clock_out' || e.tipe === 'overtime_out'){ penutupMs = e.ts.toDate().getTime(); break; } }
+      // Simpan hanya event SETELAH penutup (aktivitas hari ini yang beneran); buang ekor kemarin (<= penutup).
+      byUid[u].events = today.filter(e=>{
+        const ms = e.ts && e.ts.toDate ? e.ts.toDate().getTime() : 0;
+        return ms > penutupMs;
+      });
+      // byTipe akan dibangun ulang dari events di tahap normalisasi berikutnya.
     });
     // ===== Normalize byTipe untuk shift overnight =====
     // clock_out yang muncul SEBELUM clock_in pertama = orphan (sisa shift kemaren) -> skip.
