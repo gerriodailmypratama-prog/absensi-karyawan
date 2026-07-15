@@ -1193,7 +1193,15 @@ async function autoOtThenOut() {
       const snap = await getDoc(doc(db,'karyawan',uid));
       const d = snap.exists() ? snap.data() : {};
       if(el('pfNama')) el('pfNama').value = ((typeof userProfile!=='undefined'&&userProfile&&userProfile.nama)?userProfile.nama:'') || d.nama || currentUser.displayName || '';
-      if(el('pfIdKaryawan')) el('pfIdKaryawan').value = d.idKaryawan || d.nik || '';
+      // ID Karyawan (read-only). Kalau belum ada, auto-generate sekali biar user langsung lihat ID-nya.
+      // Skema EMP-XXXX (acak, tanpa baca daftar karyawan lain). Owner tetap bisa ganti dari panel.
+      let _idKar = d.idKaryawan || d.nik || '';
+      if(!_idKar){
+        _idKar = 'EMP-' + Math.random().toString(36).slice(2,6).toUpperCase();
+        try { await setDoc(doc(db,'karyawan',uid), { idKaryawan: _idKar }, { merge:true }); }
+        catch(e){ console.warn('auto-set idKaryawan gagal:', e); }
+      }
+      if(el('pfIdKaryawan')) el('pfIdKaryawan').value = _idKar;
       if(el('pfNamaBank')) el('pfNamaBank').value = d.namaBank || '';
       if(el('pfNomorRekening')) el('pfNomorRekening').value = d.nomorRekening || '';
       if(el('pfAtasNamaRek')) el('pfAtasNamaRek').value = d.atasNamaRek || '';
