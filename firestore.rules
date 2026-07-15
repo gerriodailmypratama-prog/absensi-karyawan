@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: cek apakah requester adalah owner
+    function isOwner() {
+      return request.auth != null
+        && request.auth.token.email in ['gerriomail@gmail.com', 'steffieerzamia@gmail.com'];
+    }
+
+    // Field profil yang boleh diisi karyawan dari sisi mereka sendiri (rekening/KTP)
+    function profilFields() {
+      return ['namaBank', 'nomorRekening', 'atasNamaRek',
+              'ktpUrl', 'profilLocked', 'profilUpdatedAt'];
+    }
+
+    // Field USULAN hari libur yang boleh diisi karyawan sendiri.
+    // Owner tetap satu-satunya yang menetapkan liburHari final (bukan lewat sini).
+    function liburRequestFields() {
+      return ['liburRequest', 'liburRequestAt', 'liburRequestPending', 'updatedAt'];
+    }
+
+    // Koleksi absensi (clock in/out, OT)
+    match /absensi/{docId} {
+      allow read: if request.auth != null && (
+        isOwner() || resource.data.uid == request.auth.uid
+      );
+      // Create: owner boleh bikin event untuk siapa saja; karyawan hanya untuk dirinya sendiri
+      allow create: if request.auth != null && (
+        isOwner() || request.resource.data.uid == request.auth.uid
+      );
+      allow update, delete: if isOwner();
+    }
+
+    // Koleksi karyawan (data profile karyawan)
+    match /karyawan/{uid} {
+      allow read: if request.auth != null && (
+        isOwner() || request.auth.uid == uid
+      );
+      allow create: if request.auth != null && (
+        isOwner() || request.auth.uid == uid
+      );
+      // Owner bebas update. Karyawan boleh perbaiki field profil mereka sendiri (rekening/KTP)
+      // dan mengirim usulan hari libur, TAPI tidak bisa menyentuh field gaji / liburHari final.
+      allow update: if isOwner() || (
+        request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.diff(resource.data)
+            .affectedKeys().hasOnly(profilFields().concat(liburRequestFields()))
+      );
+      allow delete: if isOwner();
+    }
+
+    // Koleksi profil (foto profil & nama karyawan)
+    match /profil/{uid} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null && request.auth.uid == uid;
+      allow delete: if isOwner();
+    }
+  }
+}
