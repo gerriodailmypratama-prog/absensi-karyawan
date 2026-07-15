@@ -800,8 +800,22 @@ function openLiburModal(){
   $('liburPil1').innerHTML = _liburOptionsHtml(req[0]!=null?req[0]:cur);
   $('liburPil2').innerHTML = _liburOptionsHtml(req[1]);
   $('liburPil3').innerHTML = _liburOptionsHtml(req[2]);
+  ['liburPil1','liburPil2','liburPil3'].forEach(id=>{ const s=$(id); if (s) s.onchange = _liburSyncDropdowns; });
+  _liburSyncDropdowns();
   const err=$('liburErr'); if(err) err.style.display='none';
   modal.classList.remove('hidden');
+}
+// Cegah pilih hari yang sama di lebih dari satu dropdown (prioritas Pilihan 1 > 2 > 3).
+// Hari yang sudah dipilih di pilihan lebih tinggi otomatis di-disable & di-reset di bawahnya.
+function _liburSyncDropdowns(){
+  const s1=$('liburPil1'), s2=$('liburPil2'), s3=$('liburPil3');
+  if (!s1||!s2||!s3) return;
+  const v1=s1.value;
+  if (s2.value && s2.value===v1) s2.value='';
+  const v2=s2.value;
+  if (s3.value && (s3.value===v1 || s3.value===v2)) s3.value='';
+  Array.from(s2.options).forEach(o=>{ o.disabled = !!(o.value && o.value===v1); });
+  Array.from(s3.options).forEach(o=>{ o.disabled = !!(o.value && (o.value===v1 || o.value===v2)); });
 }
 async function saveLiburRequest(){
   const picks=[$('liburPil1').value, $('liburPil2').value, $('liburPil3').value].filter(v=>v!=='').map(Number);
