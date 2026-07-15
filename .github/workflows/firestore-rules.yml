@@ -1,0 +1,30 @@
+name: Firestore Rules Admin
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "get = tampilkan rules aktif; deploy = push firestore.rules"
+        required: true
+        default: "get"
+        type: choice
+        options:
+          - get
+          - deploy
+
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install deps
+        working-directory: bot
+        run: npm install
+      - name: Run rules-admin (${{ github.event.inputs.mode }})
+        working-directory: bot
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node rules-admin.js "${{ github.event.inputs.mode }}"
