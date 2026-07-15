@@ -780,21 +780,34 @@ function askKodeClockout(){
 }
 
 /* ===== Hari Libur Mingguan — karyawan pilih sendiri 3 prioritas (PR-CL60) ===== */
+let _liburFull = []; // hari yang slot-nya udah penuh (>= LIBUR_MAX) — di-exclude dari pilihan
 function _liburOptionsHtml(sel){
   let h = '<option value="">— pilih hari —</option>';
-  for (let i=0;i<7;i++) h += '<option value="'+i+'"'+(String(sel)===String(i)?' selected':'')+'>'+LIBUR_HARI[i]+'</option>';
+  for (let i=0;i<7;i++){
+    const full = _liburFull.includes(i);
+    h += '<option value="'+i+'"'+(String(sel)===String(i)?' selected':'')+(full?' disabled':'')+'>'+LIBUR_HARI[i]+(full?' — PENUH':'')+'</option>';
+  }
   return h;
 }
-function openLiburModal(){
+async function openLiburModal(){
   const modal = $('liburModal'); if (!modal) return;
   const cur = userProfile.liburHari;
   const req = Array.isArray(userProfile.liburRequest) ? userProfile.liburRequest : [];
+  // Hitung hari yang slot-nya udah penuh (>= LIBUR_MAX), biar di-exclude dari pilihan.
+  _liburFull = [];
+  try {
+    const snap = await getDocs(collection(db,'karyawan'));
+    const cnt=[0,0,0,0,0,0,0];
+    snap.forEach(s=>{ if (s.id===currentUser.uid) return; const k=s.data()||{}; if (k.nonaktif===true) return; if (k.liburHari!=null){ const h=Number(k.liburHari); if(h>=0&&h<=6) cnt[h]++; } });
+    for (let i=0;i<7;i++) if (cnt[i]>=LIBUR_MAX) _liburFull.push(i);
+  } catch(e){ console.warn('libur full-count err', e); }
   const cc = $('liburCurrent');
   if (cc){
     let html = (cur!=null && cur>=0)
       ? 'Hari libur kamu: <b style="color:#6ee7b7">'+LIBUR_HARI[cur]+'</b> <span style="color:#9ca3af">(ditentukan owner)</span>'
       : 'Kamu belum punya hari libur tetap. Kirim usulan di bawah ya.';
     if (req.length) html += '<br><span style="color:#fbbf24">📩 Usulan kamu: '+req.map(d=>LIBUR_HARI[d]).join(' › ')+' — nunggu di-approve owner.</span>';
+    if (_liburFull.length>=7) html += '<br><span style="color:#f87171">Semua hari sudah penuh. Hubungi admin ya.</span>';
     cc.innerHTML = html;
   }
   $('liburPil1').innerHTML = _liburOptionsHtml(req[0]!=null?req[0]:cur);
@@ -805,17 +818,19 @@ function openLiburModal(){
   const err=$('liburErr'); if(err) err.style.display='none';
   modal.classList.remove('hidden');
 }
-// Cegah pilih hari yang sama di lebih dari satu dropdown (prioritas Pilihan 1 > 2 > 3).
-// Hari yang sudah dipilih di pilihan lebih tinggi otomatis di-disable & di-reset di bawahnya.
+// Cegah pilih hari yang sama di >1 dropdown (prioritas 1>2>3) + exclude hari yang udah PENUH.
 function _liburSyncDropdowns(){
   const s1=$('liburPil1'), s2=$('liburPil2'), s3=$('liburPil3');
   if (!s1||!s2||!s3) return;
+  const isFull = v => _liburFull.includes(Number(v));
+  [s1,s2,s3].forEach(s=>{ if (s.value && isFull(s.value)) s.value=''; });
   const v1=s1.value;
   if (s2.value && s2.value===v1) s2.value='';
   const v2=s2.value;
   if (s3.value && (s3.value===v1 || s3.value===v2)) s3.value='';
-  Array.from(s2.options).forEach(o=>{ o.disabled = !!(o.value && o.value===v1); });
-  Array.from(s3.options).forEach(o=>{ o.disabled = !!(o.value && (o.value===v1 || o.value===v2)); });
+  Array.from(s1.options).forEach(o=>{ o.disabled = !!(o.value && isFull(o.value)); });
+  Array.from(s2.options).forEach(o=>{ o.disabled = !!(o.value && (isFull(o.value) || o.value===v1)); });
+  Array.from(s3.options).forEach(o=>{ o.disabled = !!(o.value && (isFull(o.value) || o.value===v1 || o.value===v2)); });
 }
 async function saveLiburRequest(){
   const picks=[$('liburPil1').value, $('liburPil2').value, $('liburPil3').value].filter(v=>v!=='').map(Number);
