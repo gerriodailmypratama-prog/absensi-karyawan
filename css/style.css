@@ -463,6 +463,11 @@ img.hadir-avatar,
 .hadir-avatar:first-child{margin-left:0 !important}
 .hadir-avatar-ph{background:var(--gg-surface-3);color:var(--gg-text-2)}
 .hadir-empty{padding:0 6px}
+/* Mobile: avatar wall "Kehadiran hari ini" jadi full-width rata-kiri (bukan 60% rata-kanan yang bikin staggered). */
+@media (max-width:640px){
+  .hadir-floating{align-items:flex-start}
+  .hadir-floating-right{max-width:100%;flex-basis:100%;justify-content:flex-start;gap:7px;margin-top:8px}
+}
 
 .grid-2-chart{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
 .chart-wrap{position:relative;width:100%;max-width:380px;margin:0 auto;aspect-ratio:1}
