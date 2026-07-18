@@ -45,37 +45,30 @@
 
       <div id="hadirFloating" class="hadir-floating">
           <div class="hadir-floating-left">
-            <div class="hadir-title">Kehadiran personalia hari ini <strong id="hadirCount">(0 of 0)</strong></div>
+            <div class="hadir-title">Kehadiran hari ini <span class="pres-count" id="hadirCount">0/0</span></div>
             <div class="hadir-sub muted small">Karyawan yang sudah Clock In</div>
           </div>
           <div class="hadir-floating-right" id="hadirAvatars"></div>
         </div>
 
-        <div id="workingFloating" class="hadir-floating">
-          <div class="hadir-floating-left">
-            <div class="hadir-title">On Working <strong id="workingCount">(0 of 0)</strong></div>
-            <div class="hadir-sub muted small">Sedang bekerja (belum Clock Out, tidak istirahat)</div>
-            <div id="workTimers" style="margin-top:6px"></div>
+        <div class="pres-grid">
+          <div id="workingFloating" class="pres-card pres-work">
+            <div class="pres-head"><span class="pres-dot"></span><b>On Working</b><span class="pres-count" id="workingCount">0/0</span></div>
+            <div class="pres-sub muted small">Sedang bekerja &middot; total &middot; efektif</div>
+            <div id="workTimers" class="pres-list"></div>
           </div>
-          <div class="hadir-floating-right" id="workingAvatars"></div>
-        </div>
 
-        <div id="breakFloating" class="hadir-floating">
-          <div class="hadir-floating-left">
-            <div class="hadir-title">On Break <strong id="breakCount">(0 of 0)</strong></div>
-            <div class="hadir-sub muted small">Sedang istirahat</div>
-            <div id="breakTimers" style="margin-top:6px"></div>
+          <div id="breakFloating" class="pres-card pres-break">
+            <div class="pres-head"><span class="pres-dot"></span><b>On Break</b><span class="pres-count" id="breakCount">0/0</span></div>
+            <div class="pres-sub muted small">Sedang istirahat &middot; berjalan &middot; total</div>
+            <div id="breakTimers" class="pres-list"></div>
           </div>
-          <div class="hadir-floating-right" id="breakAvatars"></div>
-        </div>
 
-        <div id="finishFloating" class="hadir-floating">
-          <div class="hadir-floating-left">
-            <div class="hadir-title">Finish Working <strong id="finishCount">(0 of 0)</strong></div>
-            <div class="hadir-sub muted small">Sudah Clock Out / OT Out</div>
-            <div id="finishTimers" style="margin-top:6px"></div>
+          <div id="finishFloating" class="pres-card pres-finish">
+            <div class="pres-head"><span class="pres-dot"></span><b>Finish Working</b><span class="pres-count" id="finishCount">0/0</span></div>
+            <div class="pres-sub muted small">Sudah Clock Out / OT Out &middot; total &middot; efektif</div>
+            <div id="finishTimers" class="pres-list"></div>
           </div>
-          <div class="hadir-floating-right" id="finishAvatars"></div>
         </div>
         <div class="stats" id="berandaStats"></div>
 
