@@ -1119,85 +1119,85 @@ async function renderHadirFloating(rows){
         return (_h>0 ? (_h + ':' + String(_m).padStart(2,'0')) : String(_m)) + ':' + String(_ss).padStart(2,'0');
     }
 
-    async function paint(containerId, countId, uids){
-        const cnt = $(countId);
-        if (cnt) cnt.textContent = '(' + uids.length + ' of ' + total + ')';
-        const wrap = $(containerId);
+    // ===== Presence board v2 (PR-CL71): chip per orang = foto + nama + timer =====
+    // Foto profil di-fetch SEKALI untuk semua yang hadir (paralel), dipakai avatar wall + chip.
+    const fotoMap = new Map();
+    await Promise.all(hadirUids.map(async u => {
+        try{ const snap = await getDoc(doc(db,'profil', u)); fotoMap.set(u, snap.exists() ? (snap.data().foto || '') : ''); }
+        catch(e){ fotoMap.set(u, ''); }
+    }));
+    function avaHtml(u){
+        const foto = fotoMap.get(u) || '';
+        const nm = namaOf(u) || '?';
+        if (foto) return '<img class="p-ava" src="'+foto+'" alt="" title="'+nm+'">';
+        return '<span class="p-ava p-ava-ph" title="'+nm+'">'+nm.charAt(0).toUpperCase()+'</span>';
+    }
+    function setCount(id, n){ const el = $(id); if (el) el.textContent = n + '/' + total; }
+
+    // Bar atas: avatar wall semua yang hadir hari ini.
+    setCount('hadirCount', hadirUids.length);
+    (function(){
+        const wrap = $('hadirAvatars');
         if (!wrap) return;
         wrap.innerHTML = '';
-        if (uids.length === 0){
-            wrap.insertAdjacentHTML('beforeend', '<span class="hadir-empty muted small">\u2014</span>');
-            return;
-        }
-        // Tampil SEMUA orang (ga di-cap). Ambil foto profil paralel biar tetap cepat walau banyak.
-        const fotos = await Promise.all(uids.map(async u => {
-            try{ const snap = await getDoc(doc(db,'profil', u)); return snap.exists() ? (snap.data().foto || '') : ''; }
-            catch(e){ return ''; }
-        }));
-        uids.forEach((u, i) => {
-            const foto = fotos[i];
+        if (!hadirUids.length){ wrap.insertAdjacentHTML('beforeend', '<span class="hadir-empty muted small">\u2014</span>'); return; }
+        hadirUids.forEach(u => {
+            const foto = fotoMap.get(u) || '';
             const initial = (namaOf(u) || '?').charAt(0).toUpperCase();
-            if (!foto){
-                wrap.insertAdjacentHTML('beforeend', '<span class="hadir-avatar hadir-avatar-ph" title="'+namaOf(u)+'">'+initial+'</span>');
-            } else {
-                wrap.insertAdjacentHTML('beforeend', '<img class="hadir-avatar" src="'+foto+'" alt="" title="'+namaOf(u)+'" />');
-            }
+            if (!foto) wrap.insertAdjacentHTML('beforeend', '<span class="hadir-avatar hadir-avatar-ph" title="'+namaOf(u)+'">'+initial+'</span>');
+            else wrap.insertAdjacentHTML('beforeend', '<img class="hadir-avatar" src="'+foto+'" alt="" title="'+namaOf(u)+'" />');
         });
-    }
+    })();
 
-    await paint('hadirAvatars', 'hadirCount', hadirUids);
-    await paint('workingAvatars', 'workingCount', workingUids);
-    await paint('breakAvatars', 'breakCount', breakUids);
-    await paint('finishAvatars', 'finishCount', finishUids);
+    setCount('workingCount', workingUids.length);
+    setCount('breakCount', breakUids.length);
+    setCount('finishCount', finishUids.length);
 
-    // Durasi kerja LIVE (per karyawan yang sedang bekerja), ticking tiap detik.
+    // On Working: chip per orang (foto+nama+timer LIVE; class work-timer/work-net dipakai ticker global).
     const _workBox = $('workTimers');
     if (_workBox){
-        _workBox.innerHTML = workingUids.map(function(u){
+        _workBox.innerHTML = workingUids.length ? workingUids.map(function(u){
             const _ci = workStartMs(u); // pakai mulai-sesi (boleh lintas hari) biar timer lembur tembus tengah malam benar
             if (!_ci) return '';
             const _rest = restMsToday(u);
-            return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;margin-top:3px">'
-                 + '<span style="color:#e6e3d8">' + (namaOf(u)||'-') + '</span>'
-                 + '<span style="font-variant-numeric:tabular-nums">'
-                 +   '<span class="work-timer" data-start="' + _ci + '" style="color:#34d399;font-weight:600">--:--</span>'
-                 +   '<span class="muted" style="font-size:11px"> · efektif </span>'
-                 +   '<span class="work-net" data-start="' + _ci + '" data-base="' + _rest + '" style="color:#9ca3af;font-weight:600">--:--</span>'
-                 + '</span></div>';
-        }).join('');
+            return '<div class="p-row">' + avaHtml(u)
+                 + '<span class="p-name">' + (namaOf(u)||'-') + '</span>'
+                 + '<span class="p-time"><span class="work-timer p-main" data-start="' + _ci + '">--:--</span>'
+                 + '<small class="p-sep">efektif</small>'
+                 + '<span class="work-net p-dim" data-start="' + _ci + '" data-base="' + _rest + '">--:--</span></span>'
+                 + '</div>';
+        }).join('') : '<div class="p-empty">Belum ada yang bekerja</div>';
     }
 
-    // Durasi istirahat LIVE (per karyawan yang sedang break), ticking tiap detik.
+    // On Break: chip per orang (timer LIVE; class brk-timer/brk-total dipakai ticker global).
     const _brkBox = $('breakTimers');
     if (_brkBox){
-        _brkBox.innerHTML = breakUids.map(function(u){
+        _brkBox.innerHTML = breakUids.length ? breakUids.map(function(u){
             const _s = breakStartByUid.get(u) || 0;
             const _b = completedBreakMsToday(u);
-            return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;margin-top:3px">'
-                 + '<span style="color:#e6e3d8">' + (namaOf(u)||'-') + '</span>'
-                 + '<span style="font-variant-numeric:tabular-nums">'
-                 +   '<span class="brk-timer" data-start="' + _s + '" style="color:#fcd34d;font-weight:600">--:--</span>'
-                 +   '<span class="muted" style="font-size:11px"> · total </span>'
-                 +   '<span class="brk-total" data-start="' + _s + '" data-base="' + _b + '" style="color:#9ca3af;font-weight:600">--:--</span>'
-                 + '</span></div>';
-        }).join('');
+            return '<div class="p-row">' + avaHtml(u)
+                 + '<span class="p-name">' + (namaOf(u)||'-') + '</span>'
+                 + '<span class="p-time"><span class="brk-timer p-main" data-start="' + _s + '">--:--</span>'
+                 + '<small class="p-sep">total</small>'
+                 + '<span class="brk-total p-dim" data-start="' + _s + '" data-base="' + _b + '">--:--</span></span>'
+                 + '</div>';
+        }).join('') : '<div class="p-empty">Tidak ada yang istirahat</div>';
     }
 
-    // Total kerja efektif (FINAL) untuk yang sudah Finish Working - angka statis, tidak ticking.
+    // Finish: chip per orang, angka FINAL statis (tidak ticking).
     const _finBox = $('finishTimers');
     if (_finBox){
-        _finBox.innerHTML = finishUids.map(function(u){
+        _finBox.innerHTML = finishUids.length ? finishUids.map(function(u){
             const _gross = grossWorkMsToday(u);
             if (_gross <= 0) return '';
             const _eff = Math.max(0, _gross - restMsToday(u));
-            return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;margin-top:3px">'
-                 + '<span style="color:#e6e3d8">' + (namaOf(u)||'-') + '</span>'
-                 + '<span style="font-variant-numeric:tabular-nums">'
-                 +   '<span style="color:#34d399;font-weight:600">' + fmtDurMs(_gross) + '</span>'
-                 +   '<span class="muted" style="font-size:11px"> · efektif </span>'
-                 +   '<span style="color:#9ca3af;font-weight:600">' + fmtDurMs(_eff) + '</span>'
-                 + '</span></div>';
-        }).join('');
+            return '<div class="p-row">' + avaHtml(u)
+                 + '<span class="p-name">' + (namaOf(u)||'-') + '</span>'
+                 + '<span class="p-time"><span class="p-main">' + fmtDurMs(_gross) + '</span>'
+                 + '<small class="p-sep">efektif</small>'
+                 + '<span class="p-dim">' + fmtDurMs(_eff) + '</span></span>'
+                 + '</div>';
+        }).join('') : '<div class="p-empty">Belum ada yang pulang</div>';
     }
     if (!window.__ggBreakTick){
         window.__ggBreakTick = setInterval(function(){
