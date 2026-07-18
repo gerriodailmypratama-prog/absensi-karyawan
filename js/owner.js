@@ -1125,25 +1125,24 @@ async function renderHadirFloating(rows){
         const wrap = $(containerId);
         if (!wrap) return;
         wrap.innerHTML = '';
-        const slice = uids.slice(0, 8);
-        for (const u of slice){
-            let foto = '';
-            try{
-                const snap = await getDoc(doc(db,'profil', u));
-                if (snap.exists()) foto = snap.data().foto || '';
-            }catch(e){}
+        if (uids.length === 0){
+            wrap.insertAdjacentHTML('beforeend', '<span class="hadir-empty muted small">\u2014</span>');
+            return;
+        }
+        // Tampil SEMUA orang (ga di-cap). Ambil foto profil paralel biar tetap cepat walau banyak.
+        const fotos = await Promise.all(uids.map(async u => {
+            try{ const snap = await getDoc(doc(db,'profil', u)); return snap.exists() ? (snap.data().foto || '') : ''; }
+            catch(e){ return ''; }
+        }));
+        uids.forEach((u, i) => {
+            const foto = fotos[i];
             const initial = (namaOf(u) || '?').charAt(0).toUpperCase();
             if (!foto){
                 wrap.insertAdjacentHTML('beforeend', '<span class="hadir-avatar hadir-avatar-ph" title="'+namaOf(u)+'">'+initial+'</span>');
             } else {
                 wrap.insertAdjacentHTML('beforeend', '<img class="hadir-avatar" src="'+foto+'" alt="" title="'+namaOf(u)+'" />');
             }
-        }
-        if (uids.length === 0){
-            wrap.insertAdjacentHTML('beforeend', '<span class="hadir-empty muted small">\u2014</span>');
-        } else if (uids.length > 8){
-            wrap.insertAdjacentHTML('beforeend', '<span class="hadir-avatar hadir-avatar-ph">+'+(uids.length-8)+'</span>');
-        }
+        });
     }
 
     await paint('hadirAvatars', 'hadirCount', hadirUids);

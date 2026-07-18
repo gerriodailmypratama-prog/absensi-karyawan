@@ -449,14 +449,14 @@ td img{width:48px;height:48px;object-fit:cover;border-radius:8px;cursor:pointer}
 .hadir-floating-left .hadir-title{font-weight:600;font-size:14px;color:var(--gg-text)}
 .hadir-floating-left .hadir-title strong{color:var(--gg-text)}
 .hadir-floating-left .hadir-sub{font-size:11px;margin-top:2px}
-.hadir-floating-right{display:flex;align-items:center}
+.hadir-floating-right{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:5px;max-width:60%}
 img.hadir-avatar,
 .hadir-floating-right .hadir-avatar,
 .hadir-floating-right img.hadir-avatar{
   width:36px !important;height:36px !important;max-width:36px !important;max-height:36px !important;
   border-radius:50% !important;object-fit:cover !important;
   border:2px solid var(--gg-surface) !important;box-shadow:0 1px 3px rgba(0,0,0,.4);
-  margin-left:-8px;background:var(--gg-surface-3);flex-shrink:0 !important;
+  margin-left:0;background:var(--gg-surface-3);flex-shrink:0 !important;
   display:inline-flex !important;align-items:center;justify-content:center;
   font-weight:600;color:var(--gg-muted);font-size:13px;
 }
