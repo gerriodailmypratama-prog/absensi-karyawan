@@ -333,6 +333,22 @@ async function loadUserProfile(uid){
         liburHari = (u.liburHari != null ? Number(u.liburHari) : null);
         liburRequest = Array.isArray(u.liburRequest) ? u.liburRequest.map(Number) : null;
       }
+      // === Backfill identitas: doc karyawan tanpa nama/email (mis. doc lama kehapus lalu login lagi,
+      // atau write lain bikin doc minim) diisi ulang dari akun Auth biar tidak blank di daftar owner. ===
+      try{
+        const _d0 = snap.exists() ? snap.data() : {};
+        const au = auth.currentUser;
+        if (au && au.uid === uid){
+          const fix = {};
+          if (!_d0.email && au.email) fix.email = au.email;
+          if (!nama){
+            const guess = ((au.email||'').split('@')[0] || '').toLowerCase().replace(/[^a-z0-9]/g,'');
+            if (guess){ fix.nama = guess; fix.namaPanggilan = guess; nama = guess; namaPanggilan = namaPanggilan || guess; }
+          }
+          if (!_d0.full_name && au.displayName) fix.full_name = au.displayName;
+          if (Object.keys(fix).length) await setDoc(doc(db,'karyawan',uid), fix, { merge:true });
+        }
+      }catch(e){ console.warn('backfill identitas err:', e); }
     }catch(e){ console.warn('karyawan profile load err:', e); }
     try{
       const snap2 = await getDoc(doc(db, 'profil', uid));

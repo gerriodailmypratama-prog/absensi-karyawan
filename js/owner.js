@@ -519,7 +519,7 @@ async function loadKaryawanList(){
         const tb = document.querySelector('#tblKaryawan tbody');
         tb.innerHTML = '';
         if (snap.empty) {
-            $('emptyKaryawan').textContent = 'Pending ada data karyawan terdaftar. Tambahkan via form di atas.';
+            $('emptyKaryawan').textContent = 'Belum ada karyawan terdaftar. Minta karyawan daftar via halaman login (pakai kode pendaftaran).';
             return;
         }
         $('emptyKaryawan').textContent = '';
@@ -560,6 +560,13 @@ async function loadKaryawanList(){
                 catch(e){ console.warn('Auto-isi default gagal untuk', r.id, e); if (_idBumped) _maxKid--; }
             }
         }
+        // Foto profil: ambil dari koleksi 'profil' (foto yang diupload karyawan sendiri),
+        // fallback ke photoURL lama di doc karyawan. Per-doc getDoc (pola sama dgn avatar dashboard).
+        const fotoByUid = {};
+        await Promise.all(rows.map(async r => {
+            try { const p = await getDoc(doc(db,'profil', r.id)); if (p.exists() && p.data().foto) fotoByUid[r.id] = p.data().foto; }
+            catch(e){}
+        }));
         // Aktif dulu (urut nama), lalu Nonaktif/resign dikelompokin di bawah (redup + bisa di-collapse, default keumpet biar rapi).
         rows.sort((a,b)=> ((a.nonaktif===true)?1:0) - ((b.nonaktif===true)?1:0));
         const _nonaktifCount = rows.filter(r=>r.nonaktif===true).length;
@@ -571,7 +578,7 @@ async function loadKaryawanList(){
                 const sep = document.createElement('tr');
                 sep.className = 'kry-nonaktif-sep';
                 sep.style.cursor = 'pointer';
-                sep.innerHTML = '<td colspan="10" style="padding:9px 12px;background:#161616;border-top:2px solid #2a2a2a;color:#9ca3af;font-size:12.5px;font-weight:600">'
+                sep.innerHTML = '<td colspan="11" style="padding:9px 12px;background:#161616;border-top:2px solid #2a2a2a;color:#9ca3af;font-size:12.5px;font-weight:600">'
                   + '<span class="kry-non-caret">▸</span> Nonaktif / Resign (' + _nonaktifCount + ') — klik buat lihat/sembunyikan</td>';
                 sep.onclick = () => {
                     const rowsN = tb.querySelectorAll('.kry-nonaktif-row');
@@ -581,9 +588,6 @@ async function loadKaryawanList(){
                 };
                 tb.appendChild(sep);
             }
-            const img = x.photoURL
-                ? '<img src="'+x.photoURL+'" alt="foto" style="width:40px;height:40px;border-radius:50%;object-fit:cover">'
-                : '<span class="muted">-</span>';
             const idDisplay = x.idKaryawan || x.nik || '-';
             const jamKerja = x.jamKerja || 9;
             const tr = document.createElement('tr');
@@ -591,15 +595,28 @@ async function loadKaryawanList(){
             _no++;
             const tj = x.tanggalJoin ? (x.tanggalJoin.toDate ? x.tanggalJoin.toDate() : new Date(x.tanggalJoin)) : null;
             const tjStr = tj ? tj.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}) : '-';
+            // Nama tampilan dgn fallback berlapis: doc kosong tetap kebaca (pakai email) + jelas perlu dilengkapi.
+            const dispNama = x.full_name || x.nama || (x.email ? x.email.split('@')[0] : '') || '(belum ada data)';
+            const dispPgl = x.namaPanggilan || x.nama || '-';
+            // Avatar: foto profil karyawan (koleksi profil) > photoURL lama > inisial.
+            const _foto = fotoByUid[x.id] || x.photoURL || '';
+            const _ini = (dispNama.trim().charAt(0) || '?').toUpperCase();
+            const avatar = _foto
+                ? '<img src="'+_foto+'" alt="" loading="lazy" style="width:36px;height:36px;border-radius:50%;object-fit:cover;display:block;border:1px solid var(--gg-border,#403d37)">'
+                : '<span style="width:36px;height:36px;border-radius:50%;background:var(--gg-surface-2,#33312d);color:var(--gg-muted,#a8a399);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;border:1px solid var(--gg-border,#403d37)">'+_ini+'</span>';
+            const liburCell = (x.liburHari!=null)
+                ? '<span class="tag" style="background:#12291f;color:#6ee7b7;white-space:nowrap" title="Hari libur mingguan">🌴 '+LIBUR_HARI[Number(x.liburHari)]+'</span>'
+                : '<span class="muted">—</span>';
             tr.innerHTML = '<td>'+_no+'</td>'+
-              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#f97316;text-decoration:underline;">'+((x.full_name||x.nama)||'-')+'</span>'+((!x.updatedAt)?' <span class="tag warn" title="Karyawan baru / belum direview owner. Klik Edit untuk cek gaji & jam kerja.">baru</span>':'')+(x.nonaktif===true?' <span class="tag" title="Sudah resign / dinonaktifkan. Tidak muncul di absensi harian & laporan Telegram.">Nonaktif</span>':'')+(x.liburHari!=null?' <span class="tag" style="background:#12291f;color:#6ee7b7" title="Hari libur mingguan">🌴 '+LIBUR_HARI[Number(x.liburHari)]+'</span>':'')+'</td>'+
-              '<td><span style="color:var(--gg-text-2)">'+((x.namaPanggilan||x.nama)||'-')+'</span></td>'+
+              '<td style="width:44px;padding-right:0">'+avatar+'</td>'+
+              '<td><span class="kry-nama-link" data-uid="'+x.id+'" style="cursor:pointer;color:#f97316;text-decoration:underline;">'+dispNama+'</span>'+((!x.updatedAt)?' <span class="tag warn" title="Karyawan baru / belum direview owner. Klik Edit untuk cek gaji & jam kerja.">baru</span>':'')+(x.nonaktif===true?' <span class="tag" title="Sudah resign / dinonaktifkan. Tidak muncul di absensi harian & laporan Telegram.">Nonaktif</span>':'')+'</td>'+
+              '<td><span style="color:var(--gg-text-2)">'+dispPgl+'</span></td>'+
+              '<td>'+liburCell+'</td>'+
               '<td>'+(x.email||'-')+'</td>'+
               '<td>'+(x.phone||'-')+'</td>'+
               '<td>'+idDisplay+'</td>'+
               '<td>'+jamKerja+' jam</td>'+
               '<td>'+tjStr+'</td>'+
-              '<td>'+img+'</td>'+
               '<td><button class="btn-link btn-edit-kar" data-uid="'+x.id+'">Edit</button> <button class="btn-link btn-del-kar" data-uid="'+x.id+'" data-nama="'+(x.nama||'')+'" style="color:#dc2626">Hapus</button></td>';
             tb.appendChild(tr);
         });
@@ -628,7 +645,10 @@ async function panggilanTaken(pgValue, excludeUid){
     return taken;
 }
 
-$('formAddUser').onsubmit = async (e) => {
+// Form tambah manual sudah dipensiunkan dari UI (karyawan daftar sendiri pakai kode).
+// Handler dibiarkan dengan guard supaya tidak error kalau elemennya tidak ada.
+const _formAddUser = $('formAddUser');
+if (_formAddUser) _formAddUser.onsubmit = async (e) => {
     e.preventDefault();
     const btn = $('btnAddUser');
     const nama = $('newNama').value.trim();

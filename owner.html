@@ -248,27 +248,14 @@
 <!-- KARYAWAN -->
     <section id="page-karyawan" class="page">
       <h2 class="page-title">Karyawan</h2>
-      <div class="card">
-        <h3>Tambah Karyawan Baru</h3>
-        <p class="muted" id="addUserNote">Owner tetap login. User baru dibuat via secondary Auth instance (session owner tidak terganggu).</p>
-        <form id="formAddUser" class="form-grid" autocomplete="off">
-          <div><label>Nama Lengkap</label><input type="text" id="newNama" required></div>
-          <div><label>Nama Panggilan</label><input type="text" id="newNamaPanggilan" placeholder="1 kata, huruf kecil — cth: mila" maxlength="20" required></div>
-          <div><label>Email</label><input type="email" id="newEmail" required></div>
-          <div><label>No. HP</label><input type="text" id="newPhone" placeholder="+62..."></div>
-          <div><label>ID Karyawan</label><input type="text" id="newIdKaryawan" placeholder="auto (EMP-XXX) jika kosong"></div>
-          <div><label>Jam Kerja (jam)</label><input type="number" id="newJamKerja" min="1" max="24" value="9"></div>
-          <div><label>Base Harian (Rp)</label><input type="number" id="newBaseHarian" min="0" step="1000" value="100000"></div>
-          <div><label>Tanggal Join</label><input type="date" id="newTanggalJoin"></div>
-          <div><label>Password</label><input type="text" id="newPassword" value="Goodgems2026"></div>
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary" id="btnAddUser">Tambah Karyawan</button>
-          </div>
-        </form>
-        <p id="addUserMsg" class="msg"></p>
-        <div style="margin-top:10px;border-top:1px solid var(--gg-border,#403d37);padding-top:10px">
+      <div class="card" style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between">
+        <div style="flex:1 1 320px">
+          <h3 style="margin:0 0 4px">👋 Karyawan Baru</h3>
+          <p class="muted small" style="margin:0">Karyawan baru daftar sendiri dari halaman login pakai kode pendaftaran — nama lengkap, panggilan &amp; no. HP WhatsApp langsung keisi otomatis. Form tambah manual sudah dipensiunkan.</p>
+        </div>
+        <div>
           <button type="button" id="btnSyncNama" class="btn btn-secondary">🔗 Sinkronkan Nama ke WMS</button>
-          <small style="color:#9ca3af;display:block;margin-top:4px">Rapikan nama karyawan lama jadi panggilan huruf kecil (1 kata) + isi nama lengkap. Data kehadiran tidak tersentuh.</small>
+          <small style="color:#9ca3af;display:block;margin-top:4px;max-width:280px">Rapikan nama karyawan lama jadi panggilan huruf kecil + nama lengkap.</small>
         </div>
       </div>
 
@@ -276,7 +263,7 @@
         <h3>Daftar Karyawan</h3>
         <div class="table-wrap">
           <table id="tblKaryawan">
-            <thead><tr><th>No.</th><th>Nama Lengkap</th><th>Panggilan</th><th>Email</th><th>No. HP</th><th>ID</th><th>Jam Kerja</th><th>Tanggal Join</th><th>Foto</th><th>Aksi</th></tr></thead>
+            <thead><tr><th>No.</th><th></th><th>Nama Lengkap</th><th>Panggilan</th><th>Libur</th><th>Email</th><th>No. HP</th><th>ID</th><th>Jam Kerja</th><th>Tanggal Join</th><th>Aksi</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
