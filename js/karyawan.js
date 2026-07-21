@@ -1220,12 +1220,17 @@ async function autoOtThenOut() {
   let pfSelectedKtpFile = null;
   let pfExistingKtpUrl = '';
 
-  function setLocked(locked){
-    const fields = ['pfNamaBank','pfNomorRekening','pfAtasNamaRek'];
-    fields.forEach(id => { const e = el(id); if(e) e.disabled = !!locked; });
-    const pick = el('pfBtnPickKtp'); if(pick) pick.style.display = locked ? 'none' : '';
-    const save = el('pfBtnSave'); if(save) save.style.display = locked ? 'none' : '';
-    const note = el('pfLockedNote'); if(note) note.classList.toggle('hidden', !locked);
+  // Rekening & KTP dikunci TERPISAH. Rekening: kekunci sampai owner buka. KTP: sekali upload, permanen (ga bisa diubah).
+  function applyProfilLocks(rekLocked, hasKtp){
+    ['pfNamaBank','pfNomorRekening','pfAtasNamaRek'].forEach(id => { const e = el(id); if(e) e.disabled = !!rekLocked; });
+    const pick = el('pfBtnPickKtp'); if(pick) pick.style.display = hasKtp ? 'none' : '';        // KTP udah ada -> tombol upload disembunyiin
+    const save = el('pfBtnSave'); if(save) save.style.display = (rekLocked && hasKtp) ? 'none' : ''; // ga ada yang bisa diubah -> sembunyiin
+    const note = el('pfLockedNote');
+    if(note){
+      if(rekLocked && hasKtp){ note.textContent = 'Rekening terkunci — minta admin buka kunci kalau mau ganti. Foto KTP tidak bisa diubah.'; note.classList.remove('hidden'); }
+      else if(hasKtp){ note.textContent = 'Foto KTP sudah terkunci (tidak bisa diubah). Rekening bisa kamu perbarui di atas, lalu Simpan.'; note.classList.remove('hidden'); }
+      else { note.classList.add('hidden'); }
+    }
   }
 
   async function openProfil(){
@@ -1257,7 +1262,9 @@ async function autoOtThenOut() {
         else { prev.src = ''; prev.classList.add('hidden'); }
       }
       if(el('pfKtpName')) el('pfKtpName').textContent = '';
-      setLocked(!!d.profilLocked);
+      pfExistingKtpUrl = d.ktpUrl || '';
+      const rekLocked = (d.rekeningLocked !== undefined) ? !!d.rekeningLocked : !!d.profilLocked;
+      applyProfilLocks(rekLocked, !!d.ktpUrl);
     }catch(e){ console.error('load profil', e); }
     modal.classList.remove('hidden');
   }
@@ -1317,15 +1324,16 @@ async function autoOtThenOut() {
       }
       const __payload = {
         namaBank, nomorRekening, atasNamaRek,
+        rekeningLocked: true,                     // rekening dikunci lagi tiap habis disimpan (owner buka lagi kalau perlu)
         profilUpdatedAt: serverTimestamp()
       };
-      if(ktpUrl) __payload.ktpUrl = ktpUrl;
+      if(ktpUrl) __payload.ktpUrl = ktpUrl;       // kalau rekening-only, ini nilai lama (ga dianggap "berubah" oleh rules)
       // Profil dianggap LENGKAP & dikunci kalau rekening + KTP sudah ada.
       if(ktpUrl) __payload.profilLocked = true;
       await setDoc(doc(db,'karyawan',uid), __payload, { merge: true });
       const prev = el('pfKtpPreview');
       if(prev && ktpUrl){ prev.src = ktpUrl; prev.classList.remove('hidden'); }
-      if(ktpUrl) setLocked(true);
+      applyProfilLocks(true, !!ktpUrl);
       alert(ktpFailed
         ? 'Rekening tersimpan, tapi foto KTP gagal terupload. Cek koneksi / coba foto lebih kecil, lalu upload KTP lagi ya.'
         : 'Data profil tersimpan. Terima kasih!');

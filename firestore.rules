@@ -11,7 +11,7 @@ service cloud.firestore {
     // Field profil yang boleh diisi karyawan dari sisi mereka sendiri (rekening/KTP)
     function profilFields() {
       return ['namaBank', 'nomorRekening', 'atasNamaRek',
-              'ktpUrl', 'profilLocked', 'profilUpdatedAt'];
+              'ktpUrl', 'profilLocked', 'rekeningLocked', 'profilUpdatedAt'];
     }
 
     // Field USULAN hari libur yang boleh diisi karyawan sendiri.
@@ -47,6 +47,10 @@ service cloud.firestore {
         && request.auth.uid == uid
         && request.resource.data.diff(resource.data)
             .affectedKeys().hasOnly(profilFields().concat(liburRequestFields()))
+        // KTP immutable: karyawan hanya boleh SET ktpUrl saat masih kosong (upload pertama),
+        // tidak boleh mengubah / menghapus KTP yang sudah ada. Owner tetap bisa (cabang isOwner di atas).
+        && ( !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ktpUrl'])
+             || resource.data.get('ktpUrl', '') == '' )
       );
       allow delete: if isOwner();
     }
