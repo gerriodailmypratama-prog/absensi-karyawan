@@ -771,18 +771,18 @@ async function openEditKaryawan(uid){
           }
           var lockSpan = $('profilLockStatus');
           var resetBtn = $('btnResetLockProfil');
-          var locked = !!d.profilLocked;
-          if(lockSpan) lockSpan.textContent = locked ? 'Status: TERKUNCI (karyawan sudah isi)' : 'Status: belum dikunci';
+          var rekLocked = (d.rekeningLocked !== undefined) ? !!d.rekeningLocked : !!d.profilLocked;
+          if(lockSpan) lockSpan.textContent = rekLocked ? 'Rekening: TERKUNCI' : 'Rekening: bisa diedit karyawan';
           if(resetBtn){
-            resetBtn.style.display = locked ? 'inline-block' : 'none';
+            resetBtn.style.display = rekLocked ? 'inline-block' : 'none';
             resetBtn.onclick = async function(){
-              if(!confirm('Reset lock profil karyawan ini? Karyawan akan bisa mengisi ulang data rekening & KTP 1x.')) return;
+              if(!confirm('Buka kunci REKENING karyawan ini? Dia bisa input ulang rekening 1x lalu kekunci lagi. Foto KTP TIDAK kena (tetap terkunci).')) return;
               resetBtn.disabled = true;
               try{
-                await updateDoc(doc(db,'karyawan',uid), { profilLocked: false, profilResetAt: serverTimestamp() });
-                if(lockSpan) lockSpan.textContent = 'Status: lock di-reset, karyawan bisa isi ulang';
+                await updateDoc(doc(db,'karyawan',uid), { rekeningLocked: false, rekeningResetAt: serverTimestamp() });
+                if(lockSpan) lockSpan.textContent = 'Rekening: dibuka — karyawan bisa input ulang sekarang';
                 resetBtn.style.display = 'none';
-                alert('Lock berhasil di-reset.');
+                alert('Kunci rekening dibuka. Karyawan bisa update rekeningnya (KTP tetap terkunci).');
               }catch(e){ alert('Gagal reset: ' + (e && e.message ? e.message : e)); }
               finally{ resetBtn.disabled = false; }
             };
