@@ -70,9 +70,9 @@ export function suggestPanggilan(fullName){
 
 // === Jadwal libur mingguan (PR-CL60) ===
 // Hari libur per karyawan (0=Minggu .. 6=Sabtu; cocok dgn Date.getDay() & wibParts.wd).
-// Maks 2 orang libur di hari yang sama biar toko ga kosong. Unpaid — ga nyentuh payroll.
+// Maks 3 orang libur di hari yang sama (naik dari 2 saat tim >14 orang, PR-CL75). Unpaid — ga nyentuh payroll.
 export const LIBUR_HARI = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-export const LIBUR_MAX = 2;
+export const LIBUR_MAX = 3;
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
