@@ -145,7 +145,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "ht
 
 
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, query, where, orderBy, getDocs, onSnapshot, Timestamp, setDoc, updateDoc, deleteDoc, getDoc, addDoc, doc, serverTimestamp }
+import { collection, query, where, orderBy, limit, getDocs, onSnapshot, Timestamp, setDoc, updateDoc, deleteDoc, getDoc, addDoc, doc, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signOut as authSignOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -555,6 +555,14 @@ async function loadKaryawanList(){
             if (!r.jamKerja)    patch.jamKerja = 9;          // default 9 jam/hari (kecuali owner sudah set)
             if (!r.baseHarian)  patch.baseHarian = 100000;   // default base 100rb, nempel sampai owner edit
             if (!r.tanggalJoin) patch.tanggalJoin = r.createdAt || Timestamp.fromDate(new Date()); // tanggal join otomatis
+            // Backfill email dari event absensi kalau record-nya kosong (email "nyasar" saat setup akun). Self-healing.
+            if (!(r.email||'').trim() && r.nonaktif !== true){
+                try {
+                    const _ea = await getDocs(query(collection(db,'absensi'), where('uid','==', r.id), limit(5)));
+                    let _em = ''; _ea.forEach(d => { const e = (d.data()||{}).email; if (e && String(e).trim() && !_em) _em = String(e).trim(); });
+                    if (_em){ patch.email = _em; r.email = _em; }
+                } catch(e){ console.warn('Backfill email gagal untuk', r.id, e); }
+            }
             if (Object.keys(patch).length){
                 try { await setDoc(doc(db,'karyawan', r.id), patch, { merge:true }); Object.assign(r, patch); }
                 catch(e){ console.warn('Auto-isi default gagal untuk', r.id, e); if (_idBumped) _maxKid--; }
