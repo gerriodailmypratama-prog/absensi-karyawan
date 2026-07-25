@@ -65,7 +65,7 @@ function updateClockInLock(){
   }
 } // semua event sesi shift aktif, ASC by ts
 let isSubmitting = false; // global lock untuk mencegah double-submit (race condition)
-let userProfile = { nama:'', namaPanggilan:'', jamKerja:9, foto:'', wajibKode:false, kodeAdmin:false, liburHari:null, liburRequest:null };
+let userProfile = { nama:'', namaPanggilan:'', jamKerja:9, foto:'', wajibKode:false, kodeAdmin:false, noShiftBarrier:false, liburHari:null, liburRequest:null };
 
 function distanceMeters(lat1, lng1, lat2, lng2){
   const R = 6371000;
@@ -319,7 +319,7 @@ function fmtTime(d){ return d.toLocaleTimeString('id-ID',{hour12:false}); }
 
 async function loadUserProfile(uid){
   try{
-    let nama='', namaPanggilan='', jamKerja=9, foto='', gpsExempt=false, wajibKode=false, kodeAdmin=false, liburHari=null, liburRequest=null;
+    let nama='', namaPanggilan='', jamKerja=9, foto='', gpsExempt=false, wajibKode=false, kodeAdmin=false, noShiftBarrier=false, liburHari=null, liburRequest=null;
     try{
       const snap = await getDoc(doc(db, 'karyawan', uid));
       if (snap.exists()){
@@ -330,6 +330,7 @@ async function loadUserProfile(uid){
         gpsExempt = !!u.gpsExempt;
         wajibKode = (u.wajibKodeClockout === true);   // wajib kode admin saat Clock Out (pilot per orang)
         kodeAdmin = (u.kodeAdmin === true);           // admin bertugas: kodenya tampil di halaman dia
+        noShiftBarrier = (u.noShiftBarrier === true); // exempt barrier shift 18 jam (khusus admin nginap, mis. Mila)
         liburHari = (u.liburHari != null ? Number(u.liburHari) : null);
         liburRequest = Array.isArray(u.liburRequest) ? u.liburRequest.map(Number) : null;
       }
@@ -358,7 +359,7 @@ async function loadUserProfile(uid){
         if (!nama && u2.nama) nama = u2.nama;
       }
     }catch(e){ console.warn('profil load err:', e); }
-    userProfile = { nama, namaPanggilan, jamKerja, foto, gpsExempt, wajibKode, kodeAdmin, liburHari, liburRequest };
+    userProfile = { nama, namaPanggilan, jamKerja, foto, gpsExempt, wajibKode, kodeAdmin, noShiftBarrier, liburHari, liburRequest };
     initAdminKodeCard();
     // (foto profil opsional) auto-popup wajib upload dihapus
     if (foto){
@@ -402,7 +403,10 @@ async function loadActiveSession(uid){
   // dan data nggak jadi shift 24 jam+ (datanya kacau).
   if (openCiIdx >= 0) {
     const __ciTs = all[openCiIdx].ts && all[openCiIdx].ts.toMillis ? all[openCiIdx].ts.toMillis() : 0;
-    if (__ciTs && (Date.now() - __ciTs) > MAX_SHIFT_MS) {
+    // Barrier "lupa clock out" — TAPI karyawan yang di-exempt (noShiftBarrier, mis. admin nginap Mila) ga kena,
+    // biar sesi lembur panjang >18 jam tetap bisa ditutup sendiri (Selesai Lembur), ga ke-reset.
+    const __maxShift = userProfile.noShiftBarrier ? (72 * 60 * 60 * 1000) : MAX_SHIFT_MS;
+    if (__ciTs && (Date.now() - __ciTs) > __maxShift) {
       openCiIdx = -1;
     }
   }
