@@ -304,7 +304,7 @@
       <table id="tblPayroll" class="table">
         <thead><tr>
           <th>Nama</th><th>Base/hari</th><th title="Hari masuk penuh (kerja minimal 75% jam standar). Angka (+N parsial) = masuk tapi kerja kurang dari itu, dibayar proporsional.">Hari Hadir</th><th title="Total jam kerja efektif bulan ini (sudah dikurangi istirahat).">Total Jam</th><th>Jam Lembur</th>
-          <th>Upah Pokok</th><th>Upah Lembur</th><th>Total</th><th>Potongan</th><th title="Total - Potongan = yang ditransfer">Total Bayar</th><th>Status</th><th>Aksi</th>
+          <th>Upah Pokok</th><th>Upah Lembur</th><th title="Tunjangan peran bulanan (flat) — di-set di menu Karyawan → Edit. Dibayar penuh selama ada kehadiran bulan itu.">Tunjangan</th><th>Total</th><th>Potongan</th><th title="Total - Potongan = yang ditransfer">Total Bayar</th><th>Status</th><th>Aksi</th>
         </tr></thead>
         <tbody></tbody>
       </table>
@@ -388,11 +388,13 @@
         </section>
 
         <section class="ksec">
-          <div class="ksec-head"><span class="ksec-ico">&#x1F4B0;</span><div><b>Payroll</b><small>Gaji harian, dibayar bulanan &mdash; total = base &times; hari hadir + lembur</small></div></div>
+          <div class="ksec-head"><span class="ksec-ico">&#x1F4B0;</span><div><b>Payroll</b><small>Gaji harian, dibayar bulanan &mdash; total = base &times; hari hadir + lembur + tunjangan peran</small></div></div>
           <div class="kgrid kgrid-3">
             <div class="kfield"><label>Base Harian (Rp)</label><input type="number" id="editBaseHarian" min="0" step="1000" placeholder="100000"></div>
             <div class="kfield"><label>Jam Kerja / Hari</label><input type="number" id="editJamKerja" min="1" max="24" value="9"></div>
             <div class="kfield"><label>Multiplier Lembur</label><input type="number" id="editMultiplierLembur" min="1" max="5" step="0.1" value="1.5" placeholder="1.5"></div>
+            <!-- PR-CL78: tunjangan peran flat bulanan (superadmin/admin/host live/PIC) — di luar base harian -->
+            <div class="kfield"><label>Tunjangan Bulanan (Rp) <small class="muted">flat per bulan, 0 = tidak ada</small></label><input type="number" id="editTunjangan" min="0" step="50000" placeholder="0"></div>
           </div>
         </section>
 
