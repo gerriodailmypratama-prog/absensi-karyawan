@@ -2657,7 +2657,7 @@ tr.innerHTML = '<td><b>' + r.nama + '</b>' + (r.nonaktif ? ' <span class="tag" t
 '<td class="num">' + fmtLemburHM(r.totalJamLembur) + '</td>' +
 '<td class="num">' + prFormatRp(r.upahPokok) + '</td>' +
 '<td class="num">' + prFormatRp(r.upahLembur) + '</td>' +
-'<td class="num">' + (r.tunjangan ? prFormatRp(r.tunjangan) : '<span class="muted">-</span>') + '</td>' +
+'<td class="num pr-tun-cell" data-uid="' + r.uid + '"><span class="pr-tun-val">' + (r.tunjangan ? prFormatRp(r.tunjangan) : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-tun-edit" data-uid="' + r.uid + '" style="color:#f97316">Edit</button></td>' +
 '<td class="num">' + prFormatRp(r.total) + '</td>' +
 '<td class="num pr-pot-cell" data-uid="' + r.uid + '"><span class="pr-pot-val">' + (r.potongan ? prFormatRp(r.potongan) : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-pot-edit" data-uid="' + r.uid + '" style="color:#f97316">Edit</button></td>' +
 '<td class="num"><b class="pr-totalbayar" data-uid="' + r.uid + '" style="color:#34d399">' + prFormatRp(r.totalBayar!=null ? r.totalBayar : r.total) + '</b></td>' +
@@ -2671,6 +2671,7 @@ tbody.appendChild(tr);
 document.querySelectorAll('.pr-detail-btn').forEach(b => { b.onclick = () => showPayrollDetail(b.dataset.uid); });
 document.querySelectorAll('.pr-paid-btn').forEach(b => { b.onclick = () => togglePayStatus(b.dataset.uid); });
 document.querySelectorAll('.pr-pot-edit').forEach(b => { b.onclick = () => startEditPotongan(b.dataset.uid); });
+document.querySelectorAll('.pr-tun-edit').forEach(b => { b.onclick = () => startEditTunjangan(b.dataset.uid); }); // PR-CL79
 document.querySelectorAll('.pr-bayar-btn').forEach(b => { b.onclick = () => openBayarModal(b.dataset.uid); });
 // Ringkasan status bayar (update tiap render, termasuk setelah tandai lunas).
 let _sudahBayar = 0, _belumBayar = 0, _grossTot = 0, _potTot = 0;
@@ -2731,6 +2732,46 @@ async function savePotongan(uid){
     renderPotonganCell(uid);
   } catch (e) {
     alert('Gagal simpan potongan: ' + (e.message || 'unknown'));
+    if (saveBtn){ saveBtn.disabled = false; saveBtn.textContent = 'Simpan'; }
+  }
+}
+
+// PR-CL79: Tunjangan inline edit di tabel payroll (pola sama kayak Potongan).
+// BEDA PENTING: potongan cuma buat bulan terpilih; tunjangan itu FLAT — nilainya
+// nempel di karyawan (tunjanganBulanan) dan otomatis kebayar TIAP BULAN sampai diubah lagi.
+function startEditTunjangan(uid){
+  const cell = document.querySelector('.pr-tun-cell[data-uid="' + uid + '"]');
+  if (!cell) return;
+  const row = __payrollData && __payrollData.rows.find(x => x.uid === uid);
+  const cur = row ? (row.tunjangan || 0) : 0;
+  cell.innerHTML = '<input type="number" class="pr-tun-input" min="0" step="50000" value="' + cur + '" style="width:100px;font:inherit;text-align:right;padding:3px 5px;background:#191919;color:#e6e3d8;border:1px solid #f97316;border-radius:6px"> '
+    + '<button class="btn-link pr-tun-save" style="color:#34d399">Simpan</button> '
+    + '<button class="btn-link pr-tun-cancel" style="color:#9ca3af">Batal</button>'
+    + '<br><small class="muted">flat — berlaku tiap bulan</small>';
+  const inp = cell.querySelector('.pr-tun-input');
+  if (inp){ inp.focus(); inp.select(); inp.onkeydown = (e) => { if (e.key === 'Enter') saveTunjangan(uid); else if (e.key === 'Escape') renderPayrollTable(); }; }
+  cell.querySelector('.pr-tun-save').onclick = () => saveTunjangan(uid);
+  cell.querySelector('.pr-tun-cancel').onclick = () => renderPayrollTable();
+}
+async function saveTunjangan(uid){
+  if (!__payrollData) return;
+  const row = __payrollData.rows.find(x => x.uid === uid);
+  if (!row) return;
+  const cell = document.querySelector('.pr-tun-cell[data-uid="' + uid + '"]');
+  const inp = cell ? cell.querySelector('.pr-tun-input') : null;
+  const amount = Math.max(0, parseInt(inp ? inp.value : row.tunjangan, 10) || 0);
+  const saveBtn = cell ? cell.querySelector('.pr-tun-save') : null;
+  if (saveBtn){ saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan...'; }
+  try {
+    await setDoc(doc(db, 'karyawan', uid), { tunjanganBulanan: amount, updatedAt: serverTimestamp() }, { merge: true });
+    row.tunjangan = amount;
+    row.total = (row.upahPokok || 0) + (row.upahLembur || 0) + amount;
+    row.totalBayar = row.total - (row.potongan || 0);
+    renderPayrollTable(); // re-render penuh biar Total, Total Bayar & ringkasan ikut keupdate
+    const budget = __payrollData.rows.reduce((s, x) => s + (x.totalBayar != null ? x.totalBayar : x.total), 0);
+    const bEl = document.getElementById('prTotalBudget'); if (bEl) bEl.textContent = prFormatRp(budget);
+  } catch (e) {
+    alert('Gagal simpan tunjangan: ' + (e.message || 'unknown'));
     if (saveBtn){ saveBtn.disabled = false; saveBtn.textContent = 'Simpan'; }
   }
 }
