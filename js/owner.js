@@ -1142,6 +1142,37 @@ async function renderHadirFloating(rows){
         for (const r of arr){ const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0; if ((r.tipe === 'clock_in' || r.tipe === 'overtime_in') && ms >= lastOut){ if (start === 0 || ms < start) start = ms; } }
         return start;
     }
+    // Total istirahat + pause (pasangan yang SUDAH selesai) di dalam rentang [start,end] ms.
+    // Berbasis SESI (bukan potong tengah malam) supaya shift lintas hari kehitung utuh.
+    function restMsInSpan(uid, start, end){
+        const arr = byUid.get(uid) || [];
+        let total = 0, openB = 0, openP = 0;
+        for (const r of arr){
+            const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0;
+            if (ms < start || ms > end) continue;
+            if (r.tipe === 'break_in') openB = ms;
+            else if (r.tipe === 'break_out'){ if (openB && ms >= openB){ total += ms - openB; openB = 0; } }
+            else if (r.tipe === 'pause_in') openP = ms;
+            else if (r.tipe === 'pause_out'){ if (openP && ms >= openP){ total += ms - openP; openP = 0; } }
+        }
+        return total;
+    }
+    // Sesi kerja TERAKHIR yang sudah ditutup: {start,end}. Boleh lintas hari (mis. masuk kemarin
+    // malam, Clock Out subuh ini) supaya "Finish Working" nampilin efektif FULL, bukan cuma bagian
+    // setelah tengah malam. end = clock_out/overtime_out terakhir; start = clock_in/overtime_in
+    // paling awal yang membuka sesi itu (setelah clock_out sebelumnya).
+    function finishedSessionMs(uid){
+        const arr = byUid.get(uid) || [];
+        let end = 0;
+        for (const r of arr){ const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0; if ((r.tipe === 'clock_out' || r.tipe === 'overtime_out') && ms > end) end = ms; }
+        if (!end) return null;
+        let prevOut = 0;
+        for (const r of arr){ const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0; if ((r.tipe === 'clock_out' || r.tipe === 'overtime_out') && ms < end && ms > prevOut) prevOut = ms; }
+        let start = 0;
+        for (const r of arr){ const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0; if ((r.tipe === 'clock_in' || r.tipe === 'overtime_in') && ms > prevOut && ms <= end){ if (start === 0 || ms < start) start = ms; } }
+        if (!start) return null;
+        return { start: start, end: end };
+    }
     // Format durasi ms -> H:MM:SS atau M:SS
     function fmtDurMs(ms){
         const _sec = Math.max(0, Math.floor(ms/1000));
@@ -1189,7 +1220,7 @@ async function renderHadirFloating(rows){
         _workBox.innerHTML = workingUids.length ? workingUids.map(function(u){
             const _ci = workStartMs(u); // pakai mulai-sesi (boleh lintas hari) biar timer lembur tembus tengah malam benar
             if (!_ci) return '';
-            const _rest = restMsToday(u);
+            const _rest = restMsInSpan(u, _ci, Date.now()); // istirahat sepanjang sesi berjalan (termasuk sebelum tengah malam)
             return '<div class="p-row">' + avaHtml(u)
                  + '<span class="p-name">' + (namaOf(u)||'-') + '</span>'
                  + '<span class="p-time"><span class="work-timer p-main" data-start="' + _ci + '">--:--</span>'
@@ -1218,9 +1249,11 @@ async function renderHadirFloating(rows){
     const _finBox = $('finishTimers');
     if (_finBox){
         _finBox.innerHTML = finishUids.length ? finishUids.map(function(u){
-            const _gross = grossWorkMsToday(u);
+            const _sess = finishedSessionMs(u); // sesi terakhir yang ditutup (boleh lintas hari)
+            if (!_sess) return '';
+            const _gross = _sess.end - _sess.start;
             if (_gross <= 0) return '';
-            const _eff = Math.max(0, _gross - restMsToday(u));
+            const _eff = Math.max(0, _gross - restMsInSpan(u, _sess.start, _sess.end));
             return '<div class="p-row">' + avaHtml(u)
                  + '<span class="p-name">' + (namaOf(u)||'-') + '</span>'
                  + '<span class="p-time"><span class="p-main">' + fmtDurMs(_gross) + '</span>'
