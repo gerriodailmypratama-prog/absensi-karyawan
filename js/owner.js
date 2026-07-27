@@ -1166,10 +1166,13 @@ async function renderHadirFloating(rows){
         let end = 0;
         for (const r of arr){ const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0; if ((r.tipe === 'clock_out' || r.tipe === 'overtime_out') && ms > end) end = ms; }
         if (!end) return null;
-        let prevOut = 0;
-        for (const r of arr){ const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0; if ((r.tipe === 'clock_out' || r.tipe === 'overtime_out') && ms < end && ms > prevOut) prevOut = ms; }
+        // start = clock_in TERAKHIR sebelum/di jam keluar. Tiap hari kerja mulai dgn clock_in baru,
+        // jadi ini otomatis motong sesi hari ini dari sesi kemarin — walau clock-out kemarin KELUPAAN
+        // (kalau pakai "clock-out sebelumnya", sesi bisa kegabung jadi 36 jam). Fallback overtime_in
+        // cuma kalau memang ga ada clock_in sama sekali di sesi itu.
         let start = 0;
-        for (const r of arr){ const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0; if ((r.tipe === 'clock_in' || r.tipe === 'overtime_in') && ms > prevOut && ms <= end){ if (start === 0 || ms < start) start = ms; } }
+        for (const r of arr){ const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0; if (r.tipe === 'clock_in' && ms <= end && ms > start) start = ms; }
+        if (!start){ for (const r of arr){ const ms = r.ts && r.ts.toMillis ? r.ts.toMillis() : 0; if (r.tipe === 'overtime_in' && ms <= end && ms > start) start = ms; } }
         if (!start) return null;
         return { start: start, end: end };
     }
