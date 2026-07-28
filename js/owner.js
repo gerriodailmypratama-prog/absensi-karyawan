@@ -2310,12 +2310,36 @@ function fmtLemburHM(hours){
   return jj + ' jam ' + mm + ' mnt';
 }
 
+// ===== PR-CL82: periode payroll berbasis TUTUP BUKU tanggal 25 =====
+// Gajian tanggal 1, tapi buku ditutup tanggal 25. Jadi payroll bulan X = 26 (X-1) s/d 25 X.
+// PR_TRANSISI = bulan peralihan: payroll Juni sudah dibayar penuh sampai akhir bulan, jadi
+// Juli dihitung 1-25 Juli saja biar tidak dobel bayar. Mulai Agustus baru penuh 26->25.
+// Bulan sebelum transisi tetap 1 s/d akhir bulan supaya data/slip lama tidak berubah.
+const PR_CUTOFF_DAY = 25;
+const PR_TRANSISI = '2026-07';
+
 function prMonthRange(yyyymm){
   const parts = yyyymm.split('-').map(Number);
   const y = parts[0], m = parts[1];
-  const start = new Date(y, m-1, 1, 0, 0, 0, 0);
-  const end = new Date(y, m, 0, 23, 59, 59, 999);
-  return {start, end, label: start.toLocaleDateString('id-ID', {month:'long', year:'numeric'})};
+  const cut = PR_CUTOFF_DAY;
+  let start, end;
+  if (yyyymm < PR_TRANSISI){
+    // Historis: sebulan penuh (jangan ubah angka yang sudah terlanjur dibayar).
+    start = new Date(y, m-1, 1, 0, 0, 0, 0);
+    end   = new Date(y, m, 0, 23, 59, 59, 999);
+  } else if (yyyymm === PR_TRANSISI){
+    // Peralihan: 1 s/d 25 bulan ini.
+    start = new Date(y, m-1, 1, 0, 0, 0, 0);
+    end   = new Date(y, m-1, cut, 23, 59, 59, 999);
+  } else {
+    // Normal: 26 bulan lalu s/d 25 bulan ini. (m-2 otomatis mundur ke tahun lalu kalau Januari.)
+    start = new Date(y, m-2, cut+1, 0, 0, 0, 0);
+    end   = new Date(y, m-1, cut, 23, 59, 59, 999);
+  }
+  const _t = d => d.toLocaleDateString('id-ID', {day:'numeric', month:'short'});
+  // Label = rentang tanggal asli, biar owner ga pernah bingung periodenya sampai mana.
+  const label = _t(start) + ' – ' + _t(end) + ' ' + end.getFullYear();
+  return {start, end, label};
 }
 
 async function loadPayroll(){
@@ -2339,6 +2363,9 @@ const yyyymm = $('prBulan').value;
 if (!yyyymm){ alert('Pilih bulan dulu.'); return; }
 const range = prMonthRange(yyyymm);
 const start = range.start, end = range.end, label = range.label;
+// Tampilkan rentang tanggal periode di bawah pilihan bulan (tutup buku tgl 25).
+const _prInfo = $('prPeriodeInfo');
+if (_prInfo) _prInfo.textContent = 'Periode: ' + label + (yyyymm === PR_TRANSISI ? ' (peralihan)' : '');
 const tbody = document.querySelector('#tblPayroll tbody');
 if (tbody) tbody.innerHTML = '<tr><td colspan="13" class="muted center">Menghitung...</td></tr>';
 $('prEmpty').classList.add('hidden');
@@ -2868,7 +2895,7 @@ if (!__payrollData) return;
 const r = __payrollData.rows.find(x => x.uid === uid);
 if (!r) return;
 $('prDetailTitle').textContent = 'Detail Payroll \u2014 ' + r.nama;
-$('prDetailSub').textContent = 'Bulan: ' + __payrollData.label + ' \u2014 Total Jam: ' + r.totalJamKerja.toFixed(1) + ' jam \u2014 Rate: ' + prFormatRp(r.ratePerJam||0) + '/jam \u2014 Total: ' + prFormatRp(r.total);
+$('prDetailSub').textContent = 'Periode: ' + __payrollData.label + ' \u2014 Total Jam: ' + r.totalJamKerja.toFixed(1) + ' jam \u2014 Rate: ' + prFormatRp(r.ratePerJam||0) + '/jam \u2014 Total: ' + prFormatRp(r.total);
 const tb = document.querySelector('#tblPayrollDetail tbody');
 tb.innerHTML = '';
 if (!r.dailyDetails.length){
@@ -2982,13 +3009,11 @@ function __slipJam(n) {
 }
 
 function __slipPeriode() {
-  const el = document.getElementById('prMonth');
+  // Ambil dari input bulan payroll dan pakai rentang tutup-buku yang sama (26->25),
+  // bukan nama bulan, biar periode di slip tidak pernah beda dgn yang dihitung.
+  const el = document.getElementById('prBulan');
   const val = el && el.value ? el.value : '';
-  if (/^\d{4}-\d{2}$/.test(val)) {
-    const [y, m] = val.split('-');
-    const bulan = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-    return bulan[Number(m) - 1] + ' ' + y;
-  }
+  if (/^\d{4}-\d{2}$/.test(val)) return prMonthRange(val).label;
   return val || '-';
 }
 
