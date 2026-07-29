@@ -82,7 +82,8 @@ async function fetchKaryawan() {
       nama: (k.namaPanggilan || k.nama || '(tanpa nama)').trim(),
       jamKerja: Number(k.jamKerja) || 9,
       nonaktif: k.nonaktif === true,
-      liburHari: (k.liburHari != null ? Number(k.liburHari) : null)
+      liburHari: (k.liburHari != null ? Number(k.liburHari) : null),
+      tanggalLahir: (typeof k.tanggalLahir === 'string' ? k.tanggalLahir.trim() : '')
     });
   });
   return map;

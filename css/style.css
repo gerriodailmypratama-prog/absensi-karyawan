@@ -695,6 +695,18 @@ input.kh-time.kh-save-err{background:var(--gg-danger-bg) !important;border-color
 }
 
 /* ---------- 17. PRESENCE BOARD v2 (PR-CL71) ---------- */
+/* Notice ulang tahun karyawan (PR-CL83) */
+.ultah-box{
+  background:linear-gradient(180deg,rgba(249,115,22,.10),rgba(255,255,255,0) 60%),var(--gg-surface);
+  border:1px solid var(--gg-border);border-left:3px solid var(--gg-primary);
+  border-radius:14px;padding:12px 15px;margin-bottom:14px;box-shadow:var(--gg-shadow);
+}
+.ultah-today{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:15px;font-weight:700;color:var(--gg-text)}
+.ultah-cake{font-size:19px}
+.ultah-name{color:var(--gg-primary-2)}
+.ultah-age{font-weight:600;color:var(--gg-muted);font-size:13px}
+.ultah-next{margin-top:7px;font-size:12.5px;color:var(--gg-muted);display:flex;gap:12px;flex-wrap:wrap}
+.ultah-next b{color:var(--gg-text-2);font-weight:600}
 .pres-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
 @media (max-width:980px){.pres-grid{grid-template-columns:1fr}}
 .pres-card{
