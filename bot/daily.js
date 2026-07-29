@@ -50,8 +50,20 @@ async function main() {
   gaMasuk.sort((a, b) => a.localeCompare(b, 'id'));
   liburHariIni.sort((a, b) => a.localeCompare(b, 'id'));
 
+  // Ulang tahun hari ini (pakai tanggal WIB, cocokin tgl+bulan saja).
+  const ultah = [];
+  for (const [, info] of kary) {
+    if (info.nonaktif) continue;
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(info.tanggalLahir || '');
+    if (!m) continue;
+    // p.mo dari wibParts itu 0-based (Januari = 0), makanya dibandingkan dengan p.mo + 1.
+    if (Number(m[2]) === p.mo + 1 && Number(m[3]) === p.d) ultah.push(info.nama + ' (' + (p.y - Number(m[1])) + ' th)');
+  }
+  ultah.sort((a, b) => a.localeCompare(b, 'id'));
+
   const lines = [];
   lines.push('🕐 ABSENSI — ' + L.wibTanggalPanjang(now));
+  if (ultah.length) lines.push('🎂 Ulang tahun hari ini: ' + ultah.join(', '));
   lines.push('Hadir: ' + hadirRows.length + ' orang');
   for (const r of hadirRows) lines.push(r.line);
   if (telat.length) lines.push('⏰ Telat: ' + telat.join(', '));

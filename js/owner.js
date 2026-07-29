@@ -246,8 +246,58 @@ async function getTotalKaryawan(){
     }
 }
 
+// ===== PR-CL83: notice ulang tahun karyawan =====
+// tanggalLahir disimpan string 'YYYY-MM-DD'. Yang dipakai cuma tanggal & bulan, jadi
+// perbandingannya aman dari zona waktu (ga ada konversi jam sama sekali).
+function _ultahInfo(tglLahir, today){
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(tglLahir||'').trim());
+    if (!m) return null;
+    const thn = +m[1], bln = +m[2], tgl = +m[3];
+    if (bln < 1 || bln > 12 || tgl < 1 || tgl > 31) return null;
+    // Ulang tahun berikutnya (29 Feb di tahun biasa otomatis jatuh ke 1 Mar oleh Date).
+    let next = new Date(today.getFullYear(), bln-1, tgl);
+    next.setHours(0,0,0,0);
+    if (next < today) next = new Date(today.getFullYear()+1, bln-1, tgl);
+    const selisihHari = Math.round((next - today) / 86400000);
+    return { selisihHari, umurNanti: next.getFullYear() - thn, tgl, bln };
+}
+async function renderUlangTahun(){
+    const box = $('ultahBox');
+    if (!box) return;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const snap = await getDocs(collection(db,'karyawan'));
+    const hariIni = [], segera = [];
+    snap.forEach(d => {
+        const k = d.data() || {};
+        if (k.nonaktif === true) return;                 // yang sudah resign ga usah
+        const info = _ultahInfo(k.tanggalLahir, today);
+        if (!info) return;
+        const nama = k.namaPanggilan || k.nama || '-';
+        if (info.selisihHari === 0) hariIni.push({nama, umur: info.umurNanti});
+        else if (info.selisihHari <= 14) segera.push({nama, hari: info.selisihHari, tgl: info.tgl, bln: info.bln});
+    });
+    if (!hariIni.length && !segera.length){ box.classList.add('hidden'); box.innerHTML = ''; return; }
+    const BLN = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+    let h = '';
+    if (hariIni.length){
+        h += '<div class="ultah-today"><span class="ultah-cake">\u{1F382}</span><span>Hari ini ulang tahun: '
+           + hariIni.map(x => '<span class="ultah-name">' + x.nama + '</span> <span class="ultah-age">(' + x.umur + ' th)</span>').join(', ')
+           + '</span></div>';
+    }
+    if (segera.length){
+        segera.sort((a,b) => a.hari - b.hari);
+        h += '<div class="ultah-next">' + (hariIni.length ? '' : '<span>\u{1F382} Ulang tahun terdekat:</span>')
+           + segera.slice(0,4).map(x => '<span><b>' + x.nama + '</b> ' + x.tgl + ' ' + BLN[x.bln-1]
+           + ' · ' + (x.hari === 1 ? 'besok' : x.hari + ' hari lagi') + '</span>').join('')
+           + '</div>';
+    }
+    box.innerHTML = h;
+    box.classList.remove('hidden');
+}
+
 async function renderBeranda(rows){
     try{ await renderHadirFloating(rows); }catch(e){ console.warn('hadir floating err', e); }
+    try{ await renderUlangTahun(); }catch(e){ console.warn('ultah err', e); }
     const total = await getTotalKaryawan();
     const clockInSet = new Set();
     const stat = { clock_in:0, clock_out:0, break_in:0, break_out:0, overtime_in:0, overtime_out:0 };
@@ -733,6 +783,9 @@ async function openEditKaryawan(uid){
             const tj = d.tanggalJoin ? (d.tanggalJoin.toDate ? d.tanggalJoin.toDate() : new Date(d.tanggalJoin)) : null;
             $('editTanggalJoin').value = tj ? tj.toISOString().substring(0,10) : '';
         }
+        // Tanggal lahir disimpan string 'YYYY-MM-DD' (tanggal kalender, bukan momen waktu)
+        // supaya ulang tahun tidak pernah geser gara-gara zona waktu.
+        if ($('editTanggalLahir')) $('editTanggalLahir').value = d.tanggalLahir || '';
         // Field baru: payroll + data pribadi + bank
         if ($('editJabatan')) $('editJabatan').value = d.jabatan || '';
         if ($('editStatusKaryawan')) $('editStatusKaryawan').value = d.statusKaryawan || '';
@@ -837,9 +890,10 @@ $('formEditKaryawan').onsubmit = async (e) => {
         }
         const tanggalJoinVal = $('editTanggalJoin') ? $('editTanggalJoin').value : '';
         const tjPayload = tanggalJoinVal ? Timestamp.fromDate(new Date(tanggalJoinVal)) : null;
+        const tanggalLahir = $('editTanggalLahir') ? ($('editTanggalLahir').value || '') : '';
         // nama = panggilan (dibaca WMS), full_name = nama lengkap.
         const payload = {
-            nama: pg.value, namaPanggilan: pg.value, full_name: fullName, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload,
+            nama: pg.value, namaPanggilan: pg.value, full_name: fullName, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload, tanggalLahir,
             jabatan, statusKaryawan, baseHarian, tunjanganBulanan, multiplierLembur, gpsExempt,
             namaBank, atasNamaRek, nomorRekening, nonaktif, wajibKodeClockout, kodeAdmin,
             liburHari, liburSetBy: (liburHari != null ? 'owner' : null), liburRequestPending: false,
