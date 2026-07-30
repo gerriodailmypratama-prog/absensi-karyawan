@@ -66,6 +66,16 @@ function updateClockInLock(){
 } // semua event sesi shift aktif, ASC by ts
 let isSubmitting = false; // global lock untuk mencegah double-submit (race condition)
 let userProfile = { nama:'', namaPanggilan:'', jamKerja:9, foto:'', wajibKode:false, kodeAdmin:false, noShiftBarrier:false, liburHari:null, liburRequest:null };
+// Daftar yang belum diisi (rekening/KTP). Default dianggap kurang semua sampai doc kebaca,
+// biar akun baru yang doc-nya belum kebentuk juga tetap dapat notif lengkapi profil.
+let profilKurang = ['Rekening bank &mdash; tujuan transfer gaji', 'Foto KTP'];
+// Popup pengingat tiap kali buka aplikasi (sebelum sempat Clock In) sampai profil lengkap.
+function showLengkapiProfilNotice(){
+  if (!profilKurang.length) return;
+  const m = $('lengkapiProfilModal'); if (!m) return;
+  const ul = $('lpList'); if (ul) ul.innerHTML = profilKurang.map(x => '<li>' + x + '</li>').join('');
+  m.classList.remove('hidden');
+}
 
 function distanceMeters(lat1, lng1, lat2, lng2){
   const R = 6371000;
@@ -333,6 +343,10 @@ async function loadUserProfile(uid){
         noShiftBarrier = (u.noShiftBarrier === true); // exempt barrier shift 18 jam (khusus admin nginap, mis. Mila)
         liburHari = (u.liburHari != null ? Number(u.liburHari) : null);
         liburRequest = Array.isArray(u.liburRequest) ? u.liburRequest.map(Number) : null;
+        // Cek kelengkapan profil (rekening + KTP) buat notif "Lengkapi Profil" pas login.
+        profilKurang = [];
+        if (!String(u.namaBank||'').trim() || !String(u.nomorRekening||'').trim() || !String(u.atasNamaRek||'').trim()) profilKurang.push('Rekening bank &mdash; tujuan transfer gaji');
+        if (!String(u.ktpUrl||'').trim()) profilKurang.push('Foto KTP');
       }
       // === Backfill identitas: doc karyawan tanpa nama/email (mis. doc lama kehapus lalu login lagi,
       // atau write lain bikin doc minim) diisi ulang dari akun Auth biar tidak blank di daftar owner. ===
@@ -454,9 +468,16 @@ onAuthStateChanged(auth, async u => {
   await loadActiveSession(u.uid);
   await checkForgottenClockOut(u.uid);
   refreshLocStatus();
+  try{ showLengkapiProfilNotice(); }catch(e){}
 });
 
 $('btnLogout').onclick = () => signOut(auth).then(()=>location.replace('index.html')).catch(()=>location.replace('index.html'));
+// Tombol popup "Lengkapi Profil": isi sekarang -> buka modal Profil; nanti -> tutup (muncul lagi di buka berikutnya).
+if ($('btnLpNanti')) $('btnLpNanti').onclick = () => $('lengkapiProfilModal').classList.add('hidden');
+if ($('btnLpIsi')) $('btnLpIsi').onclick = () => {
+  $('lengkapiProfilModal').classList.add('hidden');
+  try{ if (window.openProfil) window.openProfil(); else $('btnOpenProfil').click(); }catch(e){}
+};
 
 async function refreshLocStatus(){
   if (!navigator.geolocation){ coords = null; return; }
@@ -1338,6 +1359,8 @@ async function autoOtThenOut() {
       const prev = el('pfKtpPreview');
       if(prev && ktpUrl){ prev.src = ktpUrl; prev.classList.remove('hidden'); }
       applyProfilLocks(true, !!ktpUrl);
+      // Refresh daftar-kurang: rekening baru tersimpan, sisa KTP kalau belum keupload.
+      profilKurang = ktpUrl ? [] : ['Foto KTP'];
       alert(ktpFailed
         ? 'Rekening tersimpan, tapi foto KTP gagal terupload. Cek koneksi / coba foto lebih kecil, lalu upload KTP lagi ya.'
         : 'Data profil tersimpan. Terima kasih!');
