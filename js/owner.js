@@ -2348,9 +2348,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
 // PAYROLL MODULE — gaji harian, dibayar bulanan
 // ============================================================
 let __payrollData = null;
-// PR-CL84: patokan tetap buat RATE LEMBUR (bukan jam kontrak masing-masing orang).
-// 8 jam = shift standar; jadi rate lembur cuma nempel ke level base, bukan panjang shift.
-const STD_JAM_LEMBUR = 8;
+// PR-CL85: RATE LEMBUR FLAT — SAMA RATA buat SEMUA karyawan (keputusan owner).
+// Sengaja angka tetap, bukan turunan dari base atau jam kontrak: lembur dianggap
+// kerja tambahan yang nilainya sama siapa pun yang ngerjain. Base harian & upah
+// pokok tetap beda-beda per orang (level/senioritas) — ini cuma soal lembur.
+// Mau ubah nilainya? cukup ganti satu angka di bawah ini.
+const RATE_LEMBUR_FLAT = 12500;
 
 function prFormatRp(n){
   if (!n) return 'Rp 0';
@@ -2462,13 +2465,14 @@ const jamKerja = parseInt(k.jamKerja, 10) || 9;
 const multiplierLembur = parseFloat(k.multiplierLembur) || 1;
 const netJamKerja = Math.max(1, jamKerja - 1);
 const ratePerJam = netJamKerja > 0 ? (baseHarian / netJamKerja) : 0;
-// PR-CL84: RATE LEMBUR pakai patokan TETAP 8 jam (STD_JAM_LEMBUR), bukan jam kontrak.
-// Kenapa: karyawan yang nginap kontraknya 9 jam efektif (jam ke-9 = trade-off fasilitas
-// kamar/AC/subsidi makan, bukan lembur). Kalau rate lembur dibagi jam kontrak, mereka
-// kena rate LEBIH KECIL (100rb/9 = 11.111) cuma gara-gara shiftnya lebih panjang.
-// Keputusan owner: rate lembur seragam per level base — 100rb -> 12.500, 110rb -> 13.750.
+// PR-CL85: RATE LEMBUR = FLAT, sama rata semua karyawan.
+// Kenapa dilepas dari jam kontrak: karyawan yang nginap kontraknya 9 jam efektif
+// (jam ke-9 = trade-off fasilitas kamar/AC/subsidi makan, BUKAN lembur). Kalau rate
+// lembur dibagi jam kontrak, mereka kena rate lebih kecil (100rb/9 = 11.111) cuma
+// gara-gara shiftnya lebih panjang. Kenapa dilepas juga dari base: keputusan owner —
+// lembur = kerja tambahan yang nilainya sama, siapa pun yang ngerjain.
 // Base harian & upah pokok TIDAK berubah (tetap pakai ratePerJam di atas).
-const rateLemburPerJam = baseHarian / STD_JAM_LEMBUR;
+const rateLemburPerJam = RATE_LEMBUR_FLAT;
 const personMap = byPerson.get(k.uid) || byPerson.get(k.email) || new Map();
 let hariHadir = 0, hariParsial = 0, totalJamLembur = 0, totalJamKerja = 0, totalKontribusi = 0, hariLupaCO = 0;
 const dailyDetails = [];
