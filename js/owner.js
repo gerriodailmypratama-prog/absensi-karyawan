@@ -274,7 +274,7 @@ async function renderUlangTahun(){
         if (!info) return;
         const nama = k.namaPanggilan || k.nama || '-';
         if (info.selisihHari === 0) hariIni.push({nama, umur: info.umurNanti});
-        else if (info.selisihHari <= 14) segera.push({nama, hari: info.selisihHari, tgl: info.tgl, bln: info.bln});
+        else if (info.selisihHari <= 2) segera.push({nama, hari: info.selisihHari, tgl: info.tgl, bln: info.bln}); // H-2 aja biar ga kelamaan diumumin
     });
     if (!hariIni.length && !segera.length){ box.classList.add('hidden'); box.innerHTML = ''; return; }
     const BLN = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
