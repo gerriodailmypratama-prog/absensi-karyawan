@@ -2684,7 +2684,7 @@ function kirimSlipWA(uid){
   const tb = r.totalBayar != null ? r.totalBayar : r.total;
   const L = ['Halo ' + (r.namaPanggilan || r.nama) + ',', '', 'Rincian gaji ' + __payrollData.label + ':',
     '- Upah Pokok: ' + prFormatRp(r.upahPokok), '- Upah Lembur: ' + prFormatRp(r.upahLembur)];
-  if (r.tunjangan > 0) L.push('- Tunjangan: ' + prFormatRp(r.tunjangan)); // PR-CL78
+  if (r.tunjangan > 0) L.push('- Tunjangan Jabatan: ' + prFormatRp(r.tunjangan)); // PR-CL78
   if (r.potongan > 0) L.push('- Potongan: -' + prFormatRp(r.potongan));
   L.push('- *Total Diterima: ' + prFormatRp(tb) + '*', '', 'Sudah ditransfer ya. Terima kasih! 🙏');
   window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(L.join('\n')), '_blank');
@@ -2996,7 +2996,7 @@ trT.innerHTML = '<td colspan="5" style="text-align:right">TOTAL</td>'
 tb.appendChild(trT);
 const trG = document.createElement('tr');
 trG.style.cssText = 'font-weight:800';
-trG.innerHTML = '<td colspan="7" style="text-align:right">TOTAL AKHIR (Pokok + Lembur' + (r.tunjangan > 0 ? ' + Tunjangan ' + prFormatRp(r.tunjangan) : '') + ')</td>'
+trG.innerHTML = '<td colspan="7" style="text-align:right">TOTAL AKHIR (Pokok + Lembur' + (r.tunjangan > 0 ? ' + Tunjangan Jabatan ' + prFormatRp(r.tunjangan) : '') + ')</td>'
 + '<td class="num" style="color:#34d399;font-size:14px">' + prFormatRp(r.total) + '</td>';
 tb.appendChild(trG);
 }
@@ -3192,7 +3192,7 @@ function downloadSlipGaji(uid) {
     '<table class="calc">' +
     '<tr><td>Upah Pokok <span class="muted">(akumulasi kontribusi harian)</span></td><td class="r">' + __slipFmtRp(r.upahPokok) + '</td></tr>' +
     '<tr><td>Upah Lembur <span class="muted">(' + __slipJam(jamLembur) + ' &times; ' + __slipFmtRp(rateLembur) + ')</span></td><td class="r">' + __slipFmtRp(r.upahLembur) + '</td></tr>' +
-    ((r.tunjangan && r.tunjangan > 0) ? '<tr><td>Tunjangan Peran <span class="muted">(flat bulanan)</span></td><td class="r">' + __slipFmtRp(r.tunjangan) + '</td></tr>' : '') +
+    ((r.tunjangan && r.tunjangan > 0) ? '<tr><td>Tunjangan Jabatan <span class="muted">(tetap per bulan)</span></td><td class="r">' + __slipFmtRp(r.tunjangan) + '</td></tr>' : '') +
     ((r.potongan && r.potongan > 0) ? '<tr><td>Potongan / Kasbon</td><td class="r">- ' + __slipFmtRp(r.potongan) + '</td></tr>' : '') +
     '<tr class="tot"><td>Total Diterima</td><td class="r">' + __slipFmtRp(r.totalBayar != null ? r.totalBayar : r.total) + '</td></tr>' +
     '</table>' +
