@@ -813,7 +813,7 @@ async function openEditKaryawan(uid){
           }
         }
         if ($('editBaseHarian')) $('editBaseHarian').value = d.baseHarian || '';
-        if ($('editTunjangan')) $('editTunjangan').value = d.tunjanganBulanan || ''; // PR-CL78
+        if ($('editTunjangan')) $('editTunjangan').value = __fmtRpPlain(d.tunjanganBulanan); // PR-CL78/87
         if ($('editMultiplierLembur')) $('editMultiplierLembur').value = d.multiplierLembur || 1;
         if ($('editGpsExempt')) $('editGpsExempt').checked = !!d.gpsExempt;
         if ($('editNamaBank')) $('editNamaBank').value = d.namaBank || '';
@@ -870,7 +870,7 @@ $('formEditKaryawan').onsubmit = async (e) => {
     const kodeAdmin = $('editKodeAdmin') ? $('editKodeAdmin').checked : false;
     const liburHari = ($('editLiburHari') && $('editLiburHari').value !== '') ? parseInt($('editLiburHari').value, 10) : null;
     const baseHarian = $('editBaseHarian') ? (parseInt($('editBaseHarian').value, 10) || 0) : 0;
-    const tunjanganBulanan = $('editTunjangan') ? (parseInt($('editTunjangan').value, 10) || 0) : 0; // PR-CL78
+    const tunjanganBulanan = $('editTunjangan') ? __parseRp($('editTunjangan').value) : 0; // PR-CL78/87
     const multiplierLembur = $('editMultiplierLembur') ? (parseFloat($('editMultiplierLembur').value) || 1) : 1;
     const gpsExempt = $('editGpsExempt') ? $('editGpsExempt').checked : false;
     const namaBank = $('editNamaBank') ? $('editNamaBank').value.trim() : '';
@@ -2347,6 +2347,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
 // ============================================================
 // PAYROLL MODULE — gaji harian, dibayar bulanan
 // ============================================================
+// PR-CL87: input rupiah sering diketik pakai titik (1.750.000). Dulu kotaknya type=number
+// jadi browser NOLAK isinya -> value kosong -> kesimpen 0 tanpa pesan error. Sekarang
+// kotaknya text dan angkanya disaring di sini.
+function __parseRp(v){ const d = String(v == null ? '' : v).replace(/[^0-9]/g, ''); return d ? parseInt(d, 10) : 0; }
+function __fmtRpPlain(n){ return (Number(n) || 0) === 0 ? '' : Number(n).toLocaleString('id-ID'); }
 let __payrollData = null;
 // PR-CL85: RATE LEMBUR FLAT — SAMA RATA buat SEMUA karyawan (keputusan owner).
 // Sengaja angka tetap, bukan turunan dari base atau jam kontrak: lembur dianggap
@@ -2875,7 +2880,7 @@ function startEditTunjangan(uid){
   if (!cell) return;
   const row = __payrollData && __payrollData.rows.find(x => x.uid === uid);
   const cur = row ? (row.tunjangan || 0) : 0;
-  cell.innerHTML = '<input type="number" class="pr-tun-input" min="0" step="50000" value="' + cur + '" style="width:100px;font:inherit;text-align:right;padding:3px 5px;background:#191919;color:#e6e3d8;border:1px solid #f97316;border-radius:6px"> '
+  cell.innerHTML = '<input type="text" inputmode="numeric" class="pr-tun-input" value="' + __fmtRpPlain(cur) + '" style="width:100px;font:inherit;text-align:right;padding:3px 5px;background:#191919;color:#e6e3d8;border:1px solid #f97316;border-radius:6px"> '
     + '<button class="btn-link pr-tun-save" style="color:#34d399">Simpan</button> '
     + '<button class="btn-link pr-tun-cancel" style="color:#9ca3af">Batal</button>'
     + '<br><small class="muted">flat — berlaku tiap bulan</small>';
@@ -2890,7 +2895,7 @@ async function saveTunjangan(uid){
   if (!row) return;
   const cell = document.querySelector('.pr-tun-cell[data-uid="' + uid + '"]');
   const inp = cell ? cell.querySelector('.pr-tun-input') : null;
-  const amount = Math.max(0, parseInt(inp ? inp.value : row.tunjangan, 10) || 0);
+  const amount = Math.max(0, inp ? __parseRp(inp.value) : (row.tunjangan || 0)); // PR-CL87
   const saveBtn = cell ? cell.querySelector('.pr-tun-save') : null;
   if (saveBtn){ saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan...'; }
   try {
