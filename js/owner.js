@@ -2351,6 +2351,68 @@ document.addEventListener('DOMContentLoaded', ()=>{
 // jadi browser NOLAK isinya -> value kosong -> kesimpen 0 tanpa pesan error. Sekarang
 // kotaknya text dan angkanya disaring di sini.
 function __parseRp(v){ const d = String(v == null ? '' : v).replace(/[^0-9]/g, ''); return d ? parseInt(d, 10) : 0; }
+
+// ===== PR-CL89: badge JABATAN + foto profil di tabel Payroll =====
+// Kosakata jabatan disamain sama role di WMS biar sekali lihat langsung nyambung.
+const PR_ROLE_STYLE = {
+  'owner':        ['#3a2f12', '#fcd34d'],
+  'kepala gudang':['#3b1d1d', '#fca5a5'],
+  'superadmin':   ['#16233a', '#93c5fd'],
+  'admin':        ['#0f2e2a', '#5eead4'],
+  'operational':  ['#241a3a', '#c4b5fd'],
+  'host live':    ['#331a2b', '#f9a8d4'],
+  'packer':       ['#2a2118', '#fdba74'],
+  'sourcing':     ['#1f2937', '#cbd5e1'],
+  'trial':        ['#3a2f12', '#fbbf24']
+};
+// Cadangan: diambil dari role WMS per 30 Jul 2026, dipakai HANYA kalau field
+// "Jabatan" di menu Karyawan masih kosong. Kalau ada yang pindah peran, isi
+// field Jabatan-nya — itu selalu menang atas daftar ini.
+const PR_ROLE_SEED = {
+  mila: 'superadmin', desti: 'admin', ila: 'admin',
+  bunga: 'operational', rafi: 'operational', restu: 'operational',
+  bahren: 'packer', dinda: 'packer', itang: 'packer', rafihm: 'packer',
+  resta: 'packer', rifki: 'packer', yani: 'packer', naufal: 'sourcing'
+};
+function __prRole(r){
+  const raw = String(r.jabatan || '').trim().toLowerCase();
+  if (raw){
+    if (raw.includes('kepala') || raw.includes('gudang')) return 'kepala gudang';
+    if (raw.includes('superadmin') || raw.includes('super admin')) return 'superadmin';
+    if (raw.includes('owner')) return 'owner';
+    if (raw.includes('host')) return 'host live';
+    if (raw.includes('admin')) return 'admin';
+    if (raw.includes('operational') || raw.includes('operasional') || raw.includes('ops')) return 'operational';
+    if (raw.includes('packer') || raw.includes('picker')) return 'packer';
+    if (raw.includes('sourcing')) return 'sourcing';
+    if (raw.includes('trial')) return 'trial';
+    return raw;
+  }
+  const key = String(r.namaPanggilan || r.nama || '').trim().toLowerCase();
+  return PR_ROLE_SEED[key] || '';
+}
+function __prRoleBadge(r){
+  const role = __prRole(r);
+  if (!role) return '';
+  const st = PR_ROLE_STYLE[role] || ['#262626', '#a3a3a3'];
+  return '<span class="pr-role-badge" style="background:' + st[0] + ';color:' + st[1] + '">' + role.toUpperCase() + '</span>';
+}
+// Foto profil: absensi nyimpen di koleksi `profil/{uid}.foto`; karyawan.photoURL jadi cadangan.
+let __prFoto = {};
+async function loadPayrollFotos(uids){
+  const need = (uids || []).filter(u => u && !(u in __prFoto));
+  if (!need.length) return;
+  await Promise.all(need.map(async (u) => {
+    try { const p = await getDoc(doc(db, 'profil', u)); __prFoto[u] = (p.exists() && p.data().foto) ? p.data().foto : ''; }
+    catch (_) { __prFoto[u] = ''; }
+  }));
+}
+function __prAvatar(r){
+  const src = __prFoto[r.uid] || r.photoURL || '';
+  if (src) return '<img class="pr-ava" src="' + src + '" alt="" loading="lazy" referrerpolicy="no-referrer" />';
+  const ini = String(r.namaPanggilan || r.nama || '?').trim().charAt(0).toUpperCase();
+  return '<span class="pr-ava ph">' + (ini || '?') + '</span>';
+}
 function __fmtRpPlain(n){ return (Number(n) || 0) === 0 ? '' : Number(n).toLocaleString('id-ID'); }
 let __payrollData = null;
 // PR-CL85: RATE LEMBUR FLAT — SAMA RATA buat SEMUA karyawan (keputusan owner).
@@ -2607,6 +2669,7 @@ totalJamKerja: totalJamKerja, totalJamLembur: totalJamLembur,
 upahPokok: upahPokok, upahLembur: upahLembur, tunjangan: tunjangan, total: total,
 potongan: potongan, totalBayar: totalBayar,
 namaBank: k.namaBank || '', atasNamaRek: k.atasNamaRek || '', nomorRekening: k.nomorRekening || '',
+jabatan: k.jabatan || '', photoURL: k.photoURL || '', // PR-CL89: badge jabatan + foto profil
 phone: k.phone || '', namaPanggilan: k.namaPanggilan || '',
 dailyDetails: dailyDetails
 });
@@ -2620,6 +2683,8 @@ __payrollData = {yyyymm: yyyymm, label: label, rows: rows};
 // Status lunas dibaca dari dokumen karyawan (bayarBulan[yyyymm]) — sama seperti potongan, tanpa collection terpisah.
 window.__payStatus = {};
 for (const _k of karyMap.values()){ if (_k.bayarBulan && _k.bayarBulan[yyyymm] === true) window.__payStatus[_k.uid] = 'paid'; }
+// PR-CL89: tarik foto profil dulu (non-fatal — gagal = tampil inisial), baru render
+try { await loadPayrollFotos(rows.map(r => r.uid)); } catch (_) {}
 renderPayrollTable();
 $('prTotalKaryawan').textContent = rows.length;
 $('prTotalBudget').textContent = prFormatRp(totalBudget);
@@ -2786,7 +2851,8 @@ if (r.nonaktif===true && !_prSepDone){
 }
 const tr = document.createElement('tr');
 if (r.nonaktif){ tr.className = 'pr-nonaktif-row'; tr.style.opacity = '.6'; tr.style.display = 'none'; }
-tr.innerHTML = '<td><b>' + r.nama + '</b>' + (r.nonaktif ? ' <span class="tag" title="Sudah resign / dinonaktifkan. Muncul karena masih ada absen bulan ini.">Nonaktif</span>' : '') + '<br><small class="muted">' + r.idKaryawan + '</small>' + ((r.hariLupaCO||0) > 0 ? '<br><small style="color:#fcd34d">⚠ ' + r.hariLupaCO + ' hr lupa clock-out</small>' : '') + '</td>' +
+// PR-CL89: foto profil + badge jabatan (kosakata role WMS) di kolom nama
+tr.innerHTML = '<td><div class="pr-name-cell">' + __prAvatar(r) + '<div class="pr-name-txt"><div class="pr-name-top"><b>' + r.nama + '</b>' + __prRoleBadge(r) + (r.nonaktif ? ' <span class="tag" title="Sudah resign / dinonaktifkan. Muncul karena masih ada absen bulan ini.">Nonaktif</span>' : '') + '</div><small class="muted">' + r.idKaryawan + '</small>' + ((r.hariLupaCO||0) > 0 ? '<br><small style="color:#fcd34d">⚠ ' + r.hariLupaCO + ' hr lupa clock-out</small>' : '') + '</div></div></td>' +
 '<td class="num">' + prFormatRp(r.baseHarian) + '</td>' +
 '<td class="num">' + r.hariHadir + (r.hariParsial ? ' <small class="muted" title="Masuk tapi kerja kurang dari 75% jam standar - dibayar proporsional, bukan sehari penuh">(+' + r.hariParsial + ' parsial)</small>' : '') + '</td>' +
 '<td class="num">' + r.totalJamKerja.toFixed(1) + ' jam</td>' +
