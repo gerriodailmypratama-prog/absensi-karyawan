@@ -2348,6 +2348,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
 // PAYROLL MODULE — gaji harian, dibayar bulanan
 // ============================================================
 let __payrollData = null;
+// PR-CL84: patokan tetap buat RATE LEMBUR (bukan jam kontrak masing-masing orang).
+// 8 jam = shift standar; jadi rate lembur cuma nempel ke level base, bukan panjang shift.
+const STD_JAM_LEMBUR = 8;
 
 function prFormatRp(n){
   if (!n) return 'Rp 0';
@@ -2459,6 +2462,13 @@ const jamKerja = parseInt(k.jamKerja, 10) || 9;
 const multiplierLembur = parseFloat(k.multiplierLembur) || 1;
 const netJamKerja = Math.max(1, jamKerja - 1);
 const ratePerJam = netJamKerja > 0 ? (baseHarian / netJamKerja) : 0;
+// PR-CL84: RATE LEMBUR pakai patokan TETAP 8 jam (STD_JAM_LEMBUR), bukan jam kontrak.
+// Kenapa: karyawan yang nginap kontraknya 9 jam efektif (jam ke-9 = trade-off fasilitas
+// kamar/AC/subsidi makan, bukan lembur). Kalau rate lembur dibagi jam kontrak, mereka
+// kena rate LEBIH KECIL (100rb/9 = 11.111) cuma gara-gara shiftnya lebih panjang.
+// Keputusan owner: rate lembur seragam per level base — 100rb -> 12.500, 110rb -> 13.750.
+// Base harian & upah pokok TIDAK berubah (tetap pakai ratePerJam di atas).
+const rateLemburPerJam = baseHarian / STD_JAM_LEMBUR;
 const personMap = byPerson.get(k.uid) || byPerson.get(k.email) || new Map();
 let hariHadir = 0, hariParsial = 0, totalJamLembur = 0, totalJamKerja = 0, totalKontribusi = 0, hariLupaCO = 0;
 const dailyDetails = [];
@@ -2568,7 +2578,7 @@ kontribusi: kontribusi
 });
 }
 const upahPokok = totalKontribusi;
-const upahLembur = totalJamLembur * ratePerJam * multiplierLembur;
+const upahLembur = totalJamLembur * rateLemburPerJam * multiplierLembur; // PR-CL84: pakai rate lembur seragam
 // PR-CL78: tunjangan peran flat bulanan — dibayar penuh selama ada kehadiran bulan itu
 // (baris tanpa kehadiran sudah di-skip oleh guard di bawah, jadi otomatis ikut aturan itu).
 const tunjangan = parseInt(k.tunjanganBulanan, 10) || 0;
@@ -2582,7 +2592,7 @@ if (hariHadir === 0 && hariParsial === 0 && totalJamLembur === 0) continue;
 rows.push({
 uid: k.uid, nama: k.nama || '-', idKaryawan: k.idKaryawan || '-', nonaktif: (k.nonaktif===true),
 baseHarian: baseHarian, jamKerja: jamKerja, multiplierLembur: multiplierLembur,
-ratePerJam: ratePerJam,
+ratePerJam: ratePerJam, rateLemburPerJam: rateLemburPerJam, // PR-CL84
 hariHadir: hariHadir, hariParsial: hariParsial, hariLupaCO: hariLupaCO,
 totalJamKerja: totalJamKerja, totalJamLembur: totalJamLembur,
 upahPokok: upahPokok, upahLembur: upahLembur, tunjangan: tunjangan, total: total,
@@ -2949,13 +2959,13 @@ if (!__payrollData) return;
 const r = __payrollData.rows.find(x => x.uid === uid);
 if (!r) return;
 $('prDetailTitle').textContent = 'Detail Payroll \u2014 ' + r.nama;
-$('prDetailSub').textContent = 'Periode: ' + __payrollData.label + ' \u2014 Total Jam: ' + r.totalJamKerja.toFixed(1) + ' jam \u2014 Rate: ' + prFormatRp(r.ratePerJam||0) + '/jam \u2014 Total: ' + prFormatRp(r.total);
+$('prDetailSub').textContent = 'Periode: ' + __payrollData.label + ' \u2014 Total Jam: ' + r.totalJamKerja.toFixed(1) + ' jam \u2014 Rate pokok: ' + prFormatRp(r.ratePerJam||0) + '/jam \u2014 Rate lembur: ' + prFormatRp(r.rateLemburPerJam||r.ratePerJam||0) + '/jam \u2014 Total: ' + prFormatRp(r.total);
 const tb = document.querySelector('#tblPayrollDetail tbody');
 tb.innerHTML = '';
 if (!r.dailyDetails.length){
 tb.innerHTML = '<tr><td colspan="8" class="muted center">Tidak ada catatan kehadiran bulan ini.</td></tr>';
 } else {
-const _rate = r.ratePerJam || 0;
+const _rate = r.rateLemburPerJam || r.ratePerJam || 0; // PR-CL84: kolom lembur pakai rate lembur
 const _mult = r.multiplierLembur || 1;
 for (const d of r.dailyDetails){
 const tr = document.createElement('tr');
@@ -3124,6 +3134,7 @@ function downloadSlipGaji(uid) {
   }
 
   const rateJam = r.ratePerJam || 0;
+  const rateLembur = r.rateLemburPerJam || rateJam; // PR-CL84
   const jamLembur = r.totalJamLembur || 0;
 
   const html = '<!doctype html><html lang="id"><head><meta charset="utf-8">' +
@@ -3159,7 +3170,8 @@ function downloadSlipGaji(uid) {
     '<tr><td>Nama</td><td class="r">' + (r.nama || '-') + '</td></tr>' +
     '<tr><td>ID Karyawan</td><td class="r">' + (r.idKaryawan || '-') + '</td></tr>' +
     '<tr><td>Upah Harian</td><td class="r">' + __slipFmtRp(r.baseHarian) + ' / ' + (r.jamKerja || '-') + ' jam</td></tr>' +
-    '<tr><td>Tarif per Jam</td><td class="r">' + __slipFmtRp(rateJam) + '</td></tr>' +
+    '<tr><td>Tarif per Jam <span class="muted">(upah pokok)</span></td><td class="r">' + __slipFmtRp(rateJam) + '</td></tr>' +
+    '<tr><td>Tarif Lembur per Jam</td><td class="r">' + __slipFmtRp(rateLembur) + '</td></tr>' +
     '<tr><td>Status Pembayaran</td><td class="r">' + ((typeof __payStatus!=='undefined' && __payStatus[uid]==='paid') ? '<strong style=\"color:#16a34a\">LUNAS / PAID</strong>' : 'Belum Dibayar') + '</td></tr>' +
     bankHtml +
     '</table>' +
@@ -3175,7 +3187,7 @@ function downloadSlipGaji(uid) {
     '<h2>Perhitungan Gaji</h2>' +
     '<table class="calc">' +
     '<tr><td>Upah Pokok <span class="muted">(akumulasi kontribusi harian)</span></td><td class="r">' + __slipFmtRp(r.upahPokok) + '</td></tr>' +
-    '<tr><td>Upah Lembur <span class="muted">(' + __slipJam(jamLembur) + ' &times; ' + __slipFmtRp(rateJam) + ')</span></td><td class="r">' + __slipFmtRp(r.upahLembur) + '</td></tr>' +
+    '<tr><td>Upah Lembur <span class="muted">(' + __slipJam(jamLembur) + ' &times; ' + __slipFmtRp(rateLembur) + ')</span></td><td class="r">' + __slipFmtRp(r.upahLembur) + '</td></tr>' +
     ((r.tunjangan && r.tunjangan > 0) ? '<tr><td>Tunjangan Peran <span class="muted">(flat bulanan)</span></td><td class="r">' + __slipFmtRp(r.tunjangan) + '</td></tr>' : '') +
     ((r.potongan && r.potongan > 0) ? '<tr><td>Potongan / Kasbon</td><td class="r">- ' + __slipFmtRp(r.potongan) + '</td></tr>' : '') +
     '<tr class="tot"><td>Total Diterima</td><td class="r">' + __slipFmtRp(r.totalBayar != null ? r.totalBayar : r.total) + '</td></tr>' +
