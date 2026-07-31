@@ -2494,7 +2494,7 @@ const start = range.start, end = range.end, label = range.label;
 const _prInfo = $('prPeriodeInfo');
 if (_prInfo) _prInfo.textContent = 'Periode: ' + label + (yyyymm === PR_TRANSISI ? ' (peralihan)' : '');
 const tbody = document.querySelector('#tblPayroll tbody');
-if (tbody) tbody.innerHTML = '<tr><td colspan="13" class="muted center">Menghitung...</td></tr>';
+if (tbody) tbody.innerHTML = '<tr><td colspan="14" class="muted center">Menghitung...</td></tr>';
 $('prEmpty').classList.add('hidden');
 const karyMap = new Map();
 const karySnap = await getDocs(collection(db, 'karyawan'));
@@ -2655,7 +2655,10 @@ const upahLembur = totalJamLembur * rateLemburPerJam * multiplierLembur; // PR-C
 const tunjangan = parseInt(k.tunjanganBulanan, 10) || 0;
 const total = upahPokok + upahLembur + tunjangan;
 const potongan = (k.potonganBulan && k.potonganBulan[yyyymm]) ? (Number(k.potonganBulan[yyyymm]) || 0) : 0;
-const totalBayar = total - potongan;
+// PR-CL90: bonus sekali bayar — nempel cuma di bulan terpilih (bonusBulan[yyyymm]),
+// beda dgn tunjangan yang flat kebayar tiap bulan. Bulan depan otomatis balik nol.
+const bonus = (k.bonusBulan && k.bonusBulan[yyyymm]) ? (Number(k.bonusBulan[yyyymm]) || 0) : 0;
+const totalBayar = total + bonus - potongan;
 // Sembunyikan karyawan tanpa kehadiran bulan ini (belum bergabung / nonaktif / tidak hadir sama sekali).
 // Aktif = ada hari hadir/parsial atau lembur; hariHadir sudah termasuk hari "lupa clock out".
 // Yang aktif walau gaji Rp0 tetap tampil biar owner sadar. Ini juga menutup kasus nonaktif tanpa absensi.
@@ -2667,7 +2670,7 @@ ratePerJam: ratePerJam, rateLemburPerJam: rateLemburPerJam, // PR-CL84
 hariHadir: hariHadir, hariParsial: hariParsial, hariLupaCO: hariLupaCO,
 totalJamKerja: totalJamKerja, totalJamLembur: totalJamLembur,
 upahPokok: upahPokok, upahLembur: upahLembur, tunjangan: tunjangan, total: total,
-potongan: potongan, totalBayar: totalBayar,
+potongan: potongan, bonus: bonus, totalBayar: totalBayar,
 namaBank: k.namaBank || '', atasNamaRek: k.atasNamaRek || '', nomorRekening: k.nomorRekening || '',
 jabatan: k.jabatan || '', photoURL: k.photoURL || '', // PR-CL89: badge jabatan + foto profil
 phone: k.phone || '', namaPanggilan: k.namaPanggilan || '',
@@ -2755,6 +2758,7 @@ function kirimSlipWA(uid){
   const L = ['Halo ' + (r.namaPanggilan || r.nama) + ',', '', 'Rincian gaji ' + __payrollData.label + ':',
     '- Upah Pokok: ' + prFormatRp(r.upahPokok), '- Upah Lembur: ' + prFormatRp(r.upahLembur)];
   if (r.tunjangan > 0) L.push('- Tunjangan Jabatan: ' + prFormatRp(r.tunjangan)); // PR-CL78
+  if (r.bonus > 0) L.push('- Bonus: +' + prFormatRp(r.bonus)); // PR-CL90
   if (r.potongan > 0) L.push('- Potongan: -' + prFormatRp(r.potongan));
   L.push('- *Total Diterima: ' + prFormatRp(tb) + '*', '', 'Sudah ditransfer ya. Terima kasih! 🙏');
   window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(L.join('\n')), '_blank');
@@ -2771,7 +2775,7 @@ function openBayarModal(uid){
   let h = '';
   h += '<div style="text-align:center;margin:4px 0 14px"><div class="muted small">Total Bayar (' + __payrollData.label + ')</div>'
      + '<div style="font-size:28px;font-weight:800;color:#34d399">' + prFormatRp(tb) + '</div>'
-     + (r.potongan > 0 ? '<div class="muted small">Gaji ' + prFormatRp(r.total) + ' &minus; potongan ' + prFormatRp(r.potongan) + '</div>' : '')
+     + ((r.potongan > 0 || r.bonus > 0) ? '<div class="muted small">Gaji ' + prFormatRp(r.total) + (r.bonus > 0 ? ' + bonus ' + prFormatRp(r.bonus) : '') + (r.potongan > 0 ? ' &minus; potongan ' + prFormatRp(r.potongan) : '') + '</div>' : '')
      + '</div>';
   h += '<div style="background:#191919;border:1px solid #2a2a2a;border-radius:10px;padding:12px;margin-bottom:14px">';
   if (adaRek){
@@ -2837,7 +2841,7 @@ if (r.nonaktif===true && !_prSepDone){
   const sep = document.createElement('tr');
   sep.className = 'pr-nonaktif-sep';
   sep.style.cursor = 'pointer';
-  sep.innerHTML = '<td colspan="13" style="padding:10px 14px;background:#161616;border-top:2px solid #2a2a2a;color:#9ca3af;font-size:13px;font-weight:600">'
+  sep.innerHTML = '<td colspan="14" style="padding:10px 14px;background:#161616;border-top:2px solid #2a2a2a;color:#9ca3af;font-size:13px;font-weight:600">'
     + '<span class="pr-non-caret">▸</span> Nonaktif / Resign (' + _prNon.length + ') — klik buat lihat/sembunyikan'
     + (_prNonUnpaidRp>0 ? ' <span style="color:#fcd34d">· belum dibayar ' + prFormatRp(_prNonUnpaidRp) + '</span>' : '')
     + '</td>';
@@ -2861,6 +2865,7 @@ tr.innerHTML = '<td><div class="pr-name-cell">' + __prAvatar(r) + '<div class="p
 '<td class="num">' + prFormatRp(r.upahLembur) + '</td>' +
 '<td class="num pr-tun-cell" data-uid="' + r.uid + '"><span class="pr-tun-val">' + (r.tunjangan ? prFormatRp(r.tunjangan) : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-tun-edit" data-uid="' + r.uid + '" style="color:#f97316">Edit</button></td>' +
 '<td class="num">' + prFormatRp(r.total) + '</td>' +
+'<td class="num pr-bon-cell" data-uid="' + r.uid + '"><span class="pr-bon-val">' + (r.bonus ? '<span style="color:#86efac">+' + prFormatRp(r.bonus) + '</span>' : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-bon-edit" data-uid="' + r.uid + '" style="color:#f97316">Edit</button></td>' +
 '<td class="num pr-pot-cell" data-uid="' + r.uid + '"><span class="pr-pot-val">' + (r.potongan ? prFormatRp(r.potongan) : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-pot-edit" data-uid="' + r.uid + '" style="color:#f97316">Edit</button></td>' +
 '<td class="num"><b class="pr-totalbayar" data-uid="' + r.uid + '" style="color:#34d399">' + prFormatRp(r.totalBayar!=null ? r.totalBayar : r.total) + '</b></td>' +
 __payStatusCell(r.uid) +
@@ -2873,20 +2878,23 @@ tbody.appendChild(tr);
 document.querySelectorAll('.pr-detail-btn').forEach(b => { b.onclick = () => showPayrollDetail(b.dataset.uid); });
 document.querySelectorAll('.pr-paid-btn').forEach(b => { b.onclick = () => togglePayStatus(b.dataset.uid); });
 document.querySelectorAll('.pr-pot-edit').forEach(b => { b.onclick = () => startEditPotongan(b.dataset.uid); });
+document.querySelectorAll('.pr-bon-edit').forEach(b => { b.onclick = () => startEditBonus(b.dataset.uid); }); // PR-CL90
 document.querySelectorAll('.pr-tun-edit').forEach(b => { b.onclick = () => startEditTunjangan(b.dataset.uid); }); // PR-CL79
 document.querySelectorAll('.pr-bayar-btn').forEach(b => { b.onclick = () => openBayarModal(b.dataset.uid); });
 // Ringkasan status bayar (update tiap render, termasuk setelah tandai lunas).
-let _sudahBayar = 0, _belumBayar = 0, _grossTot = 0, _potTot = 0;
+let _sudahBayar = 0, _belumBayar = 0, _grossTot = 0, _potTot = 0, _bonTot = 0;
 for (const _r of __payrollData.rows){
   const _tb = _r.totalBayar != null ? _r.totalBayar : _r.total;
   if (window.__payStatus[_r.uid] === 'paid') _sudahBayar += _tb; else _belumBayar += _tb;
   _grossTot += (_r.total || 0);
   _potTot += (_r.potongan || 0);
+  _bonTot += (_r.bonus || 0);
 }
 const _seEl = document.getElementById('prSudahBayar'); if (_seEl) _seEl.textContent = prFormatRp(_sudahBayar);
 const _beEl = document.getElementById('prBelumBayar'); if (_beEl) _beEl.textContent = prFormatRp(_belumBayar);
 const _grEl = document.getElementById('prTotalGross'); if (_grEl) _grEl.textContent = prFormatRp(_grossTot);
 const _poEl = document.getElementById('prTotalPotongan'); if (_poEl) _poEl.textContent = prFormatRp(_potTot);
+const _boEl = document.getElementById('prTotalBonus'); if (_boEl) _boEl.textContent = prFormatRp(_bonTot);
 }
 
 // Potongan/kasbon: tampil sebagai TEKS (font sama dgn tabel); klik "Edit" baru muncul input + Simpan/Batal,
@@ -2926,7 +2934,7 @@ async function savePotongan(uid){
   try {
     await setDoc(doc(db, 'karyawan', uid), { potonganBulan: { [yyyymm]: amount } }, { merge: true });
     row.potongan = amount;
-    row.totalBayar = row.total - amount;
+    row.totalBayar = row.total + (row.bonus || 0) - amount;
     const cb = document.querySelector('.pr-totalbayar[data-uid="' + uid + '"]');
     if (cb) cb.textContent = prFormatRp(row.totalBayar);
     const budget = __payrollData.rows.reduce((s, x) => s + (x.totalBayar != null ? x.totalBayar : x.total), 0);
@@ -2934,6 +2942,57 @@ async function savePotongan(uid){
     renderPotonganCell(uid);
   } catch (e) {
     alert('Gagal simpan potongan: ' + (e.message || 'unknown'));
+    if (saveBtn){ saveBtn.disabled = false; saveBtn.textContent = 'Simpan'; }
+  }
+}
+
+// PR-CL90: Bonus inline edit — pola persis Potongan, tapi NAMBAH ke Total Bayar.
+// Kayak potongan, nilainya cuma nempel di bulan terpilih (bonusBulan[yyyymm]) — sekali bayar, ga kebawa bulan depan.
+function renderBonusCell(uid){
+  const cell = document.querySelector('.pr-bon-cell[data-uid="' + uid + '"]');
+  if (!cell) return;
+  const row = __payrollData && __payrollData.rows.find(x => x.uid === uid);
+  const bon = row ? (row.bonus || 0) : 0;
+  cell.innerHTML = '<span class="pr-bon-val">' + (bon ? '<span style="color:#86efac">+' + prFormatRp(bon) + '</span>' : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-bon-edit" data-uid="' + uid + '" style="color:#f97316">Edit</button>';
+  const eb = cell.querySelector('.pr-bon-edit'); if (eb) eb.onclick = () => startEditBonus(uid);
+}
+function startEditBonus(uid){
+  const cell = document.querySelector('.pr-bon-cell[data-uid="' + uid + '"]');
+  if (!cell) return;
+  const row = __payrollData && __payrollData.rows.find(x => x.uid === uid);
+  const cur = row ? (row.bonus || 0) : 0;
+  cell.innerHTML = '<input type="number" class="pr-bon-input" min="0" step="1000" value="' + cur + '" style="width:90px;font:inherit;text-align:right;padding:3px 5px;background:#191919;color:#e6e3d8;border:1px solid #f97316;border-radius:6px"> '
+    + '<button class="btn-link pr-bon-save" style="color:#34d399">Simpan</button> '
+    + '<button class="btn-link pr-bon-cancel" style="color:#9ca3af">Batal</button>'
+    + '<br><small class="muted">cuma bulan ini</small>';
+  const inp = cell.querySelector('.pr-bon-input');
+  if (inp){ inp.focus(); inp.select(); inp.onkeydown = (e) => { if (e.key === 'Enter') saveBonus(uid); else if (e.key === 'Escape') renderBonusCell(uid); }; }
+  cell.querySelector('.pr-bon-save').onclick = () => saveBonus(uid);
+  cell.querySelector('.pr-bon-cancel').onclick = () => renderBonusCell(uid);
+}
+async function saveBonus(uid){
+  if (!__payrollData) return;
+  const yyyymm = __payrollData.yyyymm;
+  const row = __payrollData.rows.find(x => x.uid === uid);
+  if (!row) return;
+  const cell = document.querySelector('.pr-bon-cell[data-uid="' + uid + '"]');
+  const inp = cell ? cell.querySelector('.pr-bon-input') : null;
+  const amount = Math.max(0, parseInt(inp ? inp.value : row.bonus, 10) || 0);
+  const saveBtn = cell ? cell.querySelector('.pr-bon-save') : null;
+  if (saveBtn){ saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan...'; }
+  try {
+    await setDoc(doc(db, 'karyawan', uid), { bonusBulan: { [yyyymm]: amount } }, { merge: true });
+    row.bonus = amount;
+    row.totalBayar = row.total + amount - (row.potongan || 0);
+    const cb = document.querySelector('.pr-totalbayar[data-uid="' + uid + '"]');
+    if (cb) cb.textContent = prFormatRp(row.totalBayar);
+    const budget = __payrollData.rows.reduce((s, x) => s + (x.totalBayar != null ? x.totalBayar : x.total), 0);
+    const bEl = document.getElementById('prTotalBudget'); if (bEl) bEl.textContent = prFormatRp(budget);
+    const _bt = __payrollData.rows.reduce((s, x) => s + (x.bonus || 0), 0);
+    const _boEl2 = document.getElementById('prTotalBonus'); if (_boEl2) _boEl2.textContent = prFormatRp(_bt);
+    renderBonusCell(uid);
+  } catch (e) {
+    alert('Gagal simpan bonus: ' + (e.message || 'unknown'));
     if (saveBtn){ saveBtn.disabled = false; saveBtn.textContent = 'Simpan'; }
   }
 }
@@ -2968,7 +3027,7 @@ async function saveTunjangan(uid){
     await setDoc(doc(db, 'karyawan', uid), { tunjanganBulanan: amount, updatedAt: serverTimestamp() }, { merge: true });
     row.tunjangan = amount;
     row.total = (row.upahPokok || 0) + (row.upahLembur || 0) + amount;
-    row.totalBayar = row.total - (row.potongan || 0);
+    row.totalBayar = row.total + (row.bonus || 0) - (row.potongan || 0);
     renderPayrollTable(); // re-render penuh biar Total, Total Bayar & ringkasan ikut keupdate
     const budget = __payrollData.rows.reduce((s, x) => s + (x.totalBayar != null ? x.totalBayar : x.total), 0);
     const bEl = document.getElementById('prTotalBudget'); if (bEl) bEl.textContent = prFormatRp(budget);
@@ -3076,13 +3135,13 @@ $('payrollDetailModal').classList.remove('hidden');
 
 function exportPayrollCSV(){
 if (!__payrollData || !__payrollData.rows.length){ alert('Belum ada data. Hitung dulu.'); return; }
-const headers = ['Nama','ID Karyawan','Base Harian','Hari Hadir','Hari Parsial','Total Jam Kerja','Jam Lembur','Upah Pokok','Upah Lembur','Tunjangan','Total','Potongan','Total Bayar','Bank','Atas Nama','Nomor Rekening'];
+const headers = ['Nama','ID Karyawan','Base Harian','Hari Hadir','Hari Parsial','Total Jam Kerja','Jam Lembur','Upah Pokok','Upah Lembur','Tunjangan','Total','Bonus','Potongan','Total Bayar','Bank','Atas Nama','Nomor Rekening'];
 const lines = [headers.join(',')];
 for (const r of __payrollData.rows){
 const cells = [
 r.nama, r.idKaryawan, r.baseHarian, r.hariHadir, r.hariParsial,
 r.totalJamKerja.toFixed(2), r.totalJamLembur.toFixed(2),
-Math.round(r.upahPokok), Math.round(r.upahLembur), Math.round(r.tunjangan||0), Math.round(r.total), Math.round(r.potongan||0), Math.round(r.totalBayar!=null?r.totalBayar:r.total),
+Math.round(r.upahPokok), Math.round(r.upahLembur), Math.round(r.tunjangan||0), Math.round(r.total), Math.round(r.bonus||0), Math.round(r.potongan||0), Math.round(r.totalBayar!=null?r.totalBayar:r.total),
 r.namaBank, r.atasNamaRek, r.nomorRekening
 ].map(v => '"' + String(v).replace(/"/g, '""') + '"');
 lines.push(cells.join(','));
@@ -3264,6 +3323,7 @@ function downloadSlipGaji(uid) {
     '<tr><td>Upah Pokok <span class="muted">(akumulasi kontribusi harian)</span></td><td class="r">' + __slipFmtRp(r.upahPokok) + '</td></tr>' +
     '<tr><td>Upah Lembur <span class="muted">(' + __slipJam(jamLembur) + ' &times; ' + __slipFmtRp(rateLembur) + ')</span></td><td class="r">' + __slipFmtRp(r.upahLembur) + '</td></tr>' +
     ((r.tunjangan && r.tunjangan > 0) ? '<tr><td>Tunjangan Jabatan <span class="muted">(tetap per bulan)</span></td><td class="r">' + __slipFmtRp(r.tunjangan) + '</td></tr>' : '') +
+    ((r.bonus && r.bonus > 0) ? '<tr><td>Bonus</td><td class="r">+ ' + __slipFmtRp(r.bonus) + '</td></tr>' : '') +
     ((r.potongan && r.potongan > 0) ? '<tr><td>Potongan / Kasbon</td><td class="r">- ' + __slipFmtRp(r.potongan) + '</td></tr>' : '') +
     '<tr class="tot"><td>Total Diterima</td><td class="r">' + __slipFmtRp(r.totalBayar != null ? r.totalBayar : r.total) + '</td></tr>' +
     '</table>' +
