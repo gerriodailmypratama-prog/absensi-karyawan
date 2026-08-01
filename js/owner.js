@@ -2711,6 +2711,22 @@ async function loadPayStatus(yyyymm){
     });
   } catch(e){ console.warn('loadPayStatus gagal:', e); }
 }
+// PR-CL91: snapshot slip yang ditulis ke doc karyawan saat ditandai LUNAS,
+// biar bisa dibaca aplikasi karyawan (tayang 24 jam sejak paidAt, lalu disembunyikan).
+function __slipUntukKaryawan(row, yyyymm){
+  if (!row) return null;
+  return {
+    yyyymm: yyyymm, label: (__payrollData && __payrollData.label) || yyyymm,
+    hariHadir: row.hariHadir || 0, hariParsial: row.hariParsial || 0,
+    totalJamKerja: Math.round((row.totalJamKerja || 0) * 10) / 10,
+    totalJamLembur: Math.round((row.totalJamLembur || 0) * 100) / 100,
+    upahPokok: Math.round(row.upahPokok || 0), upahLembur: Math.round(row.upahLembur || 0),
+    tunjangan: Math.round(row.tunjangan || 0), bonus: Math.round(row.bonus || 0),
+    potongan: Math.round(row.potongan || 0),
+    totalBayar: Math.round(row.totalBayar != null ? row.totalBayar : (row.total || 0)),
+    paidAt: serverTimestamp()
+  };
+}
 async function togglePayStatus(uid){
   if (!__payrollData || !__payrollData.yyyymm){ alert('Hitung payroll dulu.'); return; }
   const yyyymm = __payrollData.yyyymm;
@@ -2724,6 +2740,7 @@ async function togglePayStatus(uid){
       uid: uid, yyyymm: yyyymm, status: jadi, nama: nama,
       total: row ? row.total : null, updatedAt: serverTimestamp()
     }, { merge: true });
+    await setDoc(doc(db, 'karyawan', uid), { slipTerakhir: (jadi === 'paid') ? __slipUntukKaryawan(row, yyyymm) : null }, { merge: true });
     if (jadi === 'paid') window.__payStatus[uid] = 'paid'; else delete window.__payStatus[uid];
     renderPayrollTable();
   } catch(e){ alert('Gagal simpan status: ' + (e.message || e)); }
@@ -2741,8 +2758,7 @@ async function setPaidStatus(uid, paid){
   if (!__payrollData || !__payrollData.yyyymm) return;
   const yyyymm = __payrollData.yyyymm;
   const row = (__payrollData.rows||[]).find(function(x){ return x.uid === uid; });
-  void row;
-  await setDoc(doc(db, 'karyawan', uid), { bayarBulan: { [yyyymm]: !!paid } }, { merge: true });
+  await setDoc(doc(db, 'karyawan', uid), { bayarBulan: { [yyyymm]: !!paid }, slipTerakhir: paid ? __slipUntukKaryawan(row, yyyymm) : null }, { merge: true });
   if (paid) window.__payStatus[uid] = 'paid'; else delete window.__payStatus[uid];
   renderPayrollTable();
 }
