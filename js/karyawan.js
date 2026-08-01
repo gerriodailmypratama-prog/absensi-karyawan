@@ -1,4 +1,4 @@
-import { auth, db, storage, OWNER_EMAILS, OFFICE_LOCATION, kodeClockout, KODE_SLOT_MS, LIBUR_HARI, LIBUR_MAX } from './firebase-config.js';
+import { auth, db, storage, OWNER_EMAILS, OFFICE_LOCATION, kodeClockout, KODE_SLOT_MS, LIBUR_HARI, LIBUR_MAX, periodeBerjalan, KASBON_PLAFON_DEFAULT } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { collection, addDoc, doc, query, where, orderBy, getDocs, getDoc, setDoc, Timestamp, serverTimestamp }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -69,6 +69,122 @@ let userProfile = { nama:'', namaPanggilan:'', jamKerja:9, foto:'', wajibKode:fa
 // Daftar yang belum diisi (rekening/KTP). Default dianggap kurang semua sampai doc kebaca,
 // biar akun baru yang doc-nya belum kebentuk juga tetap dapat notif lengkapi profil.
 let profilKurang = ['Rekening bank &mdash; tujuan transfer gaji', 'Foto KTP'];
+// ===== PR-CL93: KASBON — pengajuan pinjaman gaji dari sisi karyawan =====
+// Tombolnya cuma kebuka kalau owner ngasih akses (kasbonAktif), plafonnya persen dari
+// gaji yang SUDAH terkumpul di periode berjalan. Kalau disetujui owner, jumlahnya masuk
+// kolom Potongan bulan itu -> kepotong otomatis pas gajian.
+let kasbonAktif = false, kasbonPlafon = KASBON_PLAFON_DEFAULT, kasbonRequest = null, baseHarian = 0;
+function __kbRp(n){ return 'Rp ' + Math.round(n || 0).toLocaleString('id-ID'); }
+
+// Perkiraan gaji terkumpul periode ini: jumlah hari yang ada Clock In x base harian.
+// Sengaja KONSERVATIF (lembur/tunjangan ga dihitung) supaya plafon yang ditawarkan
+// ga pernah lebih besar dari hak mereka. Angka final tetap dihitung owner saat approve.
+async function hitungGajiBerjalan(uid, periode){
+  const qs = await getDocs(query(
+    collection(db, 'absensi'),
+    where('uid', '==', uid),
+    where('ts', '>=', Timestamp.fromDate(periode.start)),
+    where('ts', '<=', Timestamp.fromDate(new Date()))
+  ));
+  const hari = new Set();
+  qs.forEach(d => {
+    const r = d.data();
+    if (r.tipe !== 'clock_in') return;
+    const t = r.ts && r.ts.toDate ? r.ts.toDate() : null;
+    if (t) hari.add(t.getFullYear() + '-' + t.getMonth() + '-' + t.getDate());
+  });
+  return { hari: hari.size, gaji: hari.size * (baseHarian || 0) };
+}
+
+// Jatah kasbon: 1x per periode gaji. Yang ngunci cuma pengajuan yang masih MENUNGGU
+// atau yang SUDAH DISETUJUI di periode berjalan — kalau ditolak, masih boleh coba lagi.
+function kasbonTerpakaiBulanIni(yyyymm){
+  const r = kasbonRequest;
+  if (!r || r.yyyymm !== yyyymm) return false;
+  return r.status === 'menunggu' || r.status === 'disetujui';
+}
+function tampilStatusKasbon(yyyymm){
+  const box = $('kbStatusBox'), form = $('kbFormBox'), btn = $('btnKasbonSubmit');
+  const r = kasbonRequest;
+  if (!box) return;
+  const terkunci = kasbonTerpakaiBulanIni(yyyymm);
+  if (!r){ box.classList.add('hidden'); if (form) form.classList.remove('hidden'); if (btn) btn.classList.remove('hidden'); return; }
+  const txt = $('kbStatusTxt'), sub = $('kbStatusSub');
+  if (r.status === 'menunggu'){
+    if (txt){ txt.textContent = '⏳ Menunggu persetujuan'; txt.style.color = '#fcd34d'; }
+    if (sub) sub.textContent = 'Kamu mengajukan ' + __kbRp(r.jumlah) + '. Tunggu dikonfirmasi ya.';
+  } else if (r.status === 'disetujui'){
+    if (txt){ txt.textContent = '✅ Disetujui ' + __kbRp(r.disetujuiJumlah != null ? r.disetujuiJumlah : r.jumlah); txt.style.color = '#86efac'; }
+    if (sub) sub.textContent = 'Otomatis dipotong dari gaji periode ' + (r.periodeLabel || r.yyyymm || '') + '.'
+      + (terkunci ? ' Jatah kasbon periode ini sudah terpakai — bisa ajukan lagi periode berikutnya.' : '');
+  } else {
+    if (txt){ txt.textContent = '❌ Ditolak'; txt.style.color = '#fca5a5'; }
+    if (sub) sub.textContent = r.catatanOwner ? ('Catatan: ' + r.catatanOwner) : 'Silakan ajukan lagi kalau memang perlu.';
+  }
+  box.classList.remove('hidden');
+  if (form) form.classList.toggle('hidden', terkunci);
+  if (btn) btn.classList.toggle('hidden', terkunci);
+}
+
+async function openKasbonModal(){
+  if (!currentUser) return;
+  const m = $('kasbonModal'); if (!m) return;
+  const err = $('kbErr'); if (err) err.classList.add('hidden');
+  const periode = periodeBerjalan(new Date());
+  if ($('kbPeriode')) $('kbPeriode').textContent = periode.label;
+  if ($('kbGaji')) $('kbGaji').textContent = 'menghitung...';
+  if ($('kbMax')) $('kbMax').textContent = '-';
+  tampilStatusKasbon(periode.yyyymm);
+  m.classList.remove('hidden');
+  if (kasbonTerpakaiBulanIni(periode.yyyymm)) return; // ga usah hitung, formnya lagi dikunci
+  try{
+    const h = await hitungGajiBerjalan(currentUser.uid, periode);
+    // Kasbon yang SUDAH disetujui di periode yang sama ikut mengurangi sisa plafon.
+    const sudah = (kasbonRequest && kasbonRequest.status === 'disetujui' && kasbonRequest.yyyymm === periode.yyyymm)
+      ? (kasbonRequest.disetujuiJumlah != null ? kasbonRequest.disetujuiJumlah : kasbonRequest.jumlah) : 0;
+    const maks = Math.max(0, Math.floor(h.gaji * (kasbonPlafon / 100)) - sudah);
+    window.__kbMaks = maks;
+    if ($('kbGaji')) $('kbGaji').textContent = __kbRp(h.gaji) + ' (' + h.hari + ' hari masuk)';
+    if ($('kbMax')) $('kbMax').textContent = __kbRp(maks) + ' (maks ' + kasbonPlafon + '%' + (sudah ? ', sudah ambil ' + __kbRp(sudah) : '') + ')';
+  }catch(e){
+    console.warn('hitung gaji berjalan:', e);
+    if ($('kbGaji')) $('kbGaji').textContent = 'gagal menghitung';
+  }
+}
+
+async function submitKasbon(){
+  if (!currentUser) return;
+  const err = $('kbErr'), btn = $('btnKasbonSubmit');
+  const jumlah = parseInt(($('kbJumlah') || {}).value, 10) || 0;
+  const maks = window.__kbMaks || 0;
+  const show = msg => { if (err){ err.textContent = msg; err.classList.remove('hidden'); } };
+  if (jumlah <= 0){ show('Isi jumlah yang mau diajukan dulu ya.'); return; }
+  if (jumlah > maks){ show('Melebihi batas. Maksimal ' + __kbRp(maks) + '.'); return; }
+  const periode = periodeBerjalan(new Date());
+  if (kasbonTerpakaiBulanIni(periode.yyyymm)){ show('Jatah kasbon periode ini sudah terpakai. Coba lagi periode berikutnya ya.'); return; }
+  if (btn){ btn.disabled = true; btn.textContent = 'Mengirim...'; }
+  try{
+    const req = {
+      jumlah: jumlah,
+      alasan: (($('kbAlasan') || {}).value || '').trim(),
+      status: 'menunggu',                 // WAJIB 'menunggu' — dikunci juga di firestore.rules
+      yyyymm: periode.yyyymm,
+      periodeLabel: periode.label,
+      at: Date.now()
+    };
+    await setDoc(doc(db, 'karyawan', currentUser.uid), { kasbonRequest: req, kasbonRequestAt: serverTimestamp() }, { merge: true });
+    kasbonRequest = req;
+    if ($('kbJumlah')) $('kbJumlah').value = '';
+    if ($('kbAlasan')) $('kbAlasan').value = '';
+    tampilStatusKasbon(periode.yyyymm);
+  }catch(e){
+    console.error('submit kasbon', e);
+    show('Gagal mengirim: ' + (e && e.message ? e.message : e));
+  }finally{
+    if (btn){ btn.disabled = false; btn.textContent = 'Ajukan'; }
+  }
+}
+
 // PR-CL91: slip gaji dari owner (ditulis saat gaji ditandai LUNAS). Tayang cuma 24 jam sejak dibayar.
 let slipData = null;
 const SLIP_TAYANG_MS = 24 * 60 * 60 * 1000;
@@ -387,6 +503,11 @@ async function loadUserProfile(uid){
         liburHari = (u.liburHari != null ? Number(u.liburHari) : null);
         liburRequest = Array.isArray(u.liburRequest) ? u.liburRequest.map(Number) : null;
         slipData = u.slipTerakhir || null; // PR-CL91: slip gaji (tayang 24 jam setelah dibayar)
+        // PR-CL93: akses kasbon — dibuka owner per orang (patokan masa kerja 1 tahun+).
+        kasbonAktif = (u.kasbonAktif === true);
+        kasbonPlafon = (u.kasbonPlafonPersen != null ? Number(u.kasbonPlafonPersen) : KASBON_PLAFON_DEFAULT);
+        kasbonRequest = u.kasbonRequest || null;
+        baseHarian = Number(u.baseHarian) || 0;
         // Cek kelengkapan profil (rekening + KTP) buat notif "Lengkapi Profil" pas login.
         profilKurang = [];
         if (!String(u.namaBank||'').trim() || !String(u.nomorRekening||'').trim() || !String(u.atasNamaRek||'').trim()) profilKurang.push('Rekening bank &mdash; tujuan transfer gaji');
@@ -514,7 +635,12 @@ onAuthStateChanged(auth, async u => {
   refreshLocStatus();
   try{ showLengkapiProfilNotice(); }catch(e){}
   try{ showSlipCard(); }catch(e){}
+  // Tombol Kasbon cuma nongol kalau owner udah buka aksesnya buat orang ini.
+  try{ if (kasbonAktif && $('btnKasbon')) $('btnKasbon').classList.remove('hidden'); }catch(e){}
 });
+if ($('btnKasbon')) $('btnKasbon').onclick = () => { try{ openKasbonModal(); }catch(e){} };
+if ($('btnKasbonClose')) $('btnKasbonClose').onclick = () => $('kasbonModal').classList.add('hidden');
+if ($('btnKasbonSubmit')) $('btnKasbonSubmit').onclick = () => { try{ submitKasbon(); }catch(e){} };
 if ($('btnLihatSlip')) $('btnLihatSlip').onclick = () => { try{ openSlipModal(); }catch(e){} };
 if ($('btnSlipClose')) $('btnSlipClose').onclick = () => $('slipModal').classList.add('hidden');
 

@@ -78,3 +78,37 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
+// ===== PR-CL93: KASBON (pinjaman karyawan, dipotong otomatis saat gajian) =====
+// Periode payroll tutup buku tgl 25 — CERMIN dari prMonthRange() di owner.js.
+// Ditaruh di sini supaya sisi karyawan bisa ngitung "gaji berjalan" dgn periode yang sama.
+export const PR_CUTOFF_DAY = 25;
+export const PR_TRANSISI = '2026-07';
+export const KASBON_PLAFON_DEFAULT = 50; // persen maksimal dari gaji berjalan
+
+export function payrollRange(yyyymm){
+  const p = String(yyyymm).split('-').map(Number);
+  const y = p[0], m = p[1], cut = PR_CUTOFF_DAY;
+  let start, end;
+  if (yyyymm < PR_TRANSISI){
+    start = new Date(y, m-1, 1, 0, 0, 0, 0);
+    end   = new Date(y, m, 0, 23, 59, 59, 999);
+  } else if (yyyymm === PR_TRANSISI){
+    start = new Date(y, m-1, 1, 0, 0, 0, 0);
+    end   = new Date(y, m-1, cut, 23, 59, 59, 999);
+  } else {
+    start = new Date(y, m-2, cut+1, 0, 0, 0, 0);
+    end   = new Date(y, m-1, cut, 23, 59, 59, 999);
+  }
+  const t = d => d.toLocaleDateString('id-ID', { day:'numeric', month:'short' });
+  return { yyyymm: yyyymm, start: start, end: end, label: t(start) + ' – ' + t(end) + ' ' + end.getFullYear() };
+}
+
+// Periode yang SEDANG berjalan (yang bakal dibayar tanggal 1 berikutnya).
+// Lewat tanggal 25 = sudah masuk periode bulan berikutnya.
+export function periodeBerjalan(now){
+  const d = now || new Date();
+  let y = d.getFullYear(), m = d.getMonth() + 1;
+  if (d.getDate() > PR_CUTOFF_DAY){ m += 1; if (m > 12){ m = 1; y += 1; } }
+  return payrollRange(y + '-' + String(m).padStart(2, '0'));
+}
