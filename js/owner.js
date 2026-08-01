@@ -2874,7 +2874,7 @@ if (r.nonaktif){ tr.className = 'pr-nonaktif-row'; tr.style.opacity = '.6'; tr.s
 // PR-CL89: foto profil + badge jabatan (kosakata role WMS) di kolom nama
 tr.innerHTML = '<td><div class="pr-name-cell">' + __prAvatar(r) + '<div class="pr-name-txt"><div class="pr-name-top"><b>' + r.nama + '</b>' + __prRoleBadge(r) + (r.nonaktif ? ' <span class="tag" title="Sudah resign / dinonaktifkan. Muncul karena masih ada absen bulan ini.">Nonaktif</span>' : '') + '</div><small class="muted">' + r.idKaryawan + '</small>' + ((r.hariLupaCO||0) > 0 ? '<br><small style="color:#fcd34d">⚠ ' + r.hariLupaCO + ' hr lupa clock-out</small>' : '') + '</div></div></td>' +
 '<td class="num">' + prFormatRp(r.baseHarian) + '</td>' +
-'<td class="num">' + r.hariHadir + (r.hariParsial ? ' <small class="muted" title="Masuk tapi kerja kurang dari 75% jam standar - dibayar proporsional, bukan sehari penuh">(+' + r.hariParsial + ' parsial)</small>' : '') + '</td>' +
+'<td class="num">' + r.hariHadir + (r.hariParsial ? ' <small class="muted" title="TETAP DIHITUNG HARI MASUK KERJA - cuma karena jamnya kurang dari 75% jam standar, bayarannya dihitung sesuai jam (bukan sehari penuh)">(+' + r.hariParsial + ' parsial)</small>' : '') + '</td>' +
 '<td class="num">' + r.totalJamKerja.toFixed(1) + ' jam</td>' +
 '<td class="num">' + fmtLemburHM(r.totalJamLembur) + '</td>' +
 '<td class="num">' + prFormatRp(r.upahPokok) + '</td>' +
@@ -3329,7 +3329,7 @@ function downloadSlipGaji(uid) {
     '<h2>Ringkasan Kehadiran</h2>' +
     '<table class="info">' +
     '<tr><td>Hari Hadir Penuh</td><td class="r">' + (r.hariHadir != null ? r.hariHadir : '-') + ' hari</td></tr>' +
-    '<tr><td>Hari Sebagian / Kurang Jam</td><td class="r">' + (r.hariParsial != null ? r.hariParsial : 0) + ' hari</td></tr>' +
+    '<tr><td>Hari Kerja Singkat <span style="font-size:10px;color:#888">(tetap dihitung masuk &mdash; dibayar sesuai jam)</span></td><td class="r">' + (r.hariParsial != null ? r.hariParsial : 0) + ' hari</td></tr>' +
     '<tr><td>Total Jam Kerja Efektif</td><td class="r">' + __slipJam(r.totalJamKerja) + '</td></tr>' +
     '<tr><td>Total Jam Lembur</td><td class="r">' + __slipJam(jamLembur) + '</td></tr>' +
     '</table>' +

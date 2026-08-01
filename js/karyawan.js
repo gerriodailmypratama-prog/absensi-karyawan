@@ -86,13 +86,18 @@ function openSlipModal(){
   if (!slipData) return;
   const b = $('slipBody'); if (!b) return;
   const jamL = (function(h){ const m = Math.round((h || 0) * 60); return m <= 0 ? '-' : Math.floor(m/60) + ' jam ' + (m%60) + ' mnt'; })(slipData.totalJamLembur);
+  // PR-CL92: "parsial" bikin salah paham (dikira ga dihitung hari kerja) — jembrengin
+  // jadi dua baris bahasa manusia: hari penuh vs hari singkat (tetap dihitung masuk, dibayar per jam).
   const rows = [
-    ['Hari Hadir', (slipData.hariHadir || 0) + (slipData.hariParsial ? ' (+' + slipData.hariParsial + ' parsial)' : '') + ' hari'],
+    ['Hari Kerja Penuh', (slipData.hariHadir || 0) + ' hari']
+  ];
+  if (slipData.hariParsial) rows.push(['Hari Kerja Singkat', (slipData.hariParsial || 0) + ' hari<br><small class="muted">tetap dihitung masuk kerja &mdash; dibayar sesuai jam</small>']);
+  rows.push(
     ['Total Jam Kerja', (slipData.totalJamKerja || 0) + ' jam'],
     ['Jam Lembur', jamL],
     ['Upah Pokok', __slipRp(slipData.upahPokok)],
     ['Upah Lembur', __slipRp(slipData.upahLembur)]
-  ];
+  );
   if (slipData.tunjangan > 0) rows.push(['Tunjangan Jabatan', __slipRp(slipData.tunjangan)]);
   if (slipData.bonus > 0) rows.push(['Bonus', '+ ' + __slipRp(slipData.bonus)]);
   if (slipData.potongan > 0) rows.push(['Potongan / Kasbon', '- ' + __slipRp(slipData.potongan)]);
