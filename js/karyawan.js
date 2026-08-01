@@ -69,6 +69,44 @@ let userProfile = { nama:'', namaPanggilan:'', jamKerja:9, foto:'', wajibKode:fa
 // Daftar yang belum diisi (rekening/KTP). Default dianggap kurang semua sampai doc kebaca,
 // biar akun baru yang doc-nya belum kebentuk juga tetap dapat notif lengkapi profil.
 let profilKurang = ['Rekening bank &mdash; tujuan transfer gaji', 'Foto KTP'];
+// PR-CL91: slip gaji dari owner (ditulis saat gaji ditandai LUNAS). Tayang cuma 24 jam sejak dibayar.
+let slipData = null;
+const SLIP_TAYANG_MS = 24 * 60 * 60 * 1000;
+function __slipRp(n){ return 'Rp ' + Math.round(n || 0).toLocaleString('id-ID'); }
+function showSlipCard(){
+  const c = $('slipCard'); if (!c || !slipData) return;
+  const paidMs = slipData.paidAt && slipData.paidAt.toMillis ? slipData.paidAt.toMillis() : 0;
+  if (!paidMs || (Date.now() - paidMs) > SLIP_TAYANG_MS) return; // lewat 24 jam -> ga ditampilkan
+  const until = new Date(paidMs + SLIP_TAYANG_MS);
+  const sub = $('slipCardSub');
+  if (sub) sub.textContent = 'Slip ' + (slipData.label || '') + ' · bisa dilihat s/d ' + until.toLocaleString('id-ID', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+  c.classList.remove('hidden');
+}
+function openSlipModal(){
+  if (!slipData) return;
+  const b = $('slipBody'); if (!b) return;
+  const jamL = (function(h){ const m = Math.round((h || 0) * 60); return m <= 0 ? '-' : Math.floor(m/60) + ' jam ' + (m%60) + ' mnt'; })(slipData.totalJamLembur);
+  const rows = [
+    ['Hari Hadir', (slipData.hariHadir || 0) + (slipData.hariParsial ? ' (+' + slipData.hariParsial + ' parsial)' : '') + ' hari'],
+    ['Total Jam Kerja', (slipData.totalJamKerja || 0) + ' jam'],
+    ['Jam Lembur', jamL],
+    ['Upah Pokok', __slipRp(slipData.upahPokok)],
+    ['Upah Lembur', __slipRp(slipData.upahLembur)]
+  ];
+  if (slipData.tunjangan > 0) rows.push(['Tunjangan Jabatan', __slipRp(slipData.tunjangan)]);
+  if (slipData.bonus > 0) rows.push(['Bonus', '+ ' + __slipRp(slipData.bonus)]);
+  if (slipData.potongan > 0) rows.push(['Potongan / Kasbon', '- ' + __slipRp(slipData.potongan)]);
+  rows.push(['TOTAL DITERIMA', __slipRp(slipData.totalBayar)]);
+  b.innerHTML = rows.map(function(r, i){
+    const last = i === rows.length - 1;
+    return '<tr' + (last ? ' style="border-top:1px solid #3a3a3a"' : '') + '><td' + (last ? ' style="font-weight:700"' : '') + '>' + r[0] + '</td><td style="text-align:right;' + (last ? 'font-weight:800;color:#34d399;font-size:16px' : '') + '">' + r[1] + '</td></tr>';
+  }).join('');
+  const sub = $('slipModalSub'); if (sub) sub.textContent = 'Periode ' + (slipData.label || '-');
+  const paidMs = slipData.paidAt && slipData.paidAt.toMillis ? slipData.paidAt.toMillis() : 0;
+  const exp = $('slipModalExp');
+  if (exp && paidMs) exp.textContent = 'Slip ini otomatis hilang ' + new Date(paidMs + SLIP_TAYANG_MS).toLocaleString('id-ID', { weekday:'long', day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) + '. Screenshot kalau mau disimpan ya.';
+  $('slipModal').classList.remove('hidden');
+}
 // Popup pengingat tiap kali buka aplikasi (sebelum sempat Clock In) sampai profil lengkap.
 function showLengkapiProfilNotice(){
   if (!profilKurang.length) return;
@@ -343,6 +381,7 @@ async function loadUserProfile(uid){
         noShiftBarrier = (u.noShiftBarrier === true); // exempt barrier shift 18 jam (khusus admin nginap, mis. Mila)
         liburHari = (u.liburHari != null ? Number(u.liburHari) : null);
         liburRequest = Array.isArray(u.liburRequest) ? u.liburRequest.map(Number) : null;
+        slipData = u.slipTerakhir || null; // PR-CL91: slip gaji (tayang 24 jam setelah dibayar)
         // Cek kelengkapan profil (rekening + KTP) buat notif "Lengkapi Profil" pas login.
         profilKurang = [];
         if (!String(u.namaBank||'').trim() || !String(u.nomorRekening||'').trim() || !String(u.atasNamaRek||'').trim()) profilKurang.push('Rekening bank &mdash; tujuan transfer gaji');
@@ -469,7 +508,10 @@ onAuthStateChanged(auth, async u => {
   await checkForgottenClockOut(u.uid);
   refreshLocStatus();
   try{ showLengkapiProfilNotice(); }catch(e){}
+  try{ showSlipCard(); }catch(e){}
 });
+if ($('btnLihatSlip')) $('btnLihatSlip').onclick = () => { try{ openSlipModal(); }catch(e){} };
+if ($('btnSlipClose')) $('btnSlipClose').onclick = () => $('slipModal').classList.add('hidden');
 
 $('btnLogout').onclick = () => signOut(auth).then(()=>location.replace('index.html')).catch(()=>location.replace('index.html'));
 // Tombol popup "Lengkapi Profil": isi sekarang -> buka modal Profil; nanti -> tutup (muncul lagi di buka berikutnya).
