@@ -295,9 +295,74 @@ async function renderUlangTahun(){
     box.classList.remove('hidden');
 }
 
+// ===== PR-CL93: pengajuan kasbon dari karyawan =====
+// Muncul di Beranda kalau ada yang status 'menunggu'. Disetujui -> jumlahnya DITAMBAHKAN
+// ke potonganBulan[yyyymm] (bukan ditimpa), jadi cicilan yang sudah ada tidak ketimpa.
+function __kbRpO(n){ return 'Rp ' + Math.round(n || 0).toLocaleString('id-ID'); }
+async function renderKasbonRequests(){
+    const box = $('kasbonBox');
+    if (!box) return;
+    const snap = await getDocs(collection(db, 'karyawan'));
+    const pend = [];
+    snap.forEach(d => {
+        const k = d.data() || {};
+        const r = k.kasbonRequest;
+        if (!r || r.status !== 'menunggu') return;
+        pend.push({ uid: d.id, nama: k.namaPanggilan || k.nama || '-', req: r,
+                    potonganSekarang: (k.potonganBulan && k.potonganBulan[r.yyyymm]) ? Number(k.potonganBulan[r.yyyymm]) || 0 : 0 });
+    });
+    if (!pend.length){ box.classList.add('hidden'); box.innerHTML = ''; return; }
+    box.innerHTML = '<div class="ultah-today"><span class="ultah-cake">\u{1F4B5}</span><span>Pengajuan kasbon: <b>' + pend.length + '</b> menunggu persetujuan</span></div>'
+      + pend.map(function(p){
+          return '<div class="ultah-next" style="align-items:center;gap:8px;border-top:1px solid var(--gg-border);padding-top:8px;margin-top:8px">'
+            + '<span><b>' + p.nama + '</b> minta <b style="color:#fcd34d">' + __kbRpO(p.req.jumlah) + '</b>'
+            + (p.req.alasan ? ' &middot; <i>' + p.req.alasan + '</i>' : '')
+            + ' &middot; periode ' + (p.req.periodeLabel || p.req.yyyymm) + '</span>'
+            + '<button class="btn btn-sm btn-success kb-ok" data-uid="' + p.uid + '" style="margin-top:0;width:auto;display:inline-block">Setujui</button>'
+            + '<button class="btn btn-sm btn-ghost kb-no" data-uid="' + p.uid + '" style="margin-top:0">Tolak</button>'
+            + '</div>';
+        }).join('');
+    box.classList.remove('hidden');
+    window.__kbPend = pend;
+    box.querySelectorAll('.kb-ok').forEach(b => { b.onclick = () => putusKasbon(b.dataset.uid, true); });
+    box.querySelectorAll('.kb-no').forEach(b => { b.onclick = () => putusKasbon(b.dataset.uid, false); });
+}
+async function putusKasbon(uid, setuju){
+    const p = (window.__kbPend || []).find(x => x.uid === uid);
+    if (!p) return;
+    const r = p.req;
+    if (setuju){
+        const inp = prompt('Setujui kasbon ' + p.nama + ' — ' + __kbRpO(r.jumlah) + '\n\nJumlah yang disetujui (boleh diubah):', String(r.jumlah));
+        if (inp === null) return;
+        const jumlah = Math.max(0, parseInt(String(inp).replace(/[^0-9]/g, ''), 10) || 0);
+        if (!jumlah) return;
+        // DITAMBAH ke potongan yang sudah ada (mis. cicilan berjalan), bukan menimpa.
+        const potBaru = (p.potonganSekarang || 0) + jumlah;
+        if (!confirm('Potongan ' + p.nama + ' periode ' + (r.periodeLabel || r.yyyymm) + ' jadi '
+            + __kbRpO(potBaru) + (p.potonganSekarang ? ' (cicilan lama ' + __kbRpO(p.potonganSekarang) + ' + kasbon ' + __kbRpO(jumlah) + ')' : '')
+            + '.\n\nLanjut?')) return;
+        try{
+            await setDoc(doc(db, 'karyawan', uid), {
+                potonganBulan: { [r.yyyymm]: potBaru },
+                kasbonRequest: Object.assign({}, r, { status: 'disetujui', disetujuiJumlah: jumlah, decidedAt: Date.now() })
+            }, { merge: true });
+        }catch(e){ alert('Gagal menyetujui: ' + (e.message || e)); return; }
+    } else {
+        const alasan = prompt('Tolak kasbon ' + p.nama + '.\nCatatan buat dia (opsional):', '');
+        if (alasan === null) return;
+        try{
+            await setDoc(doc(db, 'karyawan', uid), {
+                kasbonRequest: Object.assign({}, r, { status: 'ditolak', catatanOwner: String(alasan || '').trim(), decidedAt: Date.now() })
+            }, { merge: true });
+        }catch(e){ alert('Gagal menolak: ' + (e.message || e)); return; }
+    }
+    try{ await renderKasbonRequests(); }catch(e){}
+}
+
 async function renderBeranda(rows){
     try{ await renderHadirFloating(rows); }catch(e){ console.warn('hadir floating err', e); }
     try{ await renderUlangTahun(); }catch(e){ console.warn('ultah err', e); }
+    try{ await renderKasbonRequests(); }catch(e){ console.warn('kasbon err', e); }
     const total = await getTotalKaryawan();
     const clockInSet = new Set();
     const stat = { clock_in:0, clock_out:0, break_in:0, break_out:0, overtime_in:0, overtime_out:0 };
@@ -791,6 +856,9 @@ async function openEditKaryawan(uid){
         if ($('editStatusKaryawan')) $('editStatusKaryawan').value = d.statusKaryawan || '';
         if ($('editNonaktif')) $('editNonaktif').checked = (d.nonaktif === true);
         if ($('editWajibKode')) $('editWajibKode').checked = (d.wajibKodeClockout === true);
+        // PR-CL93: akses & plafon kasbon
+        if ($('editKasbonAktif')) $('editKasbonAktif').checked = (d.kasbonAktif === true);
+        if ($('editKasbonPlafon')) $('editKasbonPlafon').value = (d.kasbonPlafonPersen != null ? d.kasbonPlafonPersen : '');
         if ($('editKodeAdmin')) $('editKodeAdmin').checked = (d.kodeAdmin === true);
         if ($('editLiburHari')) {
           $('editLiburHari').value = (d.liburHari != null ? String(d.liburHari) : '');
@@ -867,6 +935,9 @@ $('formEditKaryawan').onsubmit = async (e) => {
     const statusKaryawan = $('editStatusKaryawan') ? $('editStatusKaryawan').value : '';
     const nonaktif = $('editNonaktif') ? $('editNonaktif').checked : false;
     const wajibKodeClockout = $('editWajibKode') ? $('editWajibKode').checked : false;
+    const kasbonAktif = $('editKasbonAktif') ? $('editKasbonAktif').checked : false;
+    const _kbPl = $('editKasbonPlafon') ? parseInt($('editKasbonPlafon').value, 10) : NaN;
+    const kasbonPlafonPersen = (isNaN(_kbPl) ? 50 : Math.max(0, Math.min(100, _kbPl)));
     const kodeAdmin = $('editKodeAdmin') ? $('editKodeAdmin').checked : false;
     const liburHari = ($('editLiburHari') && $('editLiburHari').value !== '') ? parseInt($('editLiburHari').value, 10) : null;
     const baseHarian = $('editBaseHarian') ? (parseInt($('editBaseHarian').value, 10) || 0) : 0;
@@ -896,6 +967,7 @@ $('formEditKaryawan').onsubmit = async (e) => {
             nama: pg.value, namaPanggilan: pg.value, full_name: fullName, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload, tanggalLahir,
             jabatan, statusKaryawan, baseHarian, tunjanganBulanan, multiplierLembur, gpsExempt,
             namaBank, atasNamaRek, nomorRekening, nonaktif, wajibKodeClockout, kodeAdmin,
+            kasbonAktif, kasbonPlafonPersen,
             liburHari, liburSetBy: (liburHari != null ? 'owner' : null), liburRequestPending: false,
             updatedAt: serverTimestamp()
         };

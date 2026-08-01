@@ -52,6 +52,7 @@
         </div>
 
         <div id="ultahBox" class="ultah-box hidden"></div>
+        <div id="kasbonBox" class="ultah-box hidden" style="border-left-color:#fcd34d"></div>
 
         <div class="pres-grid">
           <div id="workingFloating" class="pres-card pres-work">
@@ -400,6 +401,7 @@
             <div class="kfield"><label>Multiplier Lembur</label><input type="number" id="editMultiplierLembur" min="1" max="5" step="0.1" value="1.5" placeholder="1.5"></div>
             <!-- PR-CL78: tunjangan peran flat bulanan (superadmin/admin/host live/PIC) — di luar base harian -->
             <div class="kfield"><label>Tunjangan Jabatan / bln (Rp) <small class="muted">tetap per bulan buat peran penting, 0 = tidak ada</small></label><input type="text" inputmode="numeric" id="editTunjangan" placeholder="cth: 1.750.000"></div>
+            <div class="kfield"><label>Plafon Kasbon (%) <small class="muted">maks % dari gaji berjalan, default 50</small></label><input type="number" id="editKasbonPlafon" min="0" max="100" step="5" placeholder="50"></div>
           </div>
         </section>
 
@@ -435,6 +437,10 @@
             <label class="ktog">
               <input type="checkbox" id="editKodeAdmin">
               <span><b>Admin kode</b><small>Bisa lihat &amp; kasih kode Clock Out (admin bertugas/nginap, mis. Ila, Mila, Desty).</small></span>
+            </label>
+            <label class="ktog">
+              <input type="checkbox" id="editKasbonAktif">
+              <span><b>Boleh ajukan kasbon</b><small>Buka tombol Kasbon di aplikasi karyawan (patokan: sudah kerja 1 tahun+). Mereka yang ajukan sendiri, maksimal 1x per periode gaji &mdash; kamu tinggal setujui / tolak.</small></span>
             </label>
           </div>
         </section>

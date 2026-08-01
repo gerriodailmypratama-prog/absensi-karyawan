@@ -20,6 +20,13 @@ service cloud.firestore {
       return ['liburRequest', 'liburRequestAt', 'liburRequestPending', 'updatedAt'];
     }
 
+    // Field PENGAJUAN kasbon yang boleh ditulis karyawan sendiri (PR-CL93).
+    // Nilai kasbonAktif / kasbonPlafonPersen / potonganBulan TETAP hanya owner —
+    // jadi karyawan tidak bisa membuka aksesnya sendiri atau memindahkan uang.
+    function kasbonRequestFields() {
+      return ['kasbonRequest', 'kasbonRequestAt', 'updatedAt'];
+    }
+
     // Koleksi absensi (clock in/out, OT)
     match /absensi/{docId} {
       allow read: if request.auth != null && (
@@ -46,7 +53,12 @@ service cloud.firestore {
         request.auth != null
         && request.auth.uid == uid
         && request.resource.data.diff(resource.data)
-            .affectedKeys().hasOnly(profilFields().concat(liburRequestFields()))
+            .affectedKeys().hasOnly(profilFields().concat(liburRequestFields()).concat(kasbonRequestFields()))
+        // Kasbon: hanya boleh diajukan kalau owner sudah membuka akses (kasbonAktif true),
+        // dan statusnya WAJIB 'menunggu' — karyawan tidak bisa menyetujui pengajuannya sendiri.
+        && ( !request.resource.data.diff(resource.data).affectedKeys().hasAny(['kasbonRequest'])
+             || ( resource.data.get('kasbonAktif', false) == true
+                  && request.resource.data.kasbonRequest.status == 'menunggu' ) )
         // KTP immutable: karyawan hanya boleh SET ktpUrl saat masih kosong (upload pertama),
         // tidak boleh mengubah / menghapus KTP yang sudah ada. Owner tetap bisa (cabang isOwner di atas).
         && ( !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ktpUrl'])
