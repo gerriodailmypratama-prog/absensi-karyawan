@@ -1007,6 +1007,25 @@ async function openLiburModal(){
   const modal = $('liburModal'); if (!modal) return;
   const cur = userProfile.liburHari;
   const req = Array.isArray(userProfile.liburRequest) ? userProfile.liburRequest : [];
+  // PR-CL94: hari libur yang SUDAH ditetapkan owner sifatnya PERMANEN — ga bisa diusulin
+  // ganti tiap minggu. Yang boleh ngajuin cuma yang belum punya hari libur sama sekali.
+  const terkunci = (cur != null && cur >= 0 && cur <= 6);
+  const form = $('liburForm'), intro = $('liburIntro'), save = $('btnLiburSave'), cancel = $('btnLiburCancel');
+  if (form) form.classList.toggle('hidden', terkunci);
+  if (save) save.classList.toggle('hidden', terkunci);
+  if (cancel) cancel.textContent = terkunci ? 'Tutup' : 'Batal';
+  if (intro) intro.innerHTML = terkunci
+    ? 'Hari libur mingguan kamu sudah ditetapkan dan sifatnya <b>tetap</b>. Kalau ada keperluan khusus, ngomong langsung ke owner ya.'
+    : 'Usul 3 hari sesuai prioritas kamu. Ini <b>usulan</b> &mdash; <b>owner yang nentuin</b> hari libur finalnya, jadi ga langsung jadi ya. Nanti kekabarin.';
+  if (terkunci){
+    const cc0 = $('liburCurrent');
+    if (cc0) cc0.innerHTML = '<div style="background:rgba(255,255,255,.05);border-radius:10px;padding:12px;text-align:center">'
+      + '<div style="font-size:13px;color:#9ca3af">Hari libur mingguan kamu</div>'
+      + '<div style="font-size:24px;font-weight:800;color:#6ee7b7;margin-top:2px">' + LIBUR_HARI[cur] + '</div>'
+      + '<div style="font-size:12px;color:#9ca3af;margin-top:4px">\u{1F512} Sudah tetap &mdash; ditentukan owner</div></div>';
+    modal.classList.remove('hidden');
+    return;
+  }
   // Hitung hari yang slot-nya udah penuh (>= LIBUR_MAX), biar di-exclude dari pilihan.
   _liburFull = [];
   try {
@@ -1047,6 +1066,13 @@ function _liburSyncDropdowns(){
   Array.from(s3.options).forEach(o=>{ o.disabled = !!(o.value && (isFull(o.value) || o.value===v1 || o.value===v2)); });
 }
 async function saveLiburRequest(){
+  const _cur = userProfile.liburHari;
+  // Pengaman kedua: kalau hari libur sudah ditetapkan, usulan ditolak di sini juga.
+  if (_cur != null && _cur >= 0 && _cur <= 6){
+    const e0 = $('liburErr');
+    if (e0){ e0.textContent = 'Hari libur kamu sudah ditetapkan (' + LIBUR_HARI[_cur] + ') dan sifatnya tetap.'; e0.style.display = 'block'; }
+    return;
+  }
   const picks=[$('liburPil1').value, $('liburPil2').value, $('liburPil3').value].filter(v=>v!=='').map(Number);
   const err=$('liburErr');
   if (picks.length < 1){ if(err){err.textContent='Minimal pilih 1 hari.';err.style.display='block';} return; }

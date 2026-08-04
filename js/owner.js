@@ -654,7 +654,9 @@ async function loadKaryawanList(){
           let html='<h3 style="margin:0 0 8px">🌴 Jadwal Libur Mingguan <small class="muted" style="font-weight:400;font-size:12px">— maks '+LIBUR_MAX+'/hari, ga dianggap mangkir</small></h3><div style="display:flex;flex-wrap:wrap;gap:8px">';
           for (let h=0;h<7;h++){ const full=byDay[h].length>=LIBUR_MAX; const col=byDay[h].length===0?'#6b7280':full?'#f97316':'#9ca3af'; html+='<div style="flex:1 1 120px;min-width:110px;padding:8px 10px;border:1px solid #2a2a2a;border-radius:10px;background:#141414"><div style="font-size:12px;font-weight:700;color:'+col+'">'+LIBUR_HARI[h]+' ('+byDay[h].length+'/'+LIBUR_MAX+')</div><div style="font-size:12px;color:#d1d5db;margin-top:2px">'+(byDay[h].length?byDay[h].join(', '):'<span class="muted">—</span>')+'</div></div>'; }
           html+='</div>';
-          const _pend = rows.filter(r=>r.liburRequestPending===true && r.nonaktif!==true);
+          // PR-CL94: hari libur yang sudah ditetapkan sifatnya permanen — usulan dari orang
+          // yang SUDAH punya liburHari diabaikan (sisa data lama), biar banner ga rame palsu.
+          const _pend = rows.filter(r=>r.liburRequestPending===true && r.nonaktif!==true && r.liburHari==null);
           if (_pend.length){
             html += '<div style="margin-top:10px;padding:9px 12px;border:1px solid #a16207;border-radius:10px;background:#3a2f12;font-size:12.5px;color:#fcd34d">📩 <b>'+_pend.length+' usulan libur nunggu di-assign:</b> ' + _pend.map(r=>{ const rq=Array.isArray(r.liburRequest)?r.liburRequest:[]; return (r.namaPanggilan||r.nama||'?')+' ('+rq.map(x=>LIBUR_HARI[Number(x)]).join('›')+')'; }).join(' · ') + ' — buka <b>Edit</b> karyawannya buat nentuin harinya.</div>';
           }
