@@ -69,6 +69,62 @@ let userProfile = { nama:'', namaPanggilan:'', jamKerja:9, foto:'', wajibKode:fa
 // Daftar yang belum diisi (rekening/KTP). Default dianggap kurang semua sampai doc kebaca,
 // biar akun baru yang doc-nya belum kebentuk juga tetap dapat notif lengkapi profil.
 let profilKurang = ['Rekening bank &mdash; tujuan transfer gaji', 'Foto KTP'];
+// ===== PR-CL95: ucapan ulang tahun =====
+// Karyawan cuma boleh baca doc karyawan MILIKNYA SENDIRI (biar data gaji orang lain aman),
+// jadi tanggal lahir teman ga bisa dibaca dari sana. Solusinya: tiap orang menyalin
+// TANGGAL-BULAN lahirnya sendiri (tanpa tahun) ke doc profil-nya — koleksi profil memang
+// boleh dibaca semua yang login. Efek sampingnya bagus: teman tau siapa yang ultah,
+// tapi umurnya tetap ga kelihatan.
+let tanggalLahirSaya = '';
+function __mmdd(d){ return String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+
+async function syncUltahKeProfil(uid){
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(String(tanggalLahirSaya || '').trim());
+  const nm = userProfile.namaPanggilan || userProfile.nama || '';
+  if (!m || !nm) return;
+  const mmdd = m[1] + '-' + m[2];
+  try{
+    const snap = await getDoc(doc(db, 'profil', uid));
+    const cur = snap.exists() ? (snap.data() || {}) : {};
+    if (cur.ultah === mmdd && cur.ultahNama === nm) return; // sudah sama, ga usah nulis ulang
+    await setDoc(doc(db, 'profil', uid), { ultah: mmdd, ultahNama: nm }, { merge: true });
+  }catch(e){ console.warn('sync ultah:', e); }
+}
+
+async function cekUltah(uid){
+  const hari = __mmdd(new Date());
+  // 1) Ulang tahun SAYA -> popup ucapan (sekali sehari, biar ga muncul tiap refresh).
+  if (String(tanggalLahirSaya || '').slice(5) === hari){
+    const key = 'ggUltah_' + new Date().getFullYear() + '-' + hari;
+    let sudah = false;
+    try{ sudah = localStorage.getItem(key) === '1'; }catch(e){}
+    if (!sudah){
+      const el = $('ultahPopNama');
+      if (el) el.textContent = userProfile.namaPanggilan || userProfile.nama || '';
+      const pop = $('ultahPopup');
+      if (pop){
+        pop.classList.remove('hidden');
+        try{ localStorage.setItem(key, '1'); }catch(e){}
+      }
+    }
+  }
+  // 2) Ulang tahun TEMAN -> kartu pengingat di beranda (tampil sepanjang hari itu).
+  try{
+    const snap = await getDocs(collection(db, 'profil'));
+    const teman = [];
+    snap.forEach(d => {
+      if (d.id === uid) return;
+      const p = d.data() || {};
+      if (p.ultah === hari && p.ultahNama) teman.push(p.ultahNama);
+    });
+    if (teman.length){
+      const t = $('ultahTemanTxt');
+      if (t) t.innerHTML = 'Hari ini <span style="color:#fb923c">' + teman.join(', ') + '</span> ulang tahun!';
+      const c = $('ultahTemanCard'); if (c) c.classList.remove('hidden');
+    }
+  }catch(e){ console.warn('cek ultah teman:', e); }
+}
+
 // ===== PR-CL93: KASBON — pengajuan pinjaman gaji dari sisi karyawan =====
 // Tombolnya cuma kebuka kalau owner ngasih akses (kasbonAktif), plafonnya persen dari
 // gaji yang SUDAH terkumpul di periode berjalan. Kalau disetujui owner, jumlahnya masuk
@@ -508,6 +564,7 @@ async function loadUserProfile(uid){
         kasbonPlafon = (u.kasbonPlafonPersen != null ? Number(u.kasbonPlafonPersen) : KASBON_PLAFON_DEFAULT);
         kasbonRequest = u.kasbonRequest || null;
         baseHarian = Number(u.baseHarian) || 0;
+        tanggalLahirSaya = (typeof u.tanggalLahir === 'string' ? u.tanggalLahir.trim() : ''); // PR-CL95
         // Cek kelengkapan profil (rekening + KTP) buat notif "Lengkapi Profil" pas login.
         profilKurang = [];
         if (!String(u.namaBank||'').trim() || !String(u.nomorRekening||'').trim() || !String(u.atasNamaRek||'').trim()) profilKurang.push('Rekening bank &mdash; tujuan transfer gaji');
@@ -637,7 +694,9 @@ onAuthStateChanged(auth, async u => {
   try{ showSlipCard(); }catch(e){}
   // Tombol Kasbon cuma nongol kalau owner udah buka aksesnya buat orang ini.
   try{ if (kasbonAktif && $('btnKasbon')) $('btnKasbon').classList.remove('hidden'); }catch(e){}
+  try{ await syncUltahKeProfil(u.uid); await cekUltah(u.uid); }catch(e){ console.warn('ultah:', e); }
 });
+if ($('btnUltahClose')) $('btnUltahClose').onclick = () => $('ultahPopup').classList.add('hidden');
 if ($('btnKasbon')) $('btnKasbon').onclick = () => { try{ openKasbonModal(); }catch(e){} };
 if ($('btnKasbonClose')) $('btnKasbonClose').onclick = () => $('kasbonModal').classList.add('hidden');
 if ($('btnKasbonSubmit')) $('btnKasbonSubmit').onclick = () => { try{ submitKasbon(); }catch(e){} };
