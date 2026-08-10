@@ -695,6 +695,22 @@ input.kh-time.kh-save-err{background:var(--gg-danger-bg) !important;border-color
 }
 
 /* ---------- 17. PRESENCE BOARD v2 (PR-CL71) ---------- */
+/* Popup ucapan ulang tahun di app karyawan (PR-CL95) */
+.modal-box.ultah-pop{
+  text-align:center;
+  background:
+    radial-gradient(420px 220px at 50% -10%, rgba(249,115,22,.22), transparent 70%),
+    var(--gg-surface);
+  border:1px solid rgba(249,115,22,.35);
+}
+.ultah-pop-cake{font-size:56px;line-height:1;margin:2px 0 4px;animation:ultahPop .5s cubic-bezier(.34,1.56,.64,1)}
+@keyframes ultahPop{0%{transform:scale(.4) rotate(-12deg);opacity:0}100%{transform:scale(1) rotate(0);opacity:1}}
+.ultah-pop-title{font-size:20px;margin-bottom:2px;background:var(--gg-grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.ultah-pop-nama{font-size:26px;font-weight:800;color:var(--gg-text);margin:2px 0 10px;text-transform:capitalize}
+.ultah-pop-msg{font-size:14px;color:var(--gg-text-2);line-height:1.6;margin-bottom:10px}
+.ultah-pop-from{font-size:12px;color:var(--gg-muted);font-style:italic;margin-bottom:4px}
+@media (prefers-reduced-motion:reduce){.ultah-pop-cake{animation:none}}
+
 /* Notice ulang tahun karyawan (PR-CL83) */
 .ultah-box{
   background:linear-gradient(180deg,rgba(249,115,22,.10),rgba(255,255,255,0) 60%),var(--gg-surface);

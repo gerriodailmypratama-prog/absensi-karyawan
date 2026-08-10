@@ -46,6 +46,13 @@
       </div>
   </div>
 
+  <div id="ultahTemanCard" class="card hidden" style="border-left:3px solid #f97316">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:22px">&#x1F382;</span>
+      <div><b id="ultahTemanTxt">-</b><br><small class="muted">Jangan lupa ucapin ya!</small></div>
+    </div>
+  </div>
+
   <div id="slipCard" class="card hidden" style="border-left:3px solid #34d399">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
       <div><b>&#x1F4B0; Gaji Sudah Ditransfer</b><br><small class="muted" id="slipCardSub">-</small></div>
@@ -149,6 +156,22 @@
     <div class="row">
       <button id="btnBreakRangeNoBreak" class="btn btn-ghost" title="Kemarin saya tidak istirahat sama sekali">Tidak Istirahat</button>
       <button id="btnBreakRangeOk" class="btn btn-primary">Simpan & Clock Out</button>
+    </div>
+  </div>
+</div>
+
+<div id="ultahPopup" class="modal hidden">
+  <div class="modal-box ultah-pop">
+    <div class="ultah-pop-cake">&#x1F382;</div>
+    <h3 class="ultah-pop-title">Selamat Ulang Tahun!</h3>
+    <div class="ultah-pop-nama" id="ultahPopNama">-</div>
+    <p class="ultah-pop-msg">
+      Semoga panjang umur, sehat selalu, dan makin sukses ya.<br>
+      Terima kasih buat kerja kerasnya selama ini &#x1F64F;
+    </p>
+    <div class="ultah-pop-from">&mdash; Keluarga besar GoodGems</div>
+    <div class="row">
+      <button id="btnUltahClose" class="btn btn-primary">Makasih!</button>
     </div>
   </div>
 </div>
