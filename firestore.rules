@@ -70,7 +70,10 @@ service cloud.firestore {
     // Koleksi profil (foto profil & nama karyawan)
     match /profil/{uid} {
       allow read: if request.auth != null;
-      allow create, update: if request.auth != null && request.auth.uid == uid;
+      // Owner ikut boleh nulis (PR-CL96): dashboard owner menyalin tanggal-bulan ulang tahun
+      // ke sini supaya ucapan langsung jalan untuk SEMUA orang, tanpa nunggu yang bersangkutan
+      // login duluan. Isinya cuma tanggal-bulan + nama panggilan, tanpa tahun lahir.
+      allow create, update: if request.auth != null && (request.auth.uid == uid || isOwner());
       allow delete: if isOwner();
     }
   }

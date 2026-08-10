@@ -261,11 +261,37 @@ function _ultahInfo(tglLahir, today){
     const selisihHari = Math.round((next - today) / 86400000);
     return { selisihHari, umurNanti: next.getFullYear() - thn, tgl, bln };
 }
+// PR-CL96: salin tanggal-bulan ultah (TANPA tahun) + nama panggilan ke koleksi profil.
+// Koleksi profil boleh dibaca semua yang login, jadi ini yang bikin kartu "hari ini X ulang
+// tahun" muncul di aplikasi SEMUA karyawan — tanpa nunggu orangnya login duluan, dan tanpa
+// membuka data gaji/umur siapa pun. Cuma nulis yang isinya beda, jadi hemat write.
+async function syncUltahKeProfil(karyDocs){
+    let profilMap = new Map();
+    try{
+        const ps = await getDocs(collection(db,'profil'));
+        ps.forEach(d => profilMap.set(d.id, d.data() || {}));
+    }catch(e){ console.warn('baca profil:', e); return; }
+    for (const k of karyDocs){
+        const nm = k.namaPanggilan || k.nama || '';
+        const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(String(k.tanggalLahir || '').trim());
+        const cur = profilMap.get(k.uid) || {};
+        // Yang sudah resign / tanpa tanggal lahir: bersihkan supaya ga ikut nongol di app tim.
+        const mau = (k.nonaktif === true || !m || !nm) ? { ultah: '', ultahNama: '' }
+                                                       : { ultah: m[1] + '-' + m[2], ultahNama: nm };
+        if ((cur.ultah || '') === mau.ultah && (cur.ultahNama || '') === mau.ultahNama) continue;
+        try{ await setDoc(doc(db,'profil',k.uid), mau, { merge: true }); }
+        catch(e){ console.warn('sync ultah ' + nm + ':', e); }
+    }
+}
+
 async function renderUlangTahun(){
     const box = $('ultahBox');
     if (!box) return;
     const today = new Date(); today.setHours(0,0,0,0);
     const snap = await getDocs(collection(db,'karyawan'));
+    const _semua = [];
+    snap.forEach(d => _semua.push(Object.assign({ uid: d.id }, d.data() || {})));
+    try{ await syncUltahKeProfil(_semua); }catch(e){ console.warn('sync ultah:', e); }
     const hariIni = [], segera = [];
     snap.forEach(d => {
         const k = d.data() || {};
