@@ -1172,6 +1172,15 @@ function openDeleteAbsen(id, nama, tipe, tsIso){
 async function renderHadirFloating(rows){
     const total = await getTotalKaryawan();
 
+    // PR-CL97: karyawan yang sudah resign JANGAN muncul di papan kehadiran. Kalau sesi lamanya
+    // ketinggalan kebuka (mis. fian: clock-in tanpa clock-out), dia bisa nongol di "On Working"
+    // dengan timer jalan padahal sudah nggak kerja di sini.
+    const _nonaktifUid = new Set();
+    try{
+        const _ks = await getDocs(collection(db,'karyawan'));
+        _ks.forEach(d => { if ((d.data() || {}).nonaktif === true) _nonaktifUid.add(d.id); });
+    }catch(e){ console.warn('baca nonaktif:', e); }
+
     // group by uid, get all events sorted by time asc
     const byUid = new Map();
     for (const r of rows){
@@ -1200,6 +1209,7 @@ async function renderHadirFloating(rows){
     const _todayMsHF = _today0HF.getTime();
     const _LUPA_CO_MS = 18 * 60 * 60 * 1000; // sesi terbuka > 18 jam = "lupa clock out", bukan sedang kerja (selaras Kehadiran Harian)
     for (const [uid, arr] of byUid){
+        if (_nonaktifUid.has(uid)) continue; // sudah resign -> lewati
         // Satu lintasan: cari event masuk/keluar/istirahat TERAKHIR + apakah clock_in hari ini.
         let lastClockOutMs = 0, lastClockInMs = 0, lastBreakInMs = 0, lastBreakOutMs = 0;
         let hasClockInToday = false;

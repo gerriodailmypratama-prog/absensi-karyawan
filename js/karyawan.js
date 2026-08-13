@@ -76,6 +76,7 @@ let profilKurang = ['Rekening bank &mdash; tujuan transfer gaji', 'Foto KTP'];
 // boleh dibaca semua yang login. Efek sampingnya bagus: teman tau siapa yang ultah,
 // tapi umurnya tetap ga kelihatan.
 let tanggalLahirSaya = '';
+let sayaNonaktif = false;
 function __mmdd(d){ return String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 
 async function syncUltahKeProfil(uid){
@@ -565,6 +566,7 @@ async function loadUserProfile(uid){
         kasbonRequest = u.kasbonRequest || null;
         baseHarian = Number(u.baseHarian) || 0;
         tanggalLahirSaya = (typeof u.tanggalLahir === 'string' ? u.tanggalLahir.trim() : ''); // PR-CL95
+        sayaNonaktif = (u.nonaktif === true); // PR-CL97: sudah resign -> semua tombol absen dikunci
         // Cek kelengkapan profil (rekening + KTP) buat notif "Lengkapi Profil" pas login.
         profilKurang = [];
         if (!String(u.namaBank||'').trim() || !String(u.nomorRekening||'').trim() || !String(u.atasNamaRek||'').trim()) profilKurang.push('Rekening bank &mdash; tujuan transfer gaji');
@@ -1153,6 +1155,12 @@ async function saveLiburRequest(){
 
 async function handleAction(type){
   if (isSubmitting){ return; } // cegah double-tap race condition
+  // PR-CL97: akun yang sudah di-nonaktifkan owner (resign) ga boleh absen lagi. Tanpa ini,
+  // sesi mereka bisa kebuka dan nongol di papan kehadiran owner seolah-olah masih kerja.
+  if (sayaNonaktif){
+    alert('Akun kamu sudah dinonaktifkan, jadi tidak bisa absen lagi. Kalau ini keliru, hubungi owner ya.');
+    return;
+  }
   // (foto profil opsional) tidak lagi memblokir aksi kalau belum upload foto
   const err = validateSequence(type);
   if (err){ alert(err); return; }
