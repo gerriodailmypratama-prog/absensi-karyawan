@@ -77,6 +77,7 @@ let profilKurang = ['Rekening bank &mdash; tujuan transfer gaji', 'Foto KTP'];
 // tapi umurnya tetap ga kelihatan.
 let tanggalLahirSaya = '';
 let sayaNonaktif = false;
+let sayaSpv = false; // PR-CL98: akses halaman Pantau Tim
 function __mmdd(d){ return String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 
 async function syncUltahKeProfil(uid){
@@ -567,6 +568,7 @@ async function loadUserProfile(uid){
         baseHarian = Number(u.baseHarian) || 0;
         tanggalLahirSaya = (typeof u.tanggalLahir === 'string' ? u.tanggalLahir.trim() : ''); // PR-CL95
         sayaNonaktif = (u.nonaktif === true); // PR-CL97: sudah resign -> semua tombol absen dikunci
+        sayaSpv = (u.spvAkses === true);       // PR-CL98: supervisor -> tombol Pantau Tim muncul
         // Cek kelengkapan profil (rekening + KTP) buat notif "Lengkapi Profil" pas login.
         profilKurang = [];
         if (!String(u.namaBank||'').trim() || !String(u.nomorRekening||'').trim() || !String(u.atasNamaRek||'').trim()) profilKurang.push('Rekening bank &mdash; tujuan transfer gaji');
@@ -696,6 +698,7 @@ onAuthStateChanged(auth, async u => {
   try{ showSlipCard(); }catch(e){}
   // Tombol Kasbon cuma nongol kalau owner udah buka aksesnya buat orang ini.
   try{ if (kasbonAktif && $('btnKasbon')) $('btnKasbon').classList.remove('hidden'); }catch(e){}
+  try{ if (sayaSpv && $('btnPantauTim')) $('btnPantauTim').classList.remove('hidden'); }catch(e){}
   try{ await syncUltahKeProfil(u.uid); await cekUltah(u.uid); }catch(e){ console.warn('ultah:', e); }
 });
 if ($('btnUltahClose')) $('btnUltahClose').onclick = () => $('ultahPopup').classList.add('hidden');

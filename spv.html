@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<script>if(location.protocol==='http:'&&location.hostname!=='localhost'){location.replace('https://'+location.host+location.pathname+location.search+location.hash);}</script>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0a0a0a">
+<title>Pantau Tim &mdash; SPV</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand-wrap">
+    <span class="brand-logo">GOODGEMS<span class="brand-logo-accent">SPV</span></span>
+    <small id="spvNama" class="muted"></small>
+  </div>
+  <div>
+    <a href="karyawan.html" class="btn-icon" style="text-decoration:none">&#x2190; Absen Saya</a>
+    <button id="btnLogout" class="btn-icon">Keluar</button>
+  </div>
+</header>
+
+<main class="container wide">
+  <h2 class="page-title" id="spvTitle" title="Klik untuk refresh" style="cursor:pointer;user-select:none">Pantau Tim <span style="font-size:14px;color:#f97316">&#x21BB;</span></h2>
+  <p class="muted" id="spvDate">-</p>
+
+  <div id="spvAlert" class="ultah-box hidden" style="border-left-color:#eab308"></div>
+
+  <div class="pres-grid">
+    <div class="pres-card pres-work">
+      <div class="pres-head"><span class="pres-dot"></span><b>Sedang Kerja</b><span class="pres-count" id="cWork">0</span></div>
+      <div class="pres-sub muted small">jam kerja berjalan &middot; efektif</div>
+      <div id="listWork" class="pres-list"></div>
+    </div>
+    <div class="pres-card pres-break">
+      <div class="pres-head"><span class="pres-dot"></span><b>Sedang Istirahat</b><span class="pres-count" id="cBreak">0</span></div>
+      <div class="pres-sub muted small">istirahat berjalan &middot; total hari ini</div>
+      <div id="listBreak" class="pres-list"></div>
+    </div>
+    <div class="pres-card pres-finish">
+      <div class="pres-head"><span class="pres-dot"></span><b>Sudah Pulang</b><span class="pres-count" id="cDone">0</span></div>
+      <div class="pres-sub muted small">total kerja &middot; efektif</div>
+      <div id="listDone" class="pres-list"></div>
+    </div>
+  </div>
+
+  <p class="muted small center" style="margin-top:14px">Halaman pantau kehadiran &mdash; data gaji, KTP, dan rekening tidak dapat diakses dari sini.<br>Otomatis menyegarkan tiap 60 detik.</p>
+</main>
+
+<script type="module" src="js/spv.js"></script>
+</body>
+</html>

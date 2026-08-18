@@ -20,6 +20,15 @@ service cloud.firestore {
       return ['liburRequest', 'liburRequestAt', 'liburRequestPending', 'updatedAt'];
     }
 
+    // Akses SPV (PR-CL98): supervisor boleh MEMBACA event absensi semua orang supaya bisa
+    // memantau kehadiran realtime. Sengaja TIDAK diberi akses ke koleksi karyawan, jadi
+    // gaji / KTP / rekening tetap tertutup buat dia -- bukan cuma disembunyikan di tampilan.
+    function isSpv() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/karyawan/$(request.auth.uid))
+        && get(/databases/$(database)/documents/karyawan/$(request.auth.uid)).data.get('spvAkses', false) == true;
+    }
+
     // Field PENGAJUAN kasbon yang boleh ditulis karyawan sendiri (PR-CL93).
     // Nilai kasbonAktif / kasbonPlafonPersen / potonganBulan TETAP hanya owner —
     // jadi karyawan tidak bisa membuka aksesnya sendiri atau memindahkan uang.
@@ -30,7 +39,7 @@ service cloud.firestore {
     // Koleksi absensi (clock in/out, OT)
     match /absensi/{docId} {
       allow read: if request.auth != null && (
-        isOwner() || resource.data.uid == request.auth.uid
+        isOwner() || isSpv() || resource.data.uid == request.auth.uid
       );
       // Create: owner boleh bikin event untuk siapa saja; karyawan hanya untuk dirinya sendiri
       allow create: if request.auth != null && (
