@@ -886,6 +886,7 @@ async function openEditKaryawan(uid){
         if ($('editWajibKode')) $('editWajibKode').checked = (d.wajibKodeClockout === true);
         // PR-CL93: akses & plafon kasbon
         if ($('editKasbonAktif')) $('editKasbonAktif').checked = (d.kasbonAktif === true);
+        if ($('editSpvAkses')) $('editSpvAkses').checked = (d.spvAkses === true); // PR-CL98
         if ($('editKasbonPlafon')) $('editKasbonPlafon').value = (d.kasbonPlafonPersen != null ? d.kasbonPlafonPersen : '');
         if ($('editKodeAdmin')) $('editKodeAdmin').checked = (d.kodeAdmin === true);
         if ($('editLiburHari')) {
@@ -964,6 +965,7 @@ $('formEditKaryawan').onsubmit = async (e) => {
     const nonaktif = $('editNonaktif') ? $('editNonaktif').checked : false;
     const wajibKodeClockout = $('editWajibKode') ? $('editWajibKode').checked : false;
     const kasbonAktif = $('editKasbonAktif') ? $('editKasbonAktif').checked : false;
+    const spvAkses = $('editSpvAkses') ? $('editSpvAkses').checked : false; // PR-CL98
     const _kbPl = $('editKasbonPlafon') ? parseInt($('editKasbonPlafon').value, 10) : NaN;
     const kasbonPlafonPersen = (isNaN(_kbPl) ? 50 : Math.max(0, Math.min(100, _kbPl)));
     const kodeAdmin = $('editKodeAdmin') ? $('editKodeAdmin').checked : false;
@@ -995,7 +997,7 @@ $('formEditKaryawan').onsubmit = async (e) => {
             nama: pg.value, namaPanggilan: pg.value, full_name: fullName, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload, tanggalLahir,
             jabatan, statusKaryawan, baseHarian, tunjanganBulanan, multiplierLembur, gpsExempt,
             namaBank, atasNamaRek, nomorRekening, nonaktif, wajibKodeClockout, kodeAdmin,
-            kasbonAktif, kasbonPlafonPersen,
+            kasbonAktif, kasbonPlafonPersen, spvAkses,
             liburHari, liburSetBy: (liburHari != null ? 'owner' : null), liburRequestPending: false,
             updatedAt: serverTimestamp()
         };
