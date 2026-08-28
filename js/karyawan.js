@@ -940,6 +940,49 @@ async function saveAttendance(payload){
 // Dua jalur pembukuan mundur (break isi-pas-checkout, overtime_in backdate)
 // SENGAJA gak lewat sini — itu bukan pergerakan orang detik itu.
 const ABSEN_PING_URL = 'https://ryuwnsxwtwfmndnbysxw.supabase.co/functions/v1/absensi-ping';
+// PR-CL101: total buat feed Telegram — dihitung dari sessionCache (event sesi
+// yang kebuka) + momen sekarang, karena event yang BARUSAN dipencet belum ada
+// di cache (loadActiveSession jalan sesudahnya). Display-only buat owner;
+// gaji tetap dari payroll, jadi meleset semenit dua menit bukan masalah.
+function totalMenitAbsen(tipe){
+  try {
+    var evs = (sessionCache || []).map(function(e){
+      var ms = e && e.ts && (e.ts.toMillis ? e.ts.toMillis() : (e.ts.toDate ? e.ts.toDate().getTime() : NaN));
+      return { tipe: e && e.tipe, ms: ms };
+    }).filter(function(e){ return e.tipe && isFinite(e.ms); }).sort(function(a,b){ return a.ms - b.ms; });
+    var nowMs = Date.now();
+    var ciEv = null;
+    for (var i0=0;i0<evs.length;i0++){ if (evs[i0].tipe==='clock_in'){ ciEv=evs[i0]; break; } }
+    if (!ciEv){ for (var i1=0;i1<evs.length;i1++){ if (evs[i1].tipe==='overtime_in'){ ciEv=evs[i1]; break; } } }
+    if (!ciEv) return null;
+    var ciMs = ciEv.ms;
+    function pasangan(inT, outT, endMs){
+      var tot = 0, open = null;
+      for (var i=0;i<evs.length;i++){
+        var e = evs[i];
+        if (e.tipe===inT) open = e.ms;
+        else if (e.tipe===outT && open!=null){
+          var s = Math.max(open, ciMs), en = Math.min(e.ms, endMs);
+          if (en>s) tot += en-s;
+          open = null;
+        }
+      }
+      // pasangan yang masih kebuka (mis. break_in tanpa break_out di cache,
+      // karena break_out-nya yang barusan dipencet) ditutup pakai endMs.
+      if (open!=null){ var s2=Math.max(open,ciMs); if (endMs>s2) tot += endMs-s2; }
+      return tot;
+    }
+    if (tipe==='break_out'){
+      return Math.round(pasangan('break_in','break_out', nowMs)/60000) || null;
+    }
+    if (tipe==='clock_out' || tipe==='overtime_out'){
+      var ef = (nowMs - ciMs) - pasangan('break_in','break_out', nowMs) - pasangan('pause_in','pause_out', nowMs);
+      return ef>0 ? Math.round(ef/60000) : null;
+    }
+    return null;
+  } catch(e){ return null; }
+}
+
 function pingTelegramAbsen(data){
   try {
     if (!currentUser || typeof currentUser.getIdToken !== 'function') return;
@@ -951,7 +994,8 @@ function pingTelegramAbsen(data){
           tipe: data.tipe,
           nama: (userProfile && (userProfile.namaPanggilan || userProfile.nama)) || '',
           in_radius: data.inRadius !== false,
-          gps_exempt: data.gpsExempt === true
+          gps_exempt: data.gpsExempt === true,
+          total_menit: totalMenitAbsen(data.tipe)
         })
       });
     }).catch(function(){});
