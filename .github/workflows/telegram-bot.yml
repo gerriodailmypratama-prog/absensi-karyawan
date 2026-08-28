@@ -63,4 +63,10 @@ jobs:
             REPORT="daily"
           fi
           echo "Menjalankan laporan: $REPORT"
-          node "$REPORT.js"
+          # Nama laporan != nama file: "gajian" hidup di payroll.js. Mapping ini yang
+          # dulu kelewat — cron tgl 26 mati "Cannot find module gajian.js" dan rekap
+          # gajian GAK PERNAH kekirim (ketahuan 29 Agu 2026).
+          case "$REPORT" in
+            gajian) node payroll.js ;;
+            *)      node daily.js ;;
+          esac
