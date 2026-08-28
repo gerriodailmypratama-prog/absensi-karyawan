@@ -929,6 +929,33 @@ async function saveAttendance(payload){
     data.gpsExempt = true;
   }
   await addDoc(collection(db,'absensi'), data);
+  pingTelegramAbsen(data);
+}
+
+// PR-CL99: pergerakan absen realtime ke grup Telegram 'Absen Goodgems'.
+// Fire-and-forget SESUDAH absennya tersimpan — ping gagal (sinyal jelek,
+// server ngambek) GAK BOLEH ganggu absen. Auth pakai Firebase ID token yang
+// emang udah dipegang app (diverifikasi server ke kunci publik Google) —
+// zero secret baru di client. Aturan pesan/dedup-nya di sisi server.
+// Dua jalur pembukuan mundur (break isi-pas-checkout, overtime_in backdate)
+// SENGAJA gak lewat sini — itu bukan pergerakan orang detik itu.
+const ABSEN_PING_URL = 'https://ryuwnsxwtwfmndnbysxw.supabase.co/functions/v1/absensi-ping';
+function pingTelegramAbsen(data){
+  try {
+    if (!currentUser || typeof currentUser.getIdToken !== 'function') return;
+    currentUser.getIdToken().then(function(tok){
+      return fetch(ABSEN_PING_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+        body: JSON.stringify({
+          tipe: data.tipe,
+          nama: (userProfile && (userProfile.namaPanggilan || userProfile.nama)) || '',
+          in_radius: data.inRadius !== false,
+          gps_exempt: data.gpsExempt === true
+        })
+      });
+    }).catch(function(){});
+  } catch (e) { /* absen udah aman tersimpan; ping cuma bonus */ }
 }
 
 function validateSequence(type){
