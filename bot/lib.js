@@ -55,6 +55,20 @@ function wibDayRange(y, moZeroBased, d) {
   const startUtc = Date.UTC(y, moZeroBased, d, 0, 0, 0) - WIB_MS;
   return { start: new Date(startUtc), end: new Date(startUtc + 24 * 3600 * 1000) };
 }
+// Jendela "hari kerja" = [cutoff 04:00 WIB, 04:00 WIB besoknya] — shift malam
+// dan lembur lewat tengah malam (kejadian nyata: pulang 02:28) tetap milik
+// hari yang sama. Balikin jendela yang PALING BARU KELAR, jadi run yang telat
+// berjam-jam (GitHub cron pernah ngaret 9 jam, 27→28 Agu 2026) tetap
+// ngelaporin hari yang bener — bukan "hari pas dia kebetulan jalan".
+function wibShiftWindow(now, cutoffH) {
+  const t = new Date(now.getTime() - cutoffH * 3600 * 1000);
+  const p = wibParts(t);
+  const dayStartUtc = Date.UTC(p.y, p.mo, p.d, 0, 0, 0) - WIB_MS; // 00:00 WIB hari kalender t
+  const start = new Date(dayStartUtc - 24 * 3600 * 1000 + cutoffH * 3600 * 1000); // kemarin 04:00
+  const end   = new Date(dayStartUtc + cutoffH * 3600 * 1000);                    // hari ini 04:00
+  const tanggal = new Date(dayStartUtc - 24 * 3600 * 1000 + 12 * 3600 * 1000);    // tengah hari target (buat label/hari)
+  return { start, end, tanggal };
+}
 const HARI = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 const BULAN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 function wibTanggalPanjang(date) { const p = wibParts(date); return HARI[p.wd] + ' ' + p.d + ' ' + BULAN[p.mo] + ' ' + p.y; }
@@ -243,7 +257,7 @@ async function sendReport(jenis, key, text) {
 
 module.exports = {
   admin, db, secretsReady, readEnv,
-  wibParts, wibHHMM, wibDayKey, wibDayRange, wibTanggalPanjang, wibTanggalPendek, pad2, fmtDur,
+  wibParts, wibHHMM, wibDayKey, wibDayRange, wibShiftWindow, wibTanggalPanjang, wibTanggalPendek, pad2, fmtDur,
   fetchKaryawan, fetchEventsByUid, computeDay,
   tgSend, sendReport
 };

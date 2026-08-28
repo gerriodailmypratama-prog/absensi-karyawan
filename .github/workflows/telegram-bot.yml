@@ -15,7 +15,7 @@ name: Bot Absensi Telegram
 
 on:
   schedule:
-    - cron: '0 14 * * *'   # 14:00 UTC = 21:00 WIB tiap hari  -> laporan harian
+    - cron: '30 22 * * *'  # 22:30 UTC = 05:30 WIB -> rekap HARI KEMARIN penuh (04:00-04:00, lembur malam kehitung; PR-CL100)
     - cron: '0 0 26 * *'   # 00:00 UTC = 07:00 WIB tanggal 26 -> rekap gajian
   workflow_dispatch:
     inputs:
