@@ -1028,7 +1028,8 @@ function renderWorkingNow(rows, karyawanMap){
     empty.textContent = '';
     list.innerHTML = working.map(r => {
         const k = karyawanMap[r.uid] || {};
-        const photo = k.photoURL || '';
+        // Foto profil: absensi nyimpen di koleksi `profil/{uid}.foto`; karyawan.photoURL jadi cadangan.
+        const photo = k.__foto || k.photoURL || '';
         const nama = k.nama || r.nama || r.uid.slice(0,6);
         let tipeLabel = TIPE[r.tipe] || r.tipe;
 let tipeColor = 'badge-green';
@@ -1044,9 +1045,18 @@ else if (r.tipe === 'break_out') { tipeLabel = 'Working'; tipeColor = 'badge-gre
 }
 async function renderWorkingNowWithFetch(rows){
     try {
-        const ksnap = await getDocs(collection(db,'karyawan'));
+        // Koleksi `profil` ditarik sekali (bukan per-orang) lalu ditempel ke map karyawan,
+        // supaya kartu On Working nampilin foto yang sama dengan avatar wall & tabel Karyawan.
+        const [ksnap, psnap] = await Promise.all([
+            getDocs(collection(db,'karyawan')),
+            getDocs(collection(db,'profil')).catch(() => null)
+        ]);
         const map = {};
         ksnap.forEach(d => map[d.id] = d.data());
+        if (psnap) psnap.forEach(d => {
+            const foto = (d.data() || {}).foto;
+            if (foto && map[d.id]) map[d.id].__foto = foto;
+        });
         renderWorkingNow(rows, map);
     } catch(e){ console.warn('renderWorkingNowWithFetch:', e.message); }
 }
