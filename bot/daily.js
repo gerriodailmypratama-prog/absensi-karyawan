@@ -38,7 +38,10 @@ async function main() {
   const byUid = await L.fetchEventsByUid(win.start, win.end);
 
   const hadirRows = [];
-  const telat = [];
+  // Penanda "telat" DIHAPUS (PR-CL104): dulu cuma ngecek MENIT clock-in, jadi
+  // yang masuk 05:59 / 09:59 -- alias datang tepat waktu -- malah dicap telat.
+  // Menilai telat butuh jam shift per karyawan; belum ada datanya, jadi jangan
+  // ditebak-tebak. Aktifkan lagi kalau kolom jam shift sudah terisi.
   const lupaOut = [];
   const presentUids = new Set();
   let totalEfektif = 0;
@@ -56,7 +59,6 @@ async function main() {
       nama: info.nama, ciMs: d.ciMs,
       line: '• ' + info.nama + ' — ' + masuk + '→' + pulang + ' · ' + L.fmtDur(d.efektifMs) + ' efektif'
     });
-    if (d.lateMinute > 15) telat.push(info.nama + ' (' + masuk + ')');
     if (d.stillIn) lupaOut.push(info.nama);
   }
 
@@ -88,7 +90,6 @@ async function main() {
   if (ultah.length) lines.push('🎂 Ulang tahun hari ini: ' + ultah.join(', '));
   lines.push('Hadir: ' + hadirRows.length + ' orang');
   for (const r of hadirRows) lines.push(r.line);
-  if (telat.length) lines.push('⏰ Telat: ' + telat.join(', '));
   if (lupaOut.length) lines.push('📵 Lupa clock-out: ' + lupaOut.join(', '));
   if (liburHariItu.length) lines.push('🌴 Libur: ' + liburHariItu.join(', '));
   if (gaMasuk.length) lines.push('❌ Ga masuk: ' + gaMasuk.join(', '));
