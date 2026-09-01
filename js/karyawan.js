@@ -31,6 +31,8 @@ const BREAK_MAX_MS = 60 * 60 * 1000;
 const SESSION_WINDOW_MS = 48 * 60 * 60 * 1000;
 // Max durasi 1 shift yang wajar (jam masuk -> clock out). Lebih dari ini dianggap lupa Clock Out.
 // 18 jam: cukup untuk lembur panjang yang sah, tapi masih nangkep lupa-clock-out (biasanya 24 jam+).
+// Shift lebih pendek dari ini dianggap ga wajib istirahat (PR-CL105).
+const SHIFT_WAJIB_ISTIRAHAT_MS = 5 * 60 * 60 * 1000;
 const MAX_SHIFT_MS = 18 * 60 * 60 * 1000;
 
 // Helper aman untuk ambil radius office (kompat 'radius' & 'radiusMeters').
@@ -1317,6 +1319,12 @@ async function handleClockOut(){
     return;
   }
   if (!hasInSession('break_in')){
+    // PR-CL105: shift pendek ga wajib istirahat. Sebelum ini shift 1 jam pun dipaksa isi
+    // istirahat 1 jam -- kasus itang 21 Agu: kerja 1j07m malah kepotong jadi 0.34 jam.
+    const _ciS = getFirstInSession('clock_in');
+    const _ciMs = (_ciS && _ciS.ts && _ciS.ts.toDate) ? _ciS.ts.toDate().getTime() : 0;
+    const _spanMs = _ciMs ? (Date.now() - _ciMs) : 0;
+    if (_spanMs > 0 && _spanMs < SHIFT_WAJIB_ISTIRAHAT_MS){ proceedClockOut(); return; }
     openBreakRangeModal();
     return;
   }
@@ -1351,6 +1359,11 @@ const [h,m]=s.split(':');const eh=String((parseInt(h)+1)%24).padStart(2,'0');con
     ed = new Date(sd.getTime() + BREAK_MAX_MS);
     alert('Durasi istirahat dipotong maksimal 1 jam. Selesai jadi: ' + fmtTime(ed));
   }
+  // PR-CL105: istirahat harus DI DALAM sesi kerja. Tanpa ini, "+1 jam" otomatis bisa melewati
+  // jam Clock Out (kasus itang: clock out 09:46 tapi break_out tercatat 10:00).
+  const _nowD = new Date();
+  if (sd >= _nowD){ alert("Jam mulai istirahat tidak boleh melewati jam sekarang."); return; }
+  if (ed > _nowD) ed = _nowD;
   const d = coords ? distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng) : 0;
     const inRad = coords ? withinOfficeRadius(d, coords.acc) : false;
   const namaForSave = userProfile.nama || (currentUser.email||'').split('@')[0];
@@ -1376,8 +1389,8 @@ const [h,m]=s.split(':');const eh=String((parseInt(h)+1)%24).padStart(2,'0');con
   proceedClockOut();
 };
 
-var __bnb=$('#btnBreakRangeNoBreak'); if(__bnb) __bnb.onclick = () => {
-  $('#breakRangeModal').classList.add('hidden');
+var __bnb=$('btnBreakRangeNoBreak'); if(__bnb) __bnb.onclick = () => {
+  $('breakRangeModal').classList.add('hidden');
   window.__noBreak = true;
   proceedClockOut();
 };
