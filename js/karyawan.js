@@ -562,7 +562,17 @@ async function loadUserProfile(uid){
         noShiftBarrier = (u.noShiftBarrier === true); // exempt barrier shift 18 jam (khusus admin nginap, mis. Mila)
         liburHari = (u.liburHari != null ? Number(u.liburHari) : null);
         liburRequest = Array.isArray(u.liburRequest) ? u.liburRequest.map(Number) : null;
-        slipData = u.slipTerakhir || null; // PR-CL91: slip gaji (tayang 24 jam setelah dibayar)
+        // PR-CL107: ambil slip dengan paidAt PALING BARU dari slipBulan (per bulan).
+        // slipTerakhir tetap dibaca sebagai cadangan buat data lama.
+        slipData = (function(){
+          const kandidat = [];
+          const sb = u.slipBulan || {};
+          Object.keys(sb).forEach(m => { if (sb[m]) kandidat.push(sb[m]); });
+          if (u.slipTerakhir) kandidat.push(u.slipTerakhir);
+          const ms = s => (s && s.paidAt && s.paidAt.toMillis) ? s.paidAt.toMillis() : 0;
+          kandidat.sort((a, b) => ms(b) - ms(a));
+          return kandidat[0] || null;
+        })();
         // PR-CL93: akses kasbon — dibuka owner per orang (patokan masa kerja 1 tahun+).
         kasbonAktif = (u.kasbonAktif === true);
         kasbonPlafon = (u.kasbonPlafonPersen != null ? Number(u.kasbonPlafonPersen) : KASBON_PLAFON_DEFAULT);

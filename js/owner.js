@@ -2862,7 +2862,12 @@ async function togglePayStatus(uid){
       uid: uid, yyyymm: yyyymm, status: jadi, nama: nama,
       total: row ? row.total : null, updatedAt: serverTimestamp()
     }, { merge: true });
-    await setDoc(doc(db, 'karyawan', uid), { slipTerakhir: (jadi === 'paid') ? __slipUntukKaryawan(row, yyyymm) : null }, { merge: true });
+    // PR-CL107: slip disimpan PER BULAN. Dulu cuma satu slot (slipTerakhir), jadi menandai
+    // bulan lama bisa menimpa slip bulan baru di aplikasi karyawan.
+    await setDoc(doc(db, 'karyawan', uid), {
+      slipBulan: { [yyyymm]: (jadi === 'paid') ? __slipUntukKaryawan(row, yyyymm) : null },
+      slipTerakhir: (jadi === 'paid') ? __slipUntukKaryawan(row, yyyymm) : null
+    }, { merge: true });
     if (jadi === 'paid') window.__payStatus[uid] = 'paid'; else delete window.__payStatus[uid];
     renderPayrollTable();
   } catch(e){ alert('Gagal simpan status: ' + (e.message || e)); }
@@ -2880,7 +2885,11 @@ async function setPaidStatus(uid, paid){
   if (!__payrollData || !__payrollData.yyyymm) return;
   const yyyymm = __payrollData.yyyymm;
   const row = (__payrollData.rows||[]).find(function(x){ return x.uid === uid; });
-  await setDoc(doc(db, 'karyawan', uid), { bayarBulan: { [yyyymm]: !!paid }, slipTerakhir: paid ? __slipUntukKaryawan(row, yyyymm) : null }, { merge: true });
+  await setDoc(doc(db, 'karyawan', uid), {
+    bayarBulan: { [yyyymm]: !!paid },
+    slipBulan: { [yyyymm]: paid ? __slipUntukKaryawan(row, yyyymm) : null },
+    slipTerakhir: paid ? __slipUntukKaryawan(row, yyyymm) : null
+  }, { merge: true });
   if (paid) window.__payStatus[uid] = 'paid'; else delete window.__payStatus[uid];
   renderPayrollTable();
 }
