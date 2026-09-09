@@ -584,7 +584,7 @@ async function loadUserProfile(uid){
         // Cek kelengkapan profil (rekening + KTP) buat notif "Lengkapi Profil" pas login.
         profilKurang = [];
         if (!String(u.namaBank||'').trim() || !String(u.nomorRekening||'').trim() || !String(u.atasNamaRek||'').trim()) profilKurang.push('Rekening bank &mdash; tujuan transfer gaji');
-        if (!String(u.ktpUrl||'').trim()) profilKurang.push('Foto KTP');
+        if (!String(u.ktpUrl||'').trim()) profilKurang.push('Foto KTP &mdash; arsip kepegawaian');
       }
       // === Backfill identitas: doc karyawan tanpa nama/email (mis. doc lama kehapus lalu login lagi,
       // atau write lain bikin doc minim) diisi ulang dari akun Auth biar tidak blank di daftar owner. ===
@@ -613,7 +613,21 @@ async function loadUserProfile(uid){
     }catch(e){ console.warn('profil load err:', e); }
     userProfile = { nama, namaPanggilan, jamKerja, foto, gpsExempt, wajibKode, kodeAdmin, noShiftBarrier, liburHari, liburRequest };
     initAdminKodeCard();
-    // (foto profil opsional) auto-popup wajib upload dihapus
+
+    // Foto profil ikut daftar "Profil Belum Lengkap" (PR-CL108).
+    //
+    // Sengaja MENGINGATKAN, bukan memblokir. Versi lama (dicabut Juni 2026,
+    // commit 3dd43cc) menghadang Clock In dengan modal tanpa tombol tutup —
+    // siapa pun yang uploadnya gagal jadi tidak bisa absen sama sekali.
+    // Kehadiran jangan pernah disandera urusan kelengkapan data.
+    //
+    // Ditaruh di sini, bukan di blok profilKurang bersama rekening & KTP,
+    // karena nilai foto baru selesai dibaca dari koleksi 'profil' beberapa baris
+    // di atas — di blok itu nilainya masih kosong.
+    if (!String(foto || '').trim()) {
+      profilKurang.push('Foto profil &mdash; biar wajahmu kelihatan di papan kehadiran');
+    }
+
     if (foto){
       $('avatarImg').src = foto;
       $('avatarImg').style.display = 'block';
@@ -1460,7 +1474,7 @@ $('avatarInput').onchange = async (ev) => {
     $('avatarImg').src = url;
     $('avatarImg').style.display = 'block';
     $('avatarPlaceholder').style.display = 'none';
-    $('mandatoryAvatarModal').classList.add('hidden');
+    // (modal wajib lama sudah dihapus — lihat catatan PR-CL105)
   }catch(e){
     alert('Gagal simpan foto: ' + e.message);
   }
@@ -1499,18 +1513,10 @@ setInterval(refreshAbsenState, 30000);
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshAbsenState(); });
 window.addEventListener('focus', refreshAbsenState);
 
-function showMandatoryAvatarModal(){
-  try{
-    const m = $('mandatoryAvatarModal');
-    if (m) m.classList.remove('hidden');
-  }catch(e){}
-}
-(function(){
-  try{
-    const b = document.getElementById('btnUploadAvatarNow');
-    if (b) b.onclick = ()=>{ try{ $('avatarInput').click(); }catch(e){} };
-  }catch(e){}
-})();
+// CATATAN: showMandatoryAvatarModal() DIHAPUS di PR-CL108. Itu sisa versi
+// lama yang menghadang Clock In dengan modal tanpa jalan keluar. Sudah tidak
+// dipanggil sejak commit 3dd43cc, dan sekarang digantikan daftar "Profil Belum
+// Lengkap" yang mengingatkan tanpa menyandera absen.
 
 
 // ===== Auto-Overtime logic (ditambah lewat PR) =====
