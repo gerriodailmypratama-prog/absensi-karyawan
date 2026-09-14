@@ -165,6 +165,38 @@ export function nomorWa(mentah) {
   return p;
 }
 
+// ================================================================= LIBUR
+export const LIBUR_HARI = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+export const LIBUR_MAX = 3;         // maksimal usulan hari libur yang boleh dipilih
+
+// ================================================================ KASBON
+export const KASBON_PLAFON_DEFAULT = 50;   // persen maksimal dari gaji berjalan
+
+// ====================================================== PERIODE PAYROLL
+// Gaji dihitung per periode yang tutup buku tanggal 25, bukan per tanggal 1.
+// CATATAN: angka 25 ini disalin dari GoodGems. Tanggal tutup buku Kopikiri
+// WAJIB dikonfirmasi ke klien sebelum payroll dipakai beneran — kalau beda,
+// cukup ganti PR_CUTOFF_DAY di bawah.
+export const PR_CUTOFF_DAY = 25;
+
+export function periodePayroll(yyyymm) {
+  const [y, m] = String(yyyymm).split('-').map(Number);
+  const cut = PR_CUTOFF_DAY;
+  const start = new Date(y, m - 2, cut + 1, 0, 0, 0, 0);
+  const end   = new Date(y, m - 1, cut, 23, 59, 59, 999);
+  const t = d => d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+  return { yyyymm, start, end, label: t(start) + ' – ' + t(end) + ' ' + end.getFullYear() };
+}
+
+// Periode yang SEDANG berjalan (yang bakal dibayar bulan depan).
+// Lewat tanggal tutup buku = sudah masuk periode bulan berikutnya.
+export function periodeBerjalan(now) {
+  const d = now || new Date();
+  let y = d.getFullYear(), m = d.getMonth() + 1;
+  if (d.getDate() > PR_CUTOFF_DAY) { m += 1; if (m > 12) { m = 1; y += 1; } }
+  return periodePayroll(y + '-' + String(m).padStart(2, '0'));
+}
+
 // ============================================================ PESAN ERROR
 // Supabase memberi pesan dalam bahasa Inggris teknis. Staf non-teknis butuh
 // kalimat yang bisa mereka tindak lanjuti sendiri.
