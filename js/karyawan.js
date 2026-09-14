@@ -71,6 +71,9 @@ let userProfile = { nama:'', namaPanggilan:'', jamKerja:9, foto:'', wajibKode:fa
 // Daftar yang belum diisi (rekening/KTP). Default dianggap kurang semua sampai doc kebaca,
 // biar akun baru yang doc-nya belum kebentuk juga tetap dapat notif lengkapi profil.
 let profilKurang = ['Rekening bank &mdash; tujuan transfer gaji', 'Foto KTP'];
+// Umur akun (ms sejak join/dibuat) — dipakai buat eskalasi pengingat foto profil:
+// >= 2 hari belum upload -> warning "foto absen bakal dipakai"; >= 3 hari -> beneran dipakai.
+let sayaJoinMs = 0;
 // ===== PR-CL95: ucapan ulang tahun =====
 // Karyawan cuma boleh baca doc karyawan MILIKNYA SENDIRI (biar data gaji orang lain aman),
 // jadi tanggal lahir teman ga bisa dibaca dari sana. Solusinya: tiap orang menyalin
@@ -585,6 +588,11 @@ async function loadUserProfile(uid){
         profilKurang = [];
         if (!String(u.namaBank||'').trim() || !String(u.nomorRekening||'').trim() || !String(u.atasNamaRek||'').trim()) profilKurang.push('Rekening bank &mdash; tujuan transfer gaji');
         if (!String(u.ktpUrl||'').trim()) profilKurang.push('Foto KTP &mdash; arsip kepegawaian');
+        // Umur akun buat eskalasi pengingat foto profil (pakai createdAt, fallback tanggalJoin).
+        try{
+          const _tj = u.createdAt || u.tanggalJoin;
+          sayaJoinMs = (_tj && _tj.toMillis) ? _tj.toMillis() : (_tj && _tj.toDate ? _tj.toDate().getTime() : 0);
+        }catch(e){ sayaJoinMs = 0; }
       }
       // === Backfill identitas: doc karyawan tanpa nama/email (mis. doc lama kehapus lalu login lagi,
       // atau write lain bikin doc minim) diisi ulang dari akun Auth biar tidak blank di daftar owner. ===
@@ -625,7 +633,13 @@ async function loadUserProfile(uid){
     // karena nilai foto baru selesai dibaca dari koleksi 'profil' beberapa baris
     // di atas — di blok itu nilainya masih kosong.
     if (!String(foto || '').trim()) {
-      profilKurang.push('Foto profil &mdash; biar wajahmu kelihatan di papan kehadiran');
+      // Eskalasi: lewat 2 hari belum upload -> warning tegas: selfie absen bakal dipakai.
+      const _umurHari = sayaJoinMs ? (Date.now() - sayaJoinMs) / 86400000 : 0;
+      if (_umurHari >= 2) {
+        profilKurang.push('Foto profil &mdash; &#9888;&#65039; udah ' + Math.floor(_umurHari) + ' hari belum upload nih! Kalau dibiarin, <b>foto absen kamu otomatis dipakai jadi foto profil</b> &#128248;');
+      } else {
+        profilKurang.push('Foto profil &mdash; biar wajahmu kelihatan di papan kehadiran');
+      }
     }
 
     if (foto){
@@ -897,6 +911,18 @@ $('btnSelfieShoot').onclick = async ()=>{
   try {
     await saveAttendance(Object.assign({ tipe: currentType, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad, fotoSelfie:selfieUrl }, extra));
     await loadActiveSession(currentUser.uid);
+    // Sanksi foto profil: sudah diwarning sejak hari ke-2, masuk hari ke-3 masih belum upload
+    // -> selfie absen barusan otomatis jadi foto profil. Bisa diganti kapan aja lewat menu Profil.
+    try{
+      const _umurHari = sayaJoinMs ? (Date.now() - sayaJoinMs) / 86400000 : 0;
+      if (selfieUrl && !String(userProfile.foto || '').trim() && _umurHari >= 3){
+        await setDoc(doc(db,'profil', currentUser.uid), { foto: selfieUrl, fotoDariAbsen: true, nama: userProfile.nama || '' }, { merge:true });
+        userProfile.foto = selfieUrl;
+        const _ai = $('avatarImg'); if (_ai){ _ai.src = selfieUrl; _ai.style.display = 'block'; }
+        const _ap = $('avatarPlaceholder'); if (_ap) _ap.style.display = 'none';
+        setTimeout(function(){ alert('\u{1F4F8} Karena belum upload foto profil, foto absen barusan otomatis jadi foto profil kamu ya!\n\nKurang kece? Upload foto pilihanmu sendiri di menu Profil \u{1F60E}'); }, 400);
+      }
+    }catch(e){ console.warn('auto foto profil dari absen gagal:', e); }
   } catch(e){
     alert('Gagal menyimpan absen: ' + (e.message||'unknown') + '. Coba lagi.');
   } finally {
