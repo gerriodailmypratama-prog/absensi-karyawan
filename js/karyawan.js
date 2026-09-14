@@ -1,8 +1,29 @@
-import { auth, db, storage, OWNER_EMAILS, OFFICE_LOCATION, kodeClockout, KODE_SLOT_MS, LIBUR_HARI, LIBUR_MAX, periodeBerjalan, KASBON_PLAFON_DEFAULT } from './firebase-config.js';
-import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, addDoc, doc, query, where, orderBy, getDocs, getDoc, setDoc, Timestamp, serverTimestamp }
-    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { ref, uploadBytes, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+// ============================================================================
+// Halaman karyawan — versi Supabase.
+//
+// Ini PINDAHAN, bukan perancangan ulang. Alur, urutan konfirmasi, bunyi tombol,
+// dan semua kasus aneh yang sudah ketemu di lapangan (sesi nyangkut, lupa clock
+// out, anti double clock-in, istirahat diisi belakangan pas mau pulang, lembur
+// backdate, GPS ngaco) sengaja dipertahankan apa adanya. Yang diganti cuma
+// mesin di belakangnya: Firestore -> Postgres, Firebase Storage -> Supabase
+// Storage, Firebase Auth -> Supabase Auth.
+//
+// Tiga hal yang WAJIB diingat kalau nanti mengubah file ini:
+//   1. absensi.karyawan_id menunjuk ke karyawan.id, BUKAN ke id akun login.
+//      Ini sumber bug paling gampang. `saya.id` yang betul, bukan user.id.
+//   2. Kolom `ts` sengaja TIDAK pernah dikirim dari HP — biar pakai now() dari
+//      database. Jam HP bisa diubah orang. Dua tempat yang memang harus
+//      backdate (istirahat diisi saat checkout & overtime_in otomatis) diberi
+//      catatan tersendiri di bawah.
+//   3. Kalau query balik kosong padahal datanya ada, curigai RLS dulu sebelum
+//      curiga querynya salah.
+// ============================================================================
+
+import {
+  sb, karyawanSaya, keluar, jarakMeter, dalamRadius,
+  kodeClockout, KODE_SLOT_MS, LIBUR_HARI, LIBUR_MAX,
+  periodeBerjalan, KASBON_PLAFON_DEFAULT, pesanRamah
+} from './supabase-config.js';
 
 const $ = id => document.getElementById(id);
 const TIPE = {
@@ -34,16 +55,31 @@ const SESSION_WINDOW_MS = 48 * 60 * 60 * 1000;
 // Shift lebih pendek dari ini dianggap ga wajib istirahat (PR-CL105).
 const SHIFT_WAJIB_ISTIRAHAT_MS = 5 * 60 * 60 * 1000;
 const MAX_SHIFT_MS = 18 * 60 * 60 * 1000;
+// Selfie dikompres dulu sebelum naik. ~150KB itu titik tengah: mukanya masih
+// jelas kelihatan buat dicek owner, tapi ga bikin staf yang sinyalnya tipis
+// gagal absen gara-gara upload kelamaan.
+const SELFIE_MAX_BYTES = 150 * 1024;
 
-// Helper aman untuk ambil radius office (kompat 'radius' & 'radiusMeters').
-const OFFICE_RADIUS = (OFFICE_LOCATION && (OFFICE_LOCATION.radius || OFFICE_LOCATION.radiusMeters)) || 150;
-const GPS_ACC_MAX_TOLERANCE = 75;
-function withinOfficeRadius(d, acc){
-    const tol = Math.min(Math.max(Number(acc)||0, 0), GPS_ACC_MAX_TOLERANCE);
-    return (d - tol) <= OFFICE_RADIUS;
+// Jembatan kecil: kode di bawah ini aslinya bicara dengan Timestamp Firestore
+// (punya .toDate() & .toMillis()). Daripada mengubah puluhan tempat perhitungan
+// yang sudah teruji, waktu dari Postgres (teks ISO) dibungkus ulang biar
+// bentuknya sama. Logika jam kerja/istirahat/lembur jadi TIDAK tersentuh.
+function stempel(iso){
+  const ms = iso ? new Date(iso).getTime() : NaN;
+  if (!isFinite(ms)) return null;
+  return { toDate(){ return new Date(ms); }, toMillis(){ return ms; } };
+}
+function bungkusEvent(r){
+  return Object.assign({}, r, { ts: stempel(r.ts) });
 }
 
-let currentUser=null, currentType=null, stream=null, coords=null;
+// Kolom event absen yang dipakai halaman ini. Ditulis eksplisit biar ga
+// kebawa kolom baru yang belum tentu perlu.
+const KOLOM_ABSEN = 'id, tipe, ts, lat, lng, akurasi_m, jarak_m, in_radius, gps_exempt, foto_selfie, kode_verif, no_break, auto_cap, otomatis, flag';
+
+let currentUser=null;          // akun login (auth) — dipakai buat email & token
+let saya=null;                 // BARIS TABEL KARYAWAN — ini yang punya .id
+let currentType=null, stream=null, coords=null;
 let cameraReady=false;
 let sessionCache = [];
 // === Fix C: Track last clock_out untuk cegah double-clockin ===
@@ -68,37 +104,25 @@ function updateClockInLock(){
 } // semua event sesi shift aktif, ASC by ts
 let isSubmitting = false; // global lock untuk mencegah double-submit (race condition)
 let userProfile = { nama:'', namaPanggilan:'', jamKerja:9, foto:'', wajibKode:false, kodeAdmin:false, noShiftBarrier:false, liburHari:null, liburRequest:null };
-// Daftar yang belum diisi (rekening/KTP). Default dianggap kurang semua sampai doc kebaca,
-// biar akun baru yang doc-nya belum kebentuk juga tetap dapat notif lengkapi profil.
+// Daftar yang belum diisi (rekening/KTP). Default dianggap kurang semua sampai baris kebaca,
+// biar akun baru yang datanya belum lengkap juga tetap dapat notif lengkapi profil.
 let profilKurang = ['Rekening bank &mdash; tujuan transfer gaji', 'Foto KTP'];
 // Umur akun (ms sejak join/dibuat) — dipakai buat eskalasi pengingat foto profil:
 // >= 2 hari belum upload -> warning "foto absen bakal dipakai"; >= 3 hari -> beneran dipakai.
 let sayaJoinMs = 0;
 // ===== PR-CL95: ucapan ulang tahun =====
-// Karyawan cuma boleh baca doc karyawan MILIKNYA SENDIRI (biar data gaji orang lain aman),
-// jadi tanggal lahir teman ga bisa dibaca dari sana. Solusinya: tiap orang menyalin
-// TANGGAL-BULAN lahirnya sendiri (tanpa tahun) ke doc profil-nya — koleksi profil memang
-// boleh dibaca semua yang login. Efek sampingnya bagus: teman tau siapa yang ultah,
-// tapi umurnya tetap ga kelihatan.
+// Karyawan cuma boleh baca baris karyawan MILIKNYA SENDIRI (biar data gaji orang
+// lain aman), jadi tanggal lahir teman ga bisa dibaca dari sana. Penggantinya
+// view `karyawan_publik`: isinya cuma nama, foto, dan TANGGAL-BULAN lahir tanpa
+// tahun. Jadi teman tau siapa yang ultah, tapi umurnya tetap ga kelihatan.
+// (Di versi Firebase ini dikerjakan dengan menyalin sendiri ke koleksi `profil`;
+// sekarang penyalinan itu ga perlu lagi — view-nya yang mengurus.)
 let tanggalLahirSaya = '';
 let sayaNonaktif = false;
 let sayaSpv = false; // PR-CL98: akses halaman Pantau Tim
 function __mmdd(d){ return String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 
-async function syncUltahKeProfil(uid){
-  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(String(tanggalLahirSaya || '').trim());
-  const nm = userProfile.namaPanggilan || userProfile.nama || '';
-  if (!m || !nm) return;
-  const mmdd = m[1] + '-' + m[2];
-  try{
-    const snap = await getDoc(doc(db, 'profil', uid));
-    const cur = snap.exists() ? (snap.data() || {}) : {};
-    if (cur.ultah === mmdd && cur.ultahNama === nm) return; // sudah sama, ga usah nulis ulang
-    await setDoc(doc(db, 'profil', uid), { ultah: mmdd, ultahNama: nm }, { merge: true });
-  }catch(e){ console.warn('sync ultah:', e); }
-}
-
-async function cekUltah(uid){
+async function cekUltah(){
   const hari = __mmdd(new Date());
   // 1) Ulang tahun SAYA -> popup ucapan (sekali sehari, biar ga muncul tiap refresh).
   if (String(tanggalLahirSaya || '').slice(5) === hari){
@@ -117,12 +141,12 @@ async function cekUltah(uid){
   }
   // 2) Ulang tahun TEMAN -> kartu pengingat di beranda (tampil sepanjang hari itu).
   try{
-    const snap = await getDocs(collection(db, 'profil'));
+    const { data, error } = await sb.from('karyawan_publik').select('id, nama, ultah_mmdd');
+    if (error) throw error;
     const teman = [];
-    snap.forEach(d => {
-      if (d.id === uid) return;
-      const p = d.data() || {};
-      if (p.ultah === hari && p.ultahNama) teman.push(p.ultahNama);
+    (data || []).forEach(p => {
+      if (saya && p.id === saya.id) return;
+      if (p.ultah_mmdd === hari && p.nama) teman.push(p.nama);
     });
     if (teman.length){
       const t = $('ultahTemanTxt');
@@ -136,34 +160,31 @@ async function cekUltah(uid){
 // Tombolnya cuma kebuka kalau owner ngasih akses (kasbonAktif), plafonnya persen dari
 // gaji yang SUDAH terkumpul di periode berjalan. Kalau disetujui owner, jumlahnya masuk
 // kolom Potongan bulan itu -> kepotong otomatis pas gajian.
+//
+// Semua penjaganya (akses dibuka owner, status wajib 'menunggu', jatah 1x per
+// periode, plafon) sekarang ada DI DATABASE lewat fungsi ajukan_kasbon().
+// Dulu penjaga itu setengah di JavaScript, setengah di firestore.rules — yang
+// di JavaScript gampang dilewati orang yang paham teknis.
 let kasbonAktif = false, kasbonPlafon = KASBON_PLAFON_DEFAULT, kasbonRequest = null, baseHarian = 0;
 function __kbRp(n){ return 'Rp ' + Math.round(n || 0).toLocaleString('id-ID'); }
 
 // Perkiraan gaji terkumpul periode ini: jumlah hari yang ada Clock In x base harian.
 // Sengaja KONSERVATIF (lembur/tunjangan ga dihitung) supaya plafon yang ditawarkan
 // ga pernah lebih besar dari hak mereka. Angka final tetap dihitung owner saat approve.
-async function hitungGajiBerjalan(uid, periode){
-  const qs = await getDocs(query(
-    collection(db, 'absensi'),
-    where('uid', '==', uid),
-    where('ts', '>=', Timestamp.fromDate(periode.start)),
-    where('ts', '<=', Timestamp.fromDate(new Date()))
-  ));
-  const hari = new Set();
-  qs.forEach(d => {
-    const r = d.data();
-    if (r.tipe !== 'clock_in') return;
-    const t = r.ts && r.ts.toDate ? r.ts.toDate() : null;
-    if (t) hari.add(t.getFullYear() + '-' + t.getMonth() + '-' + t.getDate());
+async function hitungGajiBerjalan(periode){
+  const { data, error } = await sb.rpc('gaji_berjalan_saya', {
+    p_periode_mulai: periode.start.toISOString()
   });
-  return { hari: hari.size, gaji: hari.size * (baseHarian || 0) };
+  if (error) throw error;
+  const b = Array.isArray(data) ? data[0] : data;
+  return { hari: (b && b.hari) || 0, gaji: Number((b && b.gaji) || 0) };
 }
 
 // Jatah kasbon: 1x per periode gaji. Yang ngunci cuma pengajuan yang masih MENUNGGU
 // atau yang SUDAH DISETUJUI di periode berjalan — kalau ditolak, masih boleh coba lagi.
 function kasbonTerpakaiBulanIni(yyyymm){
   const r = kasbonRequest;
-  if (!r || r.yyyymm !== yyyymm) return false;
+  if (!r || r.periode !== yyyymm) return false;
   return r.status === 'menunggu' || r.status === 'disetujui';
 }
 function tampilStatusKasbon(yyyymm){
@@ -177,12 +198,12 @@ function tampilStatusKasbon(yyyymm){
     if (txt){ txt.textContent = '⏳ Menunggu persetujuan'; txt.style.color = '#fcd34d'; }
     if (sub) sub.textContent = 'Kamu mengajukan ' + __kbRp(r.jumlah) + '. Tunggu dikonfirmasi ya.';
   } else if (r.status === 'disetujui'){
-    if (txt){ txt.textContent = '✅ Disetujui ' + __kbRp(r.disetujuiJumlah != null ? r.disetujuiJumlah : r.jumlah); txt.style.color = '#86efac'; }
-    if (sub) sub.textContent = 'Otomatis dipotong dari gaji periode ' + (r.periodeLabel || r.yyyymm || '') + '.'
+    if (txt){ txt.textContent = '✅ Disetujui ' + __kbRp(r.disetujui_jumlah != null ? r.disetujui_jumlah : r.jumlah); txt.style.color = '#86efac'; }
+    if (sub) sub.textContent = 'Otomatis dipotong dari gaji periode ' + (r.periode_label || r.periode || '') + '.'
       + (terkunci ? ' Jatah kasbon periode ini sudah terpakai — bisa ajukan lagi periode berikutnya.' : '');
   } else {
     if (txt){ txt.textContent = '❌ Ditolak'; txt.style.color = '#fca5a5'; }
-    if (sub) sub.textContent = r.catatanOwner ? ('Catatan: ' + r.catatanOwner) : 'Silakan ajukan lagi kalau memang perlu.';
+    if (sub) sub.textContent = r.catatan_owner ? ('Catatan: ' + r.catatan_owner) : 'Silakan ajukan lagi kalau memang perlu.';
   }
   box.classList.remove('hidden');
   if (form) form.classList.toggle('hidden', terkunci);
@@ -190,7 +211,7 @@ function tampilStatusKasbon(yyyymm){
 }
 
 async function openKasbonModal(){
-  if (!currentUser) return;
+  if (!saya) return;
   const m = $('kasbonModal'); if (!m) return;
   const err = $('kbErr'); if (err) err.classList.add('hidden');
   const periode = periodeBerjalan(new Date());
@@ -201,10 +222,10 @@ async function openKasbonModal(){
   m.classList.remove('hidden');
   if (kasbonTerpakaiBulanIni(periode.yyyymm)) return; // ga usah hitung, formnya lagi dikunci
   try{
-    const h = await hitungGajiBerjalan(currentUser.uid, periode);
+    const h = await hitungGajiBerjalan(periode);
     // Kasbon yang SUDAH disetujui di periode yang sama ikut mengurangi sisa plafon.
-    const sudah = (kasbonRequest && kasbonRequest.status === 'disetujui' && kasbonRequest.yyyymm === periode.yyyymm)
-      ? (kasbonRequest.disetujuiJumlah != null ? kasbonRequest.disetujuiJumlah : kasbonRequest.jumlah) : 0;
+    const sudah = (kasbonRequest && kasbonRequest.status === 'disetujui' && kasbonRequest.periode === periode.yyyymm)
+      ? (kasbonRequest.disetujui_jumlah != null ? kasbonRequest.disetujui_jumlah : kasbonRequest.jumlah) : 0;
     const maks = Math.max(0, Math.floor(h.gaji * (kasbonPlafon / 100)) - sudah);
     window.__kbMaks = maks;
     if ($('kbGaji')) $('kbGaji').textContent = __kbRp(h.gaji) + ' (' + h.hari + ' hari masuk)';
@@ -216,7 +237,7 @@ async function openKasbonModal(){
 }
 
 async function submitKasbon(){
-  if (!currentUser) return;
+  if (!saya) return;
   const err = $('kbErr'), btn = $('btnKasbonSubmit');
   const jumlah = parseInt(($('kbJumlah') || {}).value, 10) || 0;
   const maks = window.__kbMaks || 0;
@@ -227,22 +248,21 @@ async function submitKasbon(){
   if (kasbonTerpakaiBulanIni(periode.yyyymm)){ show('Jatah kasbon periode ini sudah terpakai. Coba lagi periode berikutnya ya.'); return; }
   if (btn){ btn.disabled = true; btn.textContent = 'Mengirim...'; }
   try{
-    const req = {
-      jumlah: jumlah,
-      alasan: (($('kbAlasan') || {}).value || '').trim(),
-      status: 'menunggu',                 // WAJIB 'menunggu' — dikunci juga di firestore.rules
-      yyyymm: periode.yyyymm,
-      periodeLabel: periode.label,
-      at: Date.now()
-    };
-    await setDoc(doc(db, 'karyawan', currentUser.uid), { kasbonRequest: req, kasbonRequestAt: serverTimestamp() }, { merge: true });
-    kasbonRequest = req;
+    const { data, error } = await sb.rpc('ajukan_kasbon', {
+      p_jumlah: jumlah,
+      p_alasan: (($('kbAlasan') || {}).value || '').trim(),
+      p_periode: periode.yyyymm,
+      p_periode_label: periode.label,
+      p_periode_mulai: periode.start.toISOString()
+    });
+    if (error) throw error;
+    kasbonRequest = Array.isArray(data) ? data[0] : data;
     if ($('kbJumlah')) $('kbJumlah').value = '';
     if ($('kbAlasan')) $('kbAlasan').value = '';
     tampilStatusKasbon(periode.yyyymm);
   }catch(e){
     console.error('submit kasbon', e);
-    show('Gagal mengirim: ' + (e && e.message ? e.message : e));
+    show('Gagal mengirim: ' + pesanRamah(e));
   }finally{
     if (btn){ btn.disabled = false; btn.textContent = 'Ajukan'; }
   }
@@ -299,14 +319,22 @@ function showLengkapiProfilNotice(){
   m.classList.remove('hidden');
 }
 
-function distanceMeters(lat1, lng1, lat2, lng2){
-  const R = 6371000;
-  const toRad = d => d * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat/2)**2 +
-            Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
-  return Math.round(2 * R * Math.asin(Math.sqrt(a)));
+// ===== LOKASI SAAT MENCET TOMBOL =====
+// Aturan cabang (sementara, sesuai keputusan owner): kalau karyawan sudah
+// ditempatkan di cabang, radiusnya dicek ke cabang ITU. Kalau belum (kondisi
+// sekarang: data cabang belum ada dari klien), lat/lng TETAP disimpan tapi
+// in_radius dibiarkan NULL = "tidak diketahui". Absen TIDAK PERNAH diblokir —
+// memblokir orang gara-gara GPS ngaco cuma bikin drama, sementara owner tetap
+// butuh tahu. Yang berubah cuma penandanya.
+function lokasiAbsen(){
+  if (!coords) return null;
+  const c = saya && saya.cabang;
+  const dasar = { lat: coords.lat, lng: coords.lng, akurasi_m: (coords.acc != null ? coords.acc : null) };
+  if (!c || c.lat == null || c.lng == null){
+    return Object.assign(dasar, { jarak_m: null, in_radius: null });
+  }
+  const j = jarakMeter(coords.lat, coords.lng, c.lat, c.lng);
+  return Object.assign(dasar, { jarak_m: j, in_radius: dalamRadius(j, coords.acc, c.radius_m) });
 }
 
 function greetingByHour(h){
@@ -549,76 +577,87 @@ setInterval(checkBreakReminder, 30000);
 
 function fmtTime(d){ return d.toLocaleTimeString('id-ID',{hour12:false}); }
 
-async function loadUserProfile(uid){
+// Ember foto sengaja TERTUTUP (selfie & KTP bukan barang yang boleh ketebak
+// URL-nya orang luar), jadi yang disimpan di database itu PATH, bukan URL.
+// Link tayangnya dibikin sebentar-sebentar di sini.
+async function urlTayang(ember, path){
+  const p = String(path || '').trim();
+  if (!p) return '';
+  if (/^(https?:|data:|blob:)/i.test(p)) return p;   // nilai lama / base64 inline
+  try{
+    const { data, error } = await sb.storage.from(ember).createSignedUrl(p, 60 * 60);
+    if (error) throw error;
+    return (data && data.signedUrl) || '';
+  }catch(e){ console.warn('signed url ' + ember + ':', e); return ''; }
+}
+
+async function loadUserProfile(){
   try{
     let nama='', namaPanggilan='', jamKerja=9, foto='', gpsExempt=false, wajibKode=false, kodeAdmin=false, noShiftBarrier=false, liburHari=null, liburRequest=null;
     try{
-      const snap = await getDoc(doc(db, 'karyawan', uid));
-      if (snap.exists()){
-        const u = snap.data();
-        nama = u.nama || '';
-        namaPanggilan = u.namaPanggilan || '';
-        jamKerja = (u.jamKerja!=null) ? parseFloat(u.jamKerja) : 9;
-        gpsExempt = !!u.gpsExempt;
-        wajibKode = (u.wajibKodeClockout === true);   // wajib kode admin saat Clock Out (pilot per orang)
-        kodeAdmin = (u.kodeAdmin === true);           // admin bertugas: kodenya tampil di halaman dia
-        noShiftBarrier = (u.noShiftBarrier === true); // exempt barrier shift 18 jam (khusus admin nginap, mis. Mila)
-        liburHari = (u.liburHari != null ? Number(u.liburHari) : null);
-        liburRequest = Array.isArray(u.liburRequest) ? u.liburRequest.map(Number) : null;
-        // PR-CL107: ambil slip dengan paidAt PALING BARU dari slipBulan (per bulan).
-        // slipTerakhir tetap dibaca sebagai cadangan buat data lama.
-        slipData = (function(){
-          const kandidat = [];
-          const sb = u.slipBulan || {};
-          Object.keys(sb).forEach(m => { if (sb[m]) kandidat.push(sb[m]); });
-          if (u.slipTerakhir) kandidat.push(u.slipTerakhir);
-          const ms = s => (s && s.paidAt && s.paidAt.toMillis) ? s.paidAt.toMillis() : 0;
-          kandidat.sort((a, b) => ms(b) - ms(a));
-          return kandidat[0] || null;
-        })();
+      const u = saya;
+      if (u){
+        // Di skema baru `nama` = nama panggilan (satu kata, yang tampil di layar)
+        // dan `nama_lengkap` = nama di KTP. Di Firestore dulu dua field terpisah
+        // di dokumen yang sama.
+        namaPanggilan = u.nama || '';
+        nama = u.nama_lengkap || u.nama || '';
+        jamKerja = (u.jam_kerja!=null) ? parseFloat(u.jam_kerja) : 9;
+        gpsExempt = !!u.gps_exempt;
+        wajibKode = (u.wajib_kode_clockout === true);  // wajib kode admin saat Clock Out (pilot per orang)
+        kodeAdmin = (u.kode_admin === true);           // admin bertugas: kodenya tampil di halaman dia
+        noShiftBarrier = (u.no_shift_barrier === true);// exempt barrier shift 18 jam (khusus admin nginap, mis. Mila)
+        liburHari = (u.libur_hari != null ? Number(u.libur_hari) : null);
         // PR-CL93: akses kasbon — dibuka owner per orang (patokan masa kerja 1 tahun+).
-        kasbonAktif = (u.kasbonAktif === true);
-        kasbonPlafon = (u.kasbonPlafonPersen != null ? Number(u.kasbonPlafonPersen) : KASBON_PLAFON_DEFAULT);
-        kasbonRequest = u.kasbonRequest || null;
-        baseHarian = Number(u.baseHarian) || 0;
-        tanggalLahirSaya = (typeof u.tanggalLahir === 'string' ? u.tanggalLahir.trim() : ''); // PR-CL95
-        sayaNonaktif = (u.nonaktif === true); // PR-CL97: sudah resign -> semua tombol absen dikunci
-        sayaSpv = (u.spvAkses === true);       // PR-CL98: supervisor -> tombol Pantau Tim muncul
+        kasbonAktif = (u.kasbon_aktif === true);
+        kasbonPlafon = (u.kasbon_plafon_persen != null ? Number(u.kasbon_plafon_persen) : KASBON_PLAFON_DEFAULT);
+        baseHarian = Number(u.base_harian) || 0;
+        tanggalLahirSaya = (typeof u.tanggal_lahir === 'string' ? u.tanggal_lahir.trim() : ''); // PR-CL95
+        sayaNonaktif = (u.nonaktif === true);          // PR-CL97: sudah resign -> semua tombol absen dikunci
+        // PR-CL98: dulu ini saklar lepas `spvAkses`. Sekarang perannya sudah ada
+        // di kolom `peran`, jadi tidak perlu saklar kedua yang bisa beda sendiri.
+        sayaSpv = (u.peran === 'spv' || u.peran === 'owner');
+        foto = await urlTayang('profil', u.foto_url);
         // Cek kelengkapan profil (rekening + KTP) buat notif "Lengkapi Profil" pas login.
         profilKurang = [];
-        if (!String(u.namaBank||'').trim() || !String(u.nomorRekening||'').trim() || !String(u.atasNamaRek||'').trim()) profilKurang.push('Rekening bank &mdash; tujuan transfer gaji');
-        if (!String(u.ktpUrl||'').trim()) profilKurang.push('Foto KTP &mdash; arsip kepegawaian');
-        // Umur akun buat eskalasi pengingat foto profil (pakai createdAt, fallback tanggalJoin).
+        if (!String(u.nama_bank||'').trim() || !String(u.nomor_rekening||'').trim() || !String(u.atas_nama_rek||'').trim()) profilKurang.push('Rekening bank &mdash; tujuan transfer gaji');
+        if (!String(u.ktp_url||'').trim()) profilKurang.push('Foto KTP &mdash; arsip kepegawaian');
+        // Umur akun buat eskalasi pengingat foto profil (pakai created_at, fallback tanggal_masuk).
         try{
-          const _tj = u.createdAt || u.tanggalJoin;
-          sayaJoinMs = (_tj && _tj.toMillis) ? _tj.toMillis() : (_tj && _tj.toDate ? _tj.toDate().getTime() : 0);
+          const _tj = u.created_at || u.tanggal_masuk;
+          sayaJoinMs = _tj ? (new Date(_tj).getTime() || 0) : 0;
         }catch(e){ sayaJoinMs = 0; }
       }
-      // === Backfill identitas: doc karyawan tanpa nama/email (mis. doc lama kehapus lalu login lagi,
-      // atau write lain bikin doc minim) diisi ulang dari akun Auth biar tidak blank di daftar owner. ===
-      try{
-        const _d0 = snap.exists() ? snap.data() : {};
-        const au = auth.currentUser;
-        if (au && au.uid === uid){
-          const fix = {};
-          if (!_d0.email && au.email) fix.email = au.email;
-          if (!nama){
-            const guess = ((au.email||'').split('@')[0] || '').toLowerCase().replace(/[^a-z0-9]/g,'');
-            if (guess){ fix.nama = guess; fix.namaPanggilan = guess; nama = guess; namaPanggilan = namaPanggilan || guess; }
-          }
-          if (!_d0.full_name && au.displayName) fix.full_name = au.displayName;
-          if (Object.keys(fix).length) await setDoc(doc(db,'karyawan',uid), fix, { merge:true });
-        }
-      }catch(e){ console.warn('backfill identitas err:', e); }
     }catch(e){ console.warn('karyawan profile load err:', e); }
+
+    // Usulan libur & pengajuan kasbon: di Firestore dulu nempel sebagai field di
+    // dokumen karyawan; di sini jadi barisnya sendiri. Yang dipakai tetap yang
+    // PALING BARU, jadi perilakunya sama dengan versi lama yang cuma simpan satu.
     try{
-      const snap2 = await getDoc(doc(db, 'profil', uid));
-      if (snap2.exists()){
-        const u2 = snap2.data();
-        if (u2.foto) foto = u2.foto;
-        if (!nama && u2.nama) nama = u2.nama;
-      }
-    }catch(e){ console.warn('profil load err:', e); }
+      const { data } = await sb.from('libur_request')
+        .select('pilihan, status, created_at')
+        .order('created_at', { ascending: false }).limit(1);
+      const r = data && data[0];
+      if (r && Array.isArray(r.pilihan)) liburRequest = r.pilihan.map(Number);
+    }catch(e){ console.warn('libur request load err:', e); }
+
+    try{
+      const { data } = await sb.from('kasbon_request')
+        .select('jumlah, alasan, status, periode, periode_label, disetujui_jumlah, catatan_owner, created_at')
+        .order('created_at', { ascending: false }).limit(1);
+      kasbonRequest = (data && data[0]) || null;
+    }catch(e){ console.warn('kasbon request load err:', e); }
+
+    // PR-CL91: slip gaji — potretnya ditulis owner ke baris payroll periode itu.
+    try{
+      const { data } = await sb.from('payroll_status')
+        .select('slip, dibayar_at, periode')
+        .eq('status', 'dibayar').not('slip', 'is', null)
+        .order('dibayar_at', { ascending: false }).limit(1);
+      const r = data && data[0];
+      slipData = r && r.slip ? Object.assign({}, r.slip, { paidAt: stempel(r.dibayar_at) }) : null;
+    }catch(e){ console.warn('slip load err:', e); }
+
     userProfile = { nama, namaPanggilan, jamKerja, foto, gpsExempt, wajibKode, kodeAdmin, noShiftBarrier, liburHari, liburRequest };
     initAdminKodeCard();
 
@@ -658,16 +697,17 @@ function timeToTodayDate(hhmm){
 }
 
 // ===== LOAD ACTIVE SESSION =====
-async function loadActiveSession(uid){
+async function loadActiveSession(){
   sessionCache = [];
-  const since = new Date(Date.now() - SESSION_WINDOW_MS);
-  const q = query(collection(db,'absensi'),
-    where('uid','==', uid),
-    where('ts','>=', Timestamp.fromDate(since)),
-    orderBy('ts','asc'));
-  const snap = await getDocs(q);
-  const all = [];
-  snap.forEach(d => { const r = d.data(); if (r.ts && r.ts.toDate) all.push(r); });
+  const since = new Date(Date.now() - SESSION_WINDOW_MS).toISOString();
+  const { data, error } = await sb
+    .from('absensi')
+    .select(KOLOM_ABSEN)
+    .eq('karyawan_id', saya.id)
+    .gte('ts', since)
+    .order('ts', { ascending: true });
+  if (error) throw error;
+  const all = (data || []).map(bungkusEvent).filter(r => r.ts);
   let openCiIdx = -1;
   for (let i = all.length - 1; i >= 0; i--){
     if (all[i].tipe === 'clock_in'){
@@ -724,23 +764,41 @@ function updatePauseTilesUI(){
   updateBreakToggleUI();
 }
 
-onAuthStateChanged(auth, async u => {
-  if (!u){ location.replace('index.html'); return; }
-  if (OWNER_EMAILS.includes((u.email||'').toLowerCase())) {
-    location.replace('owner.html'); return;
+// Pengganti onAuthStateChanged. Dijaga sekali jalan: onAuthStateChange bisa
+// menyala beberapa kali (INITIAL_SESSION, TOKEN_REFRESHED) dan kita ga mau
+// halaman disiapkan berkali-kali.
+let __sudahMulai = false;
+sb.auth.onAuthStateChange(async (event, session) => {
+  if (!session){ location.replace('index.html'); return; }
+  if (__sudahMulai) return;
+  __sudahMulai = true;
+  try{ await mulaiHalaman(session); }
+  catch(e){ console.error('mulai halaman', e); alert(pesanRamah(e)); }
+});
+
+async function mulaiHalaman(session){
+  currentUser = session.user;
+  saya = await karyawanSaya({ paksaSegar: true });
+  if (!saya){
+    // Akunnya ada tapi belum didaftarkan sebagai karyawan — jangan kasih layar
+    // kosong, balikin ke halaman depan yang memang menjelaskan langkahnya.
+    location.replace('index.html');
+    return;
   }
-  currentUser = u;
-  await loadUserProfile(u.uid);
-  await loadActiveSession(u.uid);
-  await checkForgottenClockOut(u.uid);
+  if (saya.peran === 'owner'){ location.replace('owner.html'); return; }
+
+  await loadUserProfile();
+  await loadActiveSession();
+  await checkForgottenClockOut();
   refreshLocStatus();
   try{ showLengkapiProfilNotice(); }catch(e){}
   try{ showSlipCard(); }catch(e){}
   // Tombol Kasbon cuma nongol kalau owner udah buka aksesnya buat orang ini.
   try{ if (kasbonAktif && $('btnKasbon')) $('btnKasbon').classList.remove('hidden'); }catch(e){}
   try{ if (sayaSpv && $('btnPantauTim')) $('btnPantauTim').classList.remove('hidden'); }catch(e){}
-  try{ await syncUltahKeProfil(u.uid); await cekUltah(u.uid); }catch(e){ console.warn('ultah:', e); }
-});
+  try{ await cekUltah(); }catch(e){ console.warn('ultah:', e); }
+}
+
 if ($('btnUltahClose')) $('btnUltahClose').onclick = () => $('ultahPopup').classList.add('hidden');
 if ($('btnKasbon')) $('btnKasbon').onclick = () => { try{ openKasbonModal(); }catch(e){} };
 if ($('btnKasbonClose')) $('btnKasbonClose').onclick = () => $('kasbonModal').classList.add('hidden');
@@ -748,7 +806,7 @@ if ($('btnKasbonSubmit')) $('btnKasbonSubmit').onclick = () => { try{ submitKasb
 if ($('btnLihatSlip')) $('btnLihatSlip').onclick = () => { try{ openSlipModal(); }catch(e){} };
 if ($('btnSlipClose')) $('btnSlipClose').onclick = () => $('slipModal').classList.add('hidden');
 
-$('btnLogout').onclick = () => signOut(auth).then(()=>location.replace('index.html')).catch(()=>location.replace('index.html'));
+$('btnLogout').onclick = () => keluar().catch(()=>location.replace('index.html'));
 // Tombol popup "Lengkapi Profil": isi sekarang -> buka modal Profil; nanti -> tutup (muncul lagi di buka berikutnya).
 if ($('btnLpNanti')) $('btnLpNanti').onclick = () => $('lengkapiProfilModal').classList.add('hidden');
 if ($('btnLpIsi')) $('btnLpIsi').onclick = () => {
@@ -847,6 +905,32 @@ function closeSelfie(){
   cameraReady = false;
   $('selfieModal').classList.add('hidden');
 }
+
+// Kompres gambar sampai di bawah batas. Ini kode yang sama persis yang dipakai
+// buat foto KTP di bawah — dipisah biar selfie ikut kebagian.
+async function kompresGambar(sumber, maxBytes){
+  try {
+    const tipe = sumber && sumber.type ? sumber.type : 'image/jpeg';
+    if (!sumber || !/^image\//.test(tipe)) return sumber;
+    if (sumber.size && sumber.size <= maxBytes) return sumber;
+    const dataUrl = await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(sumber); });
+    const img = await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=dataUrl; });
+    let maxDim = 1600;
+    let quality = 0.82;
+    let outBlob = null;
+    for (let attempt=0; attempt<6; attempt++){
+      let w=img.width, h=img.height;
+      if (w>maxDim || h>maxDim){ const s=Math.min(maxDim/w, maxDim/h); w=Math.round(w*s); h=Math.round(h*s); }
+      const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+      const cx=cv.getContext("2d"); cx.fillStyle="#fff"; cx.fillRect(0,0,w,h); cx.drawImage(img,0,0,w,h);
+      outBlob = await new Promise(res=>cv.toBlob(res,"image/jpeg",quality));
+      if (outBlob && outBlob.size <= maxBytes) break;
+      if (quality > 0.5) quality -= 0.15; else maxDim = Math.round(maxDim*0.8);
+    }
+    return outBlob || sumber;
+  } catch(e){ console.warn("Kompres gambar gagal, pakai file asli:", e&&e.message); return sumber; }
+}
+
 $('btnSelfieCancel').onclick = closeSelfie;
 $('btnSelfieShoot').onclick = async ()=>{
     if (!cameraReady) { alert('Kamera lagi disiapkan, tunggu 1-2 detik lalu klik lagi.'); return; }
@@ -879,18 +963,21 @@ $('btnSelfieShoot').onclick = async ()=>{
 
   if (!coords) try{ await refreshLocStatus(); }catch(e){}
   if (!coords){ alert('Lokasi belum tersedia.'); return; }
-  const d = distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
-      const inRad = withinOfficeRadius(d, coords && coords.acc);
+  const lok = lokasiAbsen();
   let selfieUrl = '';
 
   showSavingOverlay('Mengunggah foto & menyimpan absen...');
 
   try{
+    const kecil = await kompresGambar(blob, SELFIE_MAX_BYTES);
     const rand = Math.random().toString(36).slice(2,8);
-    const path = 'selfie/' + currentUser.uid + '/' + Date.now() + '_' + rand + '.jpg';
-    const r = ref(storage, path);
-    await uploadBytes(r, blob);
-    selfieUrl = await getDownloadURL(r);
+    // Map paling depan WAJIB id karyawan — itu yang dipakai aturan Storage
+    // buat mastiin orang cuma bisa naruh & buka foto miliknya sendiri.
+    const path = saya.id + '/' + Date.now() + '_' + rand + '.jpg';
+    const { error } = await sb.storage.from('selfie')
+      .upload(path, kecil, { contentType: 'image/jpeg', upsert: false });
+    if (error) throw error;
+    selfieUrl = path;   // yang disimpan PATH, bukan URL (embernya tertutup)
   }catch(e){
     console.warn('Selfie upload gagal:', e.message);
     hideSavingOverlay();
@@ -900,27 +987,37 @@ $('btnSelfieShoot').onclick = async ()=>{
   }
   const extra = {};
   if (currentType === 'clock_out' && window.__noBreak){
-    extra.noBreak = true;
+    extra.no_break = true;
     window.__noBreak = false;
   }
   if ((currentType === 'clock_out' || currentType === 'overtime_out') && window.__kodeVerif){
-    extra.kodeVerif = window.__kodeVerif; // 'ok' = terverifikasi admin, 'darurat' = tanpa kode (merah di owner)
+    extra.kode_verif = window.__kodeVerif; // 'ok' = terverifikasi admin, 'darurat' = tanpa kode (merah di owner)
     window.__kodeVerif = null;
   }
   isSubmitting = true;
   try {
-    await saveAttendance(Object.assign({ tipe: currentType, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad, fotoSelfie:selfieUrl }, extra));
-    await loadActiveSession(currentUser.uid);
-    // Sanksi foto profil: sudah diwarning sejak hari ke-2, masuk hari ke-3 masih belum upload
+    await saveAttendance(Object.assign({ tipe: currentType, foto_selfie: selfieUrl || null }, lok, extra));
+    await loadActiveSession();
+    // Sanksi foto profil (PR-CL111): sudah diwarning sejak hari ke-2, masuk hari ke-3 masih belum upload
     // -> selfie absen barusan otomatis jadi foto profil. Bisa diganti kapan aja lewat menu Profil.
+    // Selfie & foto profil beda ember, jadi filenya disalin ke ember profil dulu.
     try{
       const _umurHari = sayaJoinMs ? (Date.now() - sayaJoinMs) / 86400000 : 0;
       if (selfieUrl && !String(userProfile.foto || '').trim() && _umurHari >= 3){
-        await setDoc(doc(db,'profil', currentUser.uid), { foto: selfieUrl, fotoDariAbsen: true, nama: userProfile.nama || '' }, { merge:true });
-        userProfile.foto = selfieUrl;
-        const _ai = $('avatarImg'); if (_ai){ _ai.src = selfieUrl; _ai.style.display = 'block'; }
+        const { data: _blob, error: _e1 } = await sb.storage.from(EMBER_SELFIE).download(selfieUrl);
+        if (_e1) throw _e1;
+        const _path = saya.id + '/avatar.jpg';
+        const { error: _e2 } = await sb.storage.from(EMBER_PROFIL).upload(_path, _blob, { contentType: 'image/jpeg', upsert: true });
+        if (_e2) throw _e2;
+        const { error: _e3 } = await sb.rpc('simpan_foto_saya', { p_foto_url: _path });
+        if (_e3) throw _e3;
+        const _tayang = await urlTayang(EMBER_PROFIL, _path);
+        userProfile.foto = _tayang;
+        const _ai = $('avatarImg'); if (_ai){ _ai.src = _tayang; _ai.style.display = 'block'; }
         const _ap = $('avatarPlaceholder'); if (_ap) _ap.style.display = 'none';
-        setTimeout(function(){ alert('\u{1F4F8} Karena belum upload foto profil, foto absen barusan otomatis jadi foto profil kamu ya!\n\nKurang kece? Upload foto pilihanmu sendiri di menu Profil \u{1F60E}'); }, 400);
+        setTimeout(function(){ alert('📸 Karena belum upload foto profil, foto absen barusan otomatis jadi foto profil kamu ya!
+
+Kurang kece? Upload foto pilihanmu sendiri di menu Profil 😎'); }, 400);
       }
     }catch(e){ console.warn('auto foto profil dari absen gagal:', e); }
   } catch(e){
@@ -955,43 +1052,45 @@ function hideSavingOverlay(){
 async function doNoSelfieAction(type, extra={}){
   if (!coords) try{ await refreshLocStatus(); }catch(e){}
   if (!coords){ alert('Lokasi belum tersedia.'); return; }
-  const d = distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng);
-const inRad = withinOfficeRadius(d, coords && coords.acc);
+  const lok = lokasiAbsen();
 isSubmitting = true;
     try {
-    await saveAttendance(Object.assign({ tipe:type, lokasi:{lat:coords.lat,lng:coords.lng}, jarak:d, inRadius:inRad }, extra));
-    await loadActiveSession(currentUser.uid);
+    await saveAttendance(Object.assign({ tipe:type }, lok, extra));
+    await loadActiveSession();
   } finally {
     isSubmitting = false;
   }
 }
 
 async function saveAttendance(payload){
-  const namaForSave = userProfile.nama || (currentUser.email||'').split('@')[0];
+  // Kolom `ts` sengaja TIDAK diisi -> database yang menuliskan now(). Jam HP
+  // bisa diubah orang, jam server tidak.
   const data = Object.assign({
-    uid: currentUser.uid,
-    email: currentUser.email,
-    nama: namaForSave,
-    ts: serverTimestamp()
+    karyawan_id: saya.id,
+    cabang_id: saya.cabang_id || null
   }, payload);
   // GPS dikecualikan (HP lokasi bermasalah): jangan tandai "luar radius",
-  // tapi tandai transparan gpsExempt biar owner tau lokasinya tidak diverifikasi.
-  if (userProfile && userProfile.gpsExempt){
-    data.inRadius = true;
-    data.gpsExempt = true;
+  // tapi tandai transparan gps_exempt biar owner tau lokasinya tidak diverifikasi.
+  if (saya && saya.gps_exempt){
+    data.in_radius = true;
+    data.gps_exempt = true;
   }
-  await addDoc(collection(db,'absensi'), data);
+  const { error } = await sb.from('absensi').insert(data);
+  if (error) throw error;
   pingTelegramAbsen(data);
 }
 
-// PR-CL99: pergerakan absen realtime ke grup Telegram 'Absen Goodgems'.
+// PR-CL99: pergerakan absen realtime ke grup Telegram.
 // Fire-and-forget SESUDAH absennya tersimpan — ping gagal (sinyal jelek,
-// server ngambek) GAK BOLEH ganggu absen. Auth pakai Firebase ID token yang
-// emang udah dipegang app (diverifikasi server ke kunci publik Google) —
-// zero secret baru di client. Aturan pesan/dedup-nya di sisi server.
-// Dua jalur pembukuan mundur (break isi-pas-checkout, overtime_in backdate)
-// SENGAJA gak lewat sini — itu bukan pergerakan orang detik itu.
-const ABSEN_PING_URL = 'https://ryuwnsxwtwfmndnbysxw.supabase.co/functions/v1/absensi-ping';
+// server ngambek) GAK BOLEH ganggu absen. Auth pakai token sesi Supabase yang
+// emang udah dipegang app — zero secret baru di client. Aturan pesan/dedup-nya
+// di sisi server. Dua jalur pembukuan mundur (break isi-pas-checkout,
+// overtime_in backdate) SENGAJA gak lewat sini — itu bukan pergerakan orang
+// detik itu.
+//
+// CATATAN: Edge Function-nya BELUM ada di project Kopikiri. Selama belum
+// dipasang, panggilan ini gagal diam-diam dan absennya tetap aman.
+const ABSEN_PING_URL = 'https://llhctygpgvmionmvtrjn.supabase.co/functions/v1/absensi-ping';
 // PR-CL101: total buat feed Telegram — dihitung dari sessionCache (event sesi
 // yang kebuka) + momen sekarang, karena event yang BARUSAN dipencet belum ada
 // di cache (loadActiveSession jalan sesudahnya). Display-only buat owner;
@@ -1037,16 +1136,17 @@ function totalMenitAbsen(tipe){
 
 function pingTelegramAbsen(data){
   try {
-    if (!currentUser || typeof currentUser.getIdToken !== 'function') return;
-    currentUser.getIdToken().then(function(tok){
+    sb.auth.getSession().then(function(res){
+      var tok = res && res.data && res.data.session && res.data.session.access_token;
+      if (!tok) return;
       return fetch(ABSEN_PING_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
         body: JSON.stringify({
           tipe: data.tipe,
           nama: (userProfile && (userProfile.namaPanggilan || userProfile.nama)) || '',
-          in_radius: data.inRadius !== false,
-          gps_exempt: data.gpsExempt === true,
+          in_radius: data.in_radius !== false,
+          gps_exempt: data.gps_exempt === true,
           total_menit: totalMenitAbsen(data.tipe)
         })
       });
@@ -1214,12 +1314,13 @@ async function openLiburModal(){
     return;
   }
   // Hitung hari yang slot-nya udah penuh (>= LIBUR_MAX), biar di-exclude dari pilihan.
+  // Dihitung DI DATABASE: karyawan ga boleh baca baris karyawan lain (di sana ada
+  // gaji), jadi yang balik cuma angka harinya — bukan siapa-siapanya.
   _liburFull = [];
   try {
-    const snap = await getDocs(collection(db,'karyawan'));
-    const cnt=[0,0,0,0,0,0,0];
-    snap.forEach(s=>{ if (s.id===currentUser.uid) return; const k=s.data()||{}; if (k.nonaktif===true) return; if (k.liburHari!=null){ const h=Number(k.liburHari); if(h>=0&&h<=6) cnt[h]++; } });
-    for (let i=0;i<7;i++) if (cnt[i]>=LIBUR_MAX) _liburFull.push(i);
+    const { data, error } = await sb.rpc('libur_penuh', { p_maks: LIBUR_MAX });
+    if (error) throw error;
+    _liburFull = (data || []).map(Number);
   } catch(e){ console.warn('libur full-count err', e); }
   const cc = $('liburCurrent');
   if (cc){
@@ -1255,6 +1356,7 @@ function _liburSyncDropdowns(){
 async function saveLiburRequest(){
   const _cur = userProfile.liburHari;
   // Pengaman kedua: kalau hari libur sudah ditetapkan, usulan ditolak di sini juga.
+  // (Pengaman ketiga ada di dalam fungsi ajukan_libur() di database.)
   if (_cur != null && _cur >= 0 && _cur <= 6){
     const e0 = $('liburErr');
     if (e0){ e0.textContent = 'Hari libur kamu sudah ditetapkan (' + LIBUR_HARI[_cur] + ') dan sifatnya tetap.'; e0.style.display = 'block'; }
@@ -1267,11 +1369,12 @@ async function saveLiburRequest(){
   const btn=$('btnLiburSave'); btn.disabled=true; btn.textContent='Mengirim...';
   try {
     // Cuma KIRIM USULAN — owner yang nentuin hari final. Ga nge-set liburHari.
-    await setDoc(doc(db,'karyawan',currentUser.uid), { liburRequest: picks, liburRequestAt: serverTimestamp(), liburRequestPending: true, updatedAt: serverTimestamp() }, { merge:true });
+    const { error } = await sb.rpc('ajukan_libur', { p_pilihan: picks });
+    if (error) throw error;
     userProfile.liburRequest = picks;
     $('liburModal').classList.add('hidden');
     alert('✅ Usulan libur kamu udah dikirim ke owner:\n' + picks.map(d=>LIBUR_HARI[d]).join(' › ') + '\n\nOwner yang bakal nentuin hari finalnya. Ditunggu ya.');
-  } catch(e){ console.error('saveLiburReq', e); alert('Gagal mengirim: ' + (e && e.message ? e.message : e)); btn.disabled=false; btn.textContent='Kirim Usulan'; }
+  } catch(e){ console.error('saveLiburReq', e); alert('Gagal mengirim: ' + pesanRamah(e)); btn.disabled=false; btn.textContent='Kirim Usulan'; }
 }
 (function wireLibur(){
   const b=$('btnLibur'); if (b) b.onclick=openLiburModal;
@@ -1356,12 +1459,14 @@ async function handleClockOut(){
     try {
       await saveAttendance({
         tipe:'break_out',
-        lokasi: (bi && bi.lokasi) || null,
-        jarak: (bi && bi.jarak) || 0,
-        inRadius: (bi && bi.inRadius) || false,
-        autoCap: true
+        lat: bi ? bi.lat : null,
+        lng: bi ? bi.lng : null,
+        akurasi_m: bi ? bi.akurasi_m : null,
+        jarak_m: bi ? bi.jarak_m : null,
+        in_radius: bi ? bi.in_radius : null,
+        auto_cap: true
       });
-      await loadActiveSession(currentUser.uid);
+      await loadActiveSession();
     } finally {
       isSubmitting = false;
     }
@@ -1414,28 +1519,22 @@ const [h,m]=s.split(':');const eh=String((parseInt(h)+1)%24).padStart(2,'0');con
   const _nowD = new Date();
   if (sd >= _nowD){ alert("Jam mulai istirahat tidak boleh melewati jam sekarang."); return; }
   if (ed > _nowD) ed = _nowD;
-  const d = coords ? distanceMeters(coords.lat, coords.lng, OFFICE_LOCATION.lat, OFFICE_LOCATION.lng) : 0;
-    const inRad = coords ? withinOfficeRadius(d, coords.acc) : false;
-  const namaForSave = userProfile.nama || (currentUser.email||'').split('@')[0];
-  const base = {
-    uid: currentUser.uid,
-    email: currentUser.email,
-    nama: namaForSave,
-    lokasi: coords ? {lat:coords.lat, lng:coords.lng} : null,
-    jarak: d,
-    inRadius: inRad,
+  const lok = lokasiAbsen() || { lat:null, lng:null, akurasi_m:null, jarak_m:null, in_radius:null };
+  const base = Object.assign({
+    karyawan_id: saya.id,
+    cabang_id: saya.cabang_id || null,
     flag: 'breakFilledAtCheckout'
-  };
-  await addDoc(collection(db,'absensi'), Object.assign({}, base, {
-    tipe:'break_in',
-    ts: Timestamp.fromDate(sd)
-  }));
-  await addDoc(collection(db,'absensi'), Object.assign({}, base, {
-    tipe:'break_out',
-    ts: Timestamp.fromDate(ed)
-  }));
+  }, lok);
+  // SATU-SATUNYA jalur (selain overtime_in otomatis) yang boleh menuliskan `ts`
+  // dari HP: ini memang pembukuan MUNDUR — orangnya mengaku tadi istirahat jam
+  // sekian. Jamnya diketik sendiri, jadi memang tidak bisa pakai now().
+  const { error } = await sb.from('absensi').insert([
+    Object.assign({}, base, { tipe:'break_in',  ts: sd.toISOString() }),
+    Object.assign({}, base, { tipe:'break_out', ts: ed.toISOString() })
+  ]);
+  if (error){ alert('Gagal menyimpan istirahat: ' + pesanRamah(error)); return; }
   $('breakRangeModal').classList.add('hidden');
-  await loadActiveSession(currentUser.uid);
+  await loadActiveSession();
   proceedClockOut();
 };
 
@@ -1446,8 +1545,9 @@ var __bnb=$('btnBreakRangeNoBreak'); if(__bnb) __bnb.onclick = () => {
 };
 
 // ===== SOFT FORGOTTEN CLOCK OUT =====
-async function checkForgottenClockOut(uid){
+async function checkForgottenClockOut(){
   try{
+    const uid = saya.id;
     const ciNow = getFirstInSession('clock_in');
     if (ciNow && ciNow.ts && ciNow.ts.toDate){
       const ageMs = Date.now() - ciNow.ts.toDate().getTime();
@@ -1485,24 +1585,29 @@ $('avatarInput').onchange = async (ev) => {
   const f = ev.target.files[0]; if (!f) return;
   try{
     const dataUrl = await resizeImage(f, 400);
-    let url = dataUrl;
+    let simpan = dataUrl;   // cadangan: base64 inline kalau upload gagal
+    let tampil = dataUrl;
     try{
-      const path = 'profil/' + currentUser.uid + '/avatar.jpg';
-      const r = ref(storage, path);
-      await uploadString(r, dataUrl, 'data_url');
-      url = await getDownloadURL(r);
+      const path = saya.id + '/avatar.jpg';
+      const blob = await (await fetch(dataUrl)).blob();
+      const { error } = await sb.storage.from('profil')
+        .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+      if (error) throw error;
+      simpan = path;
+      tampil = await urlTayang('profil', path) || dataUrl;
       console.log('Avatar uploaded to Storage');
     }catch(storageErr){
       console.warn('Storage upload gagal, pakai base64 inline:', storageErr.message);
     }
-    await setDoc(doc(db,'profil', currentUser.uid), { foto: url, nama: userProfile.nama || '' }, { merge:true });
-    userProfile.foto = url;
-    $('avatarImg').src = url;
+    const { error } = await sb.rpc('simpan_foto_saya', { p_foto_url: simpan });
+    if (error) throw error;
+    userProfile.foto = tampil;
+    $('avatarImg').src = tampil;
     $('avatarImg').style.display = 'block';
     $('avatarPlaceholder').style.display = 'none';
     // (modal wajib lama sudah dihapus — lihat catatan PR-CL105)
   }catch(e){
-    alert('Gagal simpan foto: ' + e.message);
+    alert('Gagal simpan foto: ' + (e && e.message ? e.message : e));
   }
 };
 
@@ -1531,8 +1636,8 @@ function resizeImage(file, maxSize){
 // === Auto-refresh absen state agar sinkron dengan owner side ===
 async function refreshAbsenState(){
   try{
-    if(!currentUser || !currentUser.uid) return;
-    await loadActiveSession(currentUser.uid);
+    if(!saya || !saya.id) return;
+    await loadActiveSession();
   }catch(err){ console.warn('refreshAbsenState error', err); }
 }
 setInterval(refreshAbsenState, 30000);
@@ -1568,19 +1673,21 @@ function totalPauseMillisToday() {
   return total;
 }
 
-// Tulis dokumen overtime_in langsung ke Firestore dengan timestamp backdate
-// (saveAttendance memaksa ts = serverTimestamp(), jadi tidak bisa dipakai untuk backdate).
+// Tulis baris overtime_in langsung ke database dengan timestamp backdate.
+// saveAttendance() sengaja tidak pernah mengirim `ts` (biar pakai now() server),
+// jadi jalur backdate ini memang harus lewat sini. Ditandai `otomatis` supaya
+// owner tahu ini dicatat sistem, bukan dipencet orang.
 async function writeOvertimeInAt(ms) {
   const data = {
+    karyawan_id: saya.id,
+    cabang_id: saya.cabang_id || null,
     tipe: 'overtime_in',
-    ts: Timestamp.fromMillis(ms),
-    uid: currentUser.uid,
-    email: currentUser.email,
-    nama: (userProfile && userProfile.nama) ? userProfile.nama : (currentUser.displayName || ''),
-    auto: true
+    ts: new Date(ms).toISOString(),
+    otomatis: true
   };
-  await addDoc(collection(db, 'absensi'), data);
-  sessionCache.push({ tipe: 'overtime_in', ts: data.ts });
+  const { error } = await sb.from('absensi').insert(data);
+  if (error) throw error;
+  sessionCache.push({ tipe: 'overtime_in', ts: stempel(data.ts) });
 }
 
 // Handler tombol "Clock Out Lembur": catat overtime_in otomatis (kalau belum ada),
@@ -1657,34 +1764,36 @@ async function autoOtThenOut() {
   try{ window.openProfil = openProfil; }catch(e){}
     const modal = el('profilModal'); if(!modal) return;
     pfSelectedKtpFile = null;
-    if(typeof currentUser === 'undefined' || !currentUser){ alert('Sesi belum siap, coba lagi.'); return; }
-    const uid = currentUser.uid;
+    if(!saya){ alert('Sesi belum siap, coba lagi.'); return; }
     try{
-      const snap = await getDoc(doc(db,'karyawan',uid));
-      const d = snap.exists() ? snap.data() : {};
-      if(el('pfNama')) el('pfNama').value = ((typeof userProfile!=='undefined'&&userProfile&&userProfile.nama)?userProfile.nama:'') || d.nama || currentUser.displayName || '';
+      // Baris karyawan diambil ulang biar isinya segar (mis. owner baru saja
+      // membuka kunci rekening sementara halaman ini belum di-refresh).
+      const d = await karyawanSaya({ paksaSegar: true }) || {};
+      saya = d;
+      if(el('pfNama')) el('pfNama').value = ((typeof userProfile!=='undefined'&&userProfile&&userProfile.nama)?userProfile.nama:'') || d.nama_lengkap || d.nama || '';
       // ID Karyawan (read-only). Kalau belum ada, auto-generate sekali biar user langsung lihat ID-nya.
-      // Skema EMP-XXXX (acak, tanpa baca daftar karyawan lain). Owner tetap bisa ganti dari panel.
-      let _idKar = d.idKaryawan || d.nik || '';
+      // Skema EMP-XXXX (acak). Owner tetap bisa ganti dari panel.
+      let _idKar = d.id_karyawan || '';
       if(!_idKar){
-        _idKar = 'EMP-' + Math.random().toString(36).slice(2,6).toUpperCase();
-        try { await setDoc(doc(db,'karyawan',uid), { idKaryawan: _idKar }, { merge:true }); }
-        catch(e){ console.warn('auto-set idKaryawan gagal:', e); }
+        try {
+          const { data, error } = await sb.rpc('pastikan_id_karyawan');
+          if (error) throw error;
+          _idKar = data || '';
+        } catch(e){ console.warn('auto-set idKaryawan gagal:', e); }
       }
       if(el('pfIdKaryawan')) el('pfIdKaryawan').value = _idKar;
-      if(el('pfNamaBank')) el('pfNamaBank').value = d.namaBank || '';
-      if(el('pfNomorRekening')) el('pfNomorRekening').value = d.nomorRekening || '';
-      if(el('pfAtasNamaRek')) el('pfAtasNamaRek').value = d.atasNamaRek || '';
-      pfExistingKtpUrl = d.ktpUrl || '';
+      if(el('pfNamaBank')) el('pfNamaBank').value = d.nama_bank || '';
+      if(el('pfNomorRekening')) el('pfNomorRekening').value = d.nomor_rekening || '';
+      if(el('pfAtasNamaRek')) el('pfAtasNamaRek').value = d.atas_nama_rek || '';
+      pfExistingKtpUrl = d.ktp_url || '';
       const prev = el('pfKtpPreview');
       if(prev){
-        if(d.ktpUrl){ prev.src = d.ktpUrl; prev.classList.remove('hidden'); }
+        const tayang = await urlTayang('profil', d.ktp_url);
+        if(tayang){ prev.src = tayang; prev.classList.remove('hidden'); }
         else { prev.src = ''; prev.classList.add('hidden'); }
       }
       if(el('pfKtpName')) el('pfKtpName').textContent = '';
-      pfExistingKtpUrl = d.ktpUrl || '';
-      const rekLocked = (d.rekeningLocked !== undefined) ? !!d.rekeningLocked : !!d.profilLocked;
-      applyProfilLocks(rekLocked, !!d.ktpUrl);
+      applyProfilLocks(!!d.rekening_locked, !!d.ktp_url);
     }catch(e){ console.error('load profil', e); }
     modal.classList.remove('hidden');
   }
@@ -1693,8 +1802,7 @@ async function autoOtThenOut() {
 
   async function saveProfil(){
     if(window.__pfSaving) return; // cegah dobel-simpan (anti dobel-notif)
-    if(typeof currentUser === 'undefined' || !currentUser){ alert('Sesi belum siap.'); return; }
-    const uid = currentUser.uid;
+    if(!saya){ alert('Sesi belum siap.'); return; }
     const namaBank = (el('pfNamaBank').value||'').trim();
     const nomorRekening = (el('pfNomorRekening').value||'').trim();
     const atasNamaRek = (el('pfAtasNamaRek').value||'').trim();
@@ -1708,51 +1816,35 @@ async function autoOtThenOut() {
     if(saveBtn){ saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan...'; }
     window.__pfSaving = true;
     try{
-      const path = 'profil/' + uid + '/ktp.jpg';
-      const sref = ref(storage, path);
-      // --- Kompres foto KTP biar di bawah 2MB (batas Storage) sebelum upload ---
-      async function __compressKtp(file, maxBytes){
-        try {
-          if (!file || !/^image\//.test(file.type||"")) return file;
-          if (file.size && file.size <= maxBytes) return file;
-          const dataUrl = await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(file); });
-          const img = await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=dataUrl; });
-          let maxDim = 1600;
-          let quality = 0.82;
-          let outBlob = null;
-          for (let attempt=0; attempt<6; attempt++){
-            let w=img.width, h=img.height;
-            if (w>maxDim || h>maxDim){ const s=Math.min(maxDim/w, maxDim/h); w=Math.round(w*s); h=Math.round(h*s); }
-            const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
-            const cx=cv.getContext("2d"); cx.fillStyle="#fff"; cx.fillRect(0,0,w,h); cx.drawImage(img,0,0,w,h);
-            outBlob = await new Promise(res=>cv.toBlob(res,"image/jpeg",quality));
-            if (outBlob && outBlob.size <= maxBytes) break;
-            if (quality > 0.5) quality -= 0.15; else maxDim = Math.round(maxDim*0.8);
-          }
-          if (!outBlob) return file;
-          return new File([outBlob], "ktp.jpg", { type:"image/jpeg" });
-        } catch(e){ console.warn("Kompres KTP gagal, pakai file asli:", e&&e.message); return file; }
-      }
       let ktpUrl = pfExistingKtpUrl;
       let ktpFailed = false;
       if(ktpFile){
         try {
-          const __ktpToUpload = await __compressKtp(ktpFile, 2*1024*1024 - 50*1024);
-          await uploadBytes(sref, __ktpToUpload);
-          ktpUrl = await getDownloadURL(sref);
+          // Kompres foto KTP biar di bawah 2MB (batas ember) sebelum upload.
+          const __ktpToUpload = await kompresGambar(ktpFile, 2*1024*1024 - 50*1024);
+          const path = saya.id + '/ktp.jpg';
+          const { error } = await sb.storage.from('profil')
+            .upload(path, __ktpToUpload, { contentType: 'image/jpeg', upsert: true });
+          if (error) throw error;
+          ktpUrl = path;
         } catch(upErr){ console.error('Upload KTP gagal', upErr); ktpFailed = true; }
       }
-      const __payload = {
-        namaBank, nomorRekening, atasNamaRek,
-        rekeningLocked: true,                     // rekening dikunci lagi tiap habis disimpan (owner buka lagi kalau perlu)
-        profilUpdatedAt: serverTimestamp()
-      };
-      if(ktpUrl) __payload.ktpUrl = ktpUrl;       // kalau rekening-only, ini nilai lama (ga dianggap "berubah" oleh rules)
-      // Profil dianggap LENGKAP & dikunci kalau rekening + KTP sudah ada.
-      if(ktpUrl) __payload.profilLocked = true;
-      await setDoc(doc(db,'karyawan',uid), __payload, { merge: true });
+      // Rekening dikunci lagi tiap habis disimpan (owner buka lagi kalau perlu),
+      // dan KTP cuma nempel kalau sebelumnya masih kosong — dua-duanya dijaga
+      // di dalam fungsi database, bukan di sini.
+      const { error } = await sb.rpc('simpan_rekening_saya', {
+        p_nama_bank: namaBank,
+        p_nomor_rekening: nomorRekening,
+        p_atas_nama_rek: atasNamaRek,
+        p_ktp_url: ktpUrl || null
+      });
+      if (error) throw error;
+      pfExistingKtpUrl = ktpUrl || pfExistingKtpUrl;
       const prev = el('pfKtpPreview');
-      if(prev && ktpUrl){ prev.src = ktpUrl; prev.classList.remove('hidden'); }
+      if(prev && ktpUrl){
+        const tayang = await urlTayang('profil', ktpUrl);
+        if (tayang){ prev.src = tayang; prev.classList.remove('hidden'); }
+      }
       applyProfilLocks(true, !!ktpUrl);
       // Refresh daftar-kurang: rekening baru tersimpan, sisa KTP kalau belum keupload.
       profilKurang = ktpUrl ? [] : ['Foto KTP'];
@@ -1761,7 +1853,7 @@ async function autoOtThenOut() {
         : 'Data profil tersimpan. Terima kasih!');
     }catch(e){
       console.error('save profil', e);
-      alert('Gagal menyimpan: ' + (e && e.message ? e.message : e));
+      alert('Gagal menyimpan: ' + pesanRamah(e));
     }finally{
       window.__pfSaving = false;
       if(saveBtn){ saveBtn.disabled = false; saveBtn.textContent = oldTxt || 'Simpan'; }
@@ -1824,6 +1916,9 @@ async function autoOtThenOut() {
 
 // ===== Fallback wiring tombol profil (tahan banting, anti stale-cache/timing) =====
 // Hanya aktif kalau wiring utama (IIFE initProfilKaryawan) TIDAK jalan, dideteksi via window.openProfil.
+// Jauh lebih pendek dari versi Firebase: semua penjaga (kunci rekening, KTP
+// sekali isi) sekarang ada di dalam fungsi database, jadi jalur cadangan ini
+// tidak bisa lagi kelewatan aturan kayak dulu.
 (function(){
   function gid(id){ return document.getElementById(id); }
   function mainWiringActive(){ return typeof window.openProfil === 'function'; }
@@ -1839,37 +1934,15 @@ async function autoOtThenOut() {
     var prev = gid('pfKtpPreview');
     if (prev) { try { prev.src = URL.createObjectURL(f); prev.classList.remove('hidden'); } catch(e){} }
   }, true);
-  async function compressKtpFallback(file, maxBytes){
-    try {
-      if (!file || !/^image\//.test(file.type)) return file;
-      if (file.size && file.size <= maxBytes) return file;
-      var dataUrl = await new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=rej; r.readAsDataURL(file); });
-      var img = await new Promise(function(res,rej){ var im=new Image(); im.onload=function(){res(im);}; im.onerror=rej; im.src=dataUrl; });
-      var maxDim = 1600, quality = 0.82, outBlob = null;
-      for (var attempt=0; attempt<6; attempt++){
-        var w=img.width, h=img.height;
-        if (w>maxDim || h>maxDim){ var s=Math.min(maxDim/w, maxDim/h); w=Math.round(w*s); h=Math.round(h*s); }
-        var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
-        var cx=cv.getContext('2d'); cx.fillStyle='#fff'; cx.fillRect(0,0,w,h); cx.drawImage(img,0,0,w,h);
-        outBlob = await new Promise(function(res){ cv.toBlob(res,'image/jpeg',quality); });
-        if (outBlob && outBlob.size <= maxBytes) break;
-        if (quality > 0.5) quality -= 0.15; else maxDim = Math.round(maxDim*0.8);
-      }
-      if (!outBlob) return file;
-      return new File([outBlob], 'ktp.jpg', { type:'image/jpeg' });
-    } catch(e){ console.warn('compressKtpFallback gagal, pakai file asli', e); return file; }
-  }
   async function doSaveFallback(){
     if (window.__pfSaving) return;
-    if (typeof currentUser === 'undefined' || !currentUser){ alert('Sesi belum siap, coba lagi'); return; }
-    var uid = currentUser.uid;
+    if (!saya){ alert('Sesi belum siap, coba lagi'); return; }
     var namaBank = ((gid('pfNamaBank')||{}).value||'').trim();
     var nomorRekening = ((gid('pfNomorRekening')||{}).value||'').trim();
     var atasNamaRek = ((gid('pfAtasNamaRek')||{}).value||'').trim();
     if (!namaBank || !nomorRekening || !atasNamaRek){ alert('Lengkapi semua data rekening dulu ya'); return; }
     var ktpFile = window.__pfKtpFile || (gid('pfKtpInput') && gid('pfKtpInput').files && gid('pfKtpInput').files[0]) || null;
-    var existingKtp = '';
-    try { var __s0 = await getDoc(doc(db,'karyawan',uid)); if (__s0.exists()) existingKtp = (__s0.data().ktpUrl)||''; } catch(e){}
+    var existingKtp = (saya && saya.ktp_url) || '';
     if (!ktpFile && !existingKtp){ alert('Upload foto KTP dulu ya'); return; }
     window.__pfSaving = true;
     var saveBtn = gid('pfBtnSave');
@@ -1878,18 +1951,22 @@ async function autoOtThenOut() {
     try {
       var ktpUrl = existingKtp;
       if (ktpFile){
-        var sref = ref(storage, 'profil/' + uid + '/ktp.jpg');
-        var toUpload = await compressKtpFallback(ktpFile, 2*1024*1024 - 50*1024);
-        await uploadBytes(sref, toUpload);
-        ktpUrl = await getDownloadURL(sref);
+        var toUpload = await kompresGambar(ktpFile, 2*1024*1024 - 50*1024);
+        var path = saya.id + '/ktp.jpg';
+        var up = await sb.storage.from('profil').upload(path, toUpload, { contentType:'image/jpeg', upsert:true });
+        if (up.error) throw up.error;
+        ktpUrl = path;
       }
-      var __pl = { namaBank: namaBank, nomorRekening: nomorRekening, atasNamaRek: atasNamaRek, profilUpdatedAt: serverTimestamp() }; if (ktpUrl) __pl.profilLocked = true;
-      if (ktpUrl) __pl.ktpUrl = ktpUrl;
-      await setDoc(doc(db,'karyawan',uid), __pl, { merge: true });
-      var prev = gid('pfKtpPreview'); if (prev){ prev.src = ktpUrl; prev.classList.remove('hidden'); }
+      var res = await sb.rpc('simpan_rekening_saya', {
+        p_nama_bank: namaBank, p_nomor_rekening: nomorRekening,
+        p_atas_nama_rek: atasNamaRek, p_ktp_url: ktpUrl || null
+      });
+      if (res.error) throw res.error;
+      var prev = gid('pfKtpPreview');
+      if (prev && ktpUrl){ var tayang = await urlTayang('profil', ktpUrl); if (tayang) { prev.src = tayang; prev.classList.remove('hidden'); } }
       alert('Data profil tersimpan. Terima kasih!');
       var modal = gid('profilModal'); if (modal) modal.classList.add('hidden');
-    } catch(e){ console.error('doSaveFallback', e); alert('Gagal menyimpan: ' + (e && e.message ? e.message : e)); }
+    } catch(e){ console.error('doSaveFallback', e); alert('Gagal menyimpan: ' + pesanRamah(e)); }
     finally { window.__pfSaving = false; if (saveBtn){ saveBtn.disabled = false; saveBtn.textContent = oldTxt || 'Simpan'; } }
   }
   document.addEventListener('click', function(ev){
