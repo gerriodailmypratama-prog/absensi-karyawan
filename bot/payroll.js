@@ -1,7 +1,10 @@
 /* Rekap periode gajian -> Telegram. Dijadwalkan tiap tanggal 26 pagi WIB.
    Periode: 26 bulan lalu 00:00 WIB s/d 25 bulan ini 23:59 WIB.
    Per karyawan: total HARI hadir + total JAM EFEKTIF, urut terbanyak.
-   TANPA estimasi upah (owner kaliin tarif sendiri). Baca-saja, idempotent. */
+   TANPA estimasi upah (owner kaliin tarif sendiri). Baca-saja, idempotent.
+
+   Versi Kopikiri: sama persis kayak GoodGems, sumber datanya aja yang pindah
+   ke Postgres (Supabase). */
 'use strict';
 const L = require('./lib');
 
@@ -13,7 +16,7 @@ function periodRange(now) {
   const endDisp = new Date(end.getTime() - 1000);        // 25 bulan ini 23:59:59 WIB
   const ep = L.wibParts(endDisp);
   const label = L.wibTanggalPendek(start) + ' – ' + L.wibTanggalPendek(endDisp) + ' ' + ep.y;
-  const key = L.wibDayKey(endDisp);                      // mis 2026-07-25
+  const key = L.wibDayKey(endDisp);                      // mis 2026-08-25
   return { start, end, endDisp, label, key };
 }
 
@@ -26,11 +29,11 @@ async function main() {
   const { start, end, label, key } = periodRange(now);
 
   const kary = await L.fetchKaryawan();
-  const byUid = await L.fetchEventsByUid(start, end);
+  const byKar = await L.fetchEventsByKaryawan(start, end);
 
   const rows = [];
-  for (const [uid, events] of byUid) {
-    const info = kary.get(uid);
+  for (const [karyawanId, events] of byKar) {
+    const info = kary.get(karyawanId);
     if (!info) continue;
     const netMs = Math.max(0, (info.jamKerja - 1)) * 3600000;
 

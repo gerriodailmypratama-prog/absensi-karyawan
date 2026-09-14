@@ -1,19 +1,18 @@
 /* Laporan harian absensi -> Telegram. Dijadwalkan 05:30 WIB (22:30 UTC),
    ngelaporin HARI KERJA YANG BARU KELAR: jendela 04:00 WIB kemarin s/d
-   04:00 WIB tadi pagi (PR-CL100).
+   04:00 WIB tadi pagi.
 
-   Kenapa dirombak dari versi "21:00 WIB ngelaporin hari ini":
-   1. Tim sekarang rutin lembur lewat tengah malam (pulang 23:48, 00:16,
-      01:15, 02:28). Rekap jam 21:00 motong hari sebelum selesai — shift
-      malam kecap "Ga masuk" (kejadian nyata: 26 Agu, mila clock-in 21:36,
-      rekap kekirim 21:31 -> mila "Ga masuk").
-   2. GitHub cron bisa ngaret berjam-jam (27 Agu ngaret 9 jam, jalan 06:15
-      pagi 28 Agu). Versi lama ngelaporin "hari pas dia jalan", jadi yang
-      kekirim rekap subuh isi 5 orang + belasan "Ga masuk" palsu. Sekarang
-      targetnya = jendela yang paling baru KELAR — telat pun tetap
-      ngelaporin hari yang bener.
-   Baca-saja; ga pernah nyentuh flow absen. Idempotent per tanggal WIB
-   (jenis 'harian' — namespace baru biar ga ketabrak dedup 'daily' lama). */
+   Kenapa jamnya begitu (warisan GoodGems, sengaja ga diutak-atik):
+   1. Tim rutin lembur lewat tengah malam (pulang 23:48, 00:16, 01:15, 02:28).
+      Rekap jam 21:00 motong hari sebelum selesai — shift malam kecap
+      "Ga masuk".
+   2. GitHub cron bisa ngaret berjam-jam. Targetnya = jendela yang paling baru
+      KELAR, jadi telat pun tetap ngelaporin hari yang bener.
+
+   Versi Kopikiri: SAMA PERSIS kayak GoodGems, cuma sumber datanya pindah dari
+   Firestore ke Postgres (Supabase). Ga dipecah per cabang — cabang belum
+   dimodelin, nanti dia cuma jadi label + filter.
+   Baca-saja; ga pernah nyentuh flow absen. Idempotent per tanggal WIB. */
 'use strict';
 const L = require('./lib');
 
@@ -21,7 +20,7 @@ const CUTOFF_H = 4; // batas hari kerja: jam 4 pagi WIB (clock-in paling pagi ~0
 
 async function main() {
   if (!L.secretsReady()) {
-    console.warn('Secret belum lengkap (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID / FIREBASE_SERVICE_ACCOUNT). Laporan harian di-skip.');
+    console.warn('Secret belum lengkap (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID / SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY). Laporan harian di-skip.');
     return;
   }
   const now = new Date();
@@ -35,7 +34,7 @@ async function main() {
   const endMs = win.end.getTime();
 
   const kary = await L.fetchKaryawan();
-  const byUid = await L.fetchEventsByUid(win.start, win.end);
+  const byKar = await L.fetchEventsByKaryawan(win.start, win.end);
 
   const hadirRows = [];
   // Penanda "telat" DIHAPUS (PR-CL104): dulu cuma ngecek MENIT clock-in, jadi
@@ -43,15 +42,15 @@ async function main() {
   // Menilai telat butuh jam shift per karyawan; belum ada datanya, jadi jangan
   // ditebak-tebak. Aktifkan lagi kalau kolom jam shift sudah terisi.
   const lupaOut = [];
-  const presentUids = new Set();
+  const presentIds = new Set();
   let totalEfektif = 0;
 
-  for (const [uid, events] of byUid) {
-    const info = kary.get(uid);
-    if (!info) continue; // event tanpa karyawan aktif -> lewati
+  for (const [karyawanId, events] of byKar) {
+    const info = kary.get(karyawanId);
+    if (!info) continue; // event tanpa karyawan (kehapus?) -> lewati
     const d = L.computeDay(events, info.jamKerja, endMs);
     if (!d) continue;
-    presentUids.add(uid);
+    presentIds.add(karyawanId);
     totalEfektif += d.efektifMs;
     const masuk = L.wibHHMM(d.ci);
     const pulang = d.stillIn ? '(ga ada clock-out)' : L.wibHHMM(d.out);
@@ -66,8 +65,8 @@ async function main() {
 
   const gaMasuk = [];
   const liburHariItu = [];
-  for (const [uid, info] of kary) {
-    if (presentUids.has(uid) || info.nonaktif) continue;
+  for (const [karyawanId, info] of kary) {
+    if (presentIds.has(karyawanId) || info.nonaktif) continue;
     if (info.liburHari === p.wd) liburHariItu.push(info.nama); // dijadwalkan libur hari target -> bukan mangkir
     else gaMasuk.push(info.nama);
   }

@@ -1,21 +1,24 @@
 name: Bot Absensi Telegram
 
-# Laporan absensi otomatis ke Telegram. BACA-SAJA dari Firestore — ga pernah
-# nyentuh flow absen karyawan. Kalau kirim gagal, teksnya kesimpen di koleksi
-# telegram_outbox (ga hilang), dan rerun bakal nyoba ulang.
+# Laporan absensi Kopikiri otomatis ke Telegram. BACA-SAJA dari Postgres
+# (Supabase) — ga pernah nyentuh flow absen karyawan. Satu-satunya tabel yang
+# ditulis bot: telegram_outbox (punya dia sendiri). Kalau kirim gagal, teksnya
+# kesimpen di situ (ga hilang), dan rerun bakal nyoba ulang.
 #
-# ON SWITCH: isi 3 secret di
+# ON SWITCH: isi 4 secret di
 #   Settings -> Secrets and variables -> Actions -> New repository secret
-#     TELEGRAM_BOT_TOKEN         token bot BARU khusus absensi (dari @BotFather)
-#     TELEGRAM_CHAT_ID           id grup/chat tujuan
-#     FIREBASE_SERVICE_ACCOUNT   isi FULL JSON service account (Firebase Console
-#                                -> Project settings -> Service accounts ->
-#                                Generate new private key)
+#     TELEGRAM_BOT_TOKEN          token bot BARU khusus absensi (dari @BotFather)
+#     TELEGRAM_CHAT_ID            id grup/chat tujuan (grup biasanya -100...)
+#     SUPABASE_URL                https://<project-ref>.supabase.co
+#     SUPABASE_SERVICE_ROLE_KEY   service_role key (Supabase Dashboard ->
+#                                 Project Settings -> API keys). RAHASIA:
+#                                 dia ngelewatin RLS. Jangan pernah dipakai
+#                                 di browser/HTML, cuma di sini.
 # Sebelum secret diisi, job-nya SKIP diam (ga error) — aman di-merge duluan.
 
 on:
   schedule:
-    - cron: '30 22 * * *'  # 22:30 UTC = 05:30 WIB -> rekap HARI KEMARIN penuh (04:00-04:00, lembur malam kehitung; PR-CL100)
+    - cron: '30 22 * * *'  # 22:30 UTC = 05:30 WIB -> rekap HARI KEMARIN penuh (jendela 04:00-04:00, lembur malam kehitung)
     - cron: '0 0 26 * *'   # 00:00 UTC = 07:00 WIB tanggal 26 -> rekap gajian
   workflow_dispatch:
     inputs:
@@ -24,6 +27,10 @@ on:
         type: choice
         options: [daily, gajian]
         default: daily
+      dry_run:
+        description: 'Cuma cetak pesannya di log, JANGAN kirim ke Telegram'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -51,7 +58,10 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # DRY_RUN=1 -> cetak doang, ga kirim, ga nyentuh outbox.
+          DRY_RUN: ${{ github.event.inputs.dry_run == 'true' && '1' || '' }}
         run: |
           set -euo pipefail
           # Pilih laporan: manual pakai input; cron tgl-26 -> gajian; selain itu -> harian.
@@ -64,8 +74,8 @@ jobs:
           fi
           echo "Menjalankan laporan: $REPORT"
           # Nama laporan != nama file: "gajian" hidup di payroll.js. Mapping ini yang
-          # dulu kelewat — cron tgl 26 mati "Cannot find module gajian.js" dan rekap
-          # gajian GAK PERNAH kekirim (ketahuan 29 Agu 2026).
+          # dulu kelewat di repo asal — cron tgl 26 mati "Cannot find module
+          # gajian.js" dan rekap gajian GAK PERNAH kekirim. Jangan diilangin.
           case "$REPORT" in
             gajian) node payroll.js ;;
             *)      node daily.js ;;
