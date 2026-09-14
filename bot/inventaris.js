@@ -85,7 +85,11 @@ async function main() {
   }
 
   // 5) Firebase Auth: jumlah per penyedia login (tanpa email)
-  const auth = { total: 0, google: 0, password: 0, lain: 0, disabled: 0, tidakAdaDiKaryawan: 0 };
+  const auth = { total: 0, google: 0, password: 0, lain: 0, disabled: 0, tidakAdaDiKaryawan: 0,
+                 aktif_googleSaja: 0, aktif_passwordSaja: 0, aktif_keduanya: 0, aktif_tanpaAkunAuth: 0,
+                 aktif_passwordSaja_loginTerakhir30hari: 0 };
+  const aktifIds = new Set(ks.docs.filter(d => (d.data() || {}).nonaktif !== true).map(d => d.id));
+  const punyaAuth = new Set();
   let token;
   do {
     const r = await admin.auth().listUsers(1000, token);
@@ -97,9 +101,17 @@ async function main() {
       if (!p.includes('google.com') && !p.includes('password')) auth.lain++;
       if (u.disabled) auth.disabled++;
       if (!karyIds.has(u.uid)) auth.tidakAdaDiKaryawan++;
+      if (aktifIds.has(u.uid)) {
+        punyaAuth.add(u.uid);
+        const g = p.includes('google.com'), pw = p.includes('password');
+        if (g && pw) auth.aktif_keduanya++; else if (g) auth.aktif_googleSaja++; else if (pw) auth.aktif_passwordSaja++;
+        const last = Date.parse((u.metadata && u.metadata.lastSignInTime) || '') || 0;
+        if (pw && !g && last && (Date.now() - last) < 30 * 86400000) auth.aktif_passwordSaja_loginTerakhir30hari++;
+      }
     });
     token = r.pageToken;
   } while (token);
+  auth.aktif_tanpaAkunAuth = [...aktifIds].filter(id => !punyaAuth.has(id)).length;
   out.authFirebase = auth;
 
   // 6) Storage: jumlah & ukuran per folder teratas (tanpa nama file)
