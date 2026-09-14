@@ -22,7 +22,8 @@
 import {
   sb, karyawanSaya, keluar, jarakMeter, dalamRadius,
   kodeClockout, KODE_SLOT_MS, LIBUR_HARI, LIBUR_MAX,
-  periodeBerjalan, KASBON_PLAFON_DEFAULT, pesanRamah
+  periodeBerjalan, KASBON_PLAFON_DEFAULT, pesanRamah,
+  EMBER_SELFIE, EMBER_PROFIL, EMBER_KTP
 } from './supabase-config.js';
 
 const $ = id => document.getElementById(id);
@@ -172,9 +173,9 @@ function __kbRp(n){ return 'Rp ' + Math.round(n || 0).toLocaleString('id-ID'); }
 // Sengaja KONSERVATIF (lembur/tunjangan ga dihitung) supaya plafon yang ditawarkan
 // ga pernah lebih besar dari hak mereka. Angka final tetap dihitung owner saat approve.
 async function hitungGajiBerjalan(periode){
-  const { data, error } = await sb.rpc('gaji_berjalan_saya', {
-    p_periode_mulai: periode.start.toISOString()
-  });
+  // Periodenya dihitung database sendiri (absensi.periode_berjalan), sama aturan
+  // dengan periodeBerjalan() di browser.
+  const { data, error } = await sb.rpc('gaji_berjalan_saya');
   if (error) throw error;
   const b = Array.isArray(data) ? data[0] : data;
   return { hari: (b && b.hari) || 0, gaji: Number((b && b.gaji) || 0) };
@@ -250,10 +251,7 @@ async function submitKasbon(){
   try{
     const { data, error } = await sb.rpc('ajukan_kasbon', {
       p_jumlah: jumlah,
-      p_alasan: (($('kbAlasan') || {}).value || '').trim(),
-      p_periode: periode.yyyymm,
-      p_periode_label: periode.label,
-      p_periode_mulai: periode.start.toISOString()
+      p_alasan: (($('kbAlasan') || {}).value || '').trim()
     });
     if (error) throw error;
     kasbonRequest = Array.isArray(data) ? data[0] : data;
@@ -617,7 +615,7 @@ async function loadUserProfile(){
         // PR-CL98: dulu ini saklar lepas `spvAkses`. Sekarang perannya sudah ada
         // di kolom `peran`, jadi tidak perlu saklar kedua yang bisa beda sendiri.
         sayaSpv = (u.peran === 'spv' || u.peran === 'owner');
-        foto = await urlTayang('profil', u.foto_url);
+        foto = await urlTayang(EMBER_PROFIL, u.foto_url);
         // Cek kelengkapan profil (rekening + KTP) buat notif "Lengkapi Profil" pas login.
         profilKurang = [];
         if (!String(u.nama_bank||'').trim() || !String(u.nomor_rekening||'').trim() || !String(u.atas_nama_rek||'').trim()) profilKurang.push('Rekening bank &mdash; tujuan transfer gaji');
@@ -974,7 +972,7 @@ $('btnSelfieShoot').onclick = async ()=>{
     // Map paling depan WAJIB id karyawan — itu yang dipakai aturan Storage
     // buat mastiin orang cuma bisa naruh & buka foto miliknya sendiri.
     const path = saya.id + '/' + Date.now() + '_' + rand + '.jpg';
-    const { error } = await sb.storage.from('selfie')
+    const { error } = await sb.storage.from(EMBER_SELFIE)
       .upload(path, kecil, { contentType: 'image/jpeg', upsert: false });
     if (error) throw error;
     selfieUrl = path;   // yang disimpan PATH, bukan URL (embernya tertutup)
@@ -1015,9 +1013,7 @@ $('btnSelfieShoot').onclick = async ()=>{
         userProfile.foto = _tayang;
         const _ai = $('avatarImg'); if (_ai){ _ai.src = _tayang; _ai.style.display = 'block'; }
         const _ap = $('avatarPlaceholder'); if (_ap) _ap.style.display = 'none';
-        setTimeout(function(){ alert('📸 Karena belum upload foto profil, foto absen barusan otomatis jadi foto profil kamu ya!
-
-Kurang kece? Upload foto pilihanmu sendiri di menu Profil 😎'); }, 400);
+        setTimeout(function(){ alert('\u{1F4F8} Karena belum upload foto profil, foto absen barusan otomatis jadi foto profil kamu ya!\n\nKurang kece? Upload foto pilihanmu sendiri di menu Profil \u{1F60E}'); }, 400);
       }
     }catch(e){ console.warn('auto foto profil dari absen gagal:', e); }
   } catch(e){
@@ -1088,9 +1084,10 @@ async function saveAttendance(payload){
 // overtime_in backdate) SENGAJA gak lewat sini — itu bukan pergerakan orang
 // detik itu.
 //
-// CATATAN: Edge Function-nya BELUM ada di project Kopikiri. Selama belum
-// dipasang, panggilan ini gagal diam-diam dan absennya tetap aman.
-const ABSEN_PING_URL = 'https://llhctygpgvmionmvtrjn.supabase.co/functions/v1/absensi-ping';
+// CATATAN: absensi-ping di project WMS masih memverifikasi token FIREBASE.
+// Sampai fungsinya diport ke token Supabase, panggilan ini ditolak diam-diam
+// dan absennya tetap aman.
+const ABSEN_PING_URL = 'https://ryuwnsxwtwfmndnbysxw.supabase.co/functions/v1/absensi-ping';
 // PR-CL101: total buat feed Telegram — dihitung dari sessionCache (event sesi
 // yang kebuka) + momen sekarang, karena event yang BARUSAN dipencet belum ada
 // di cache (loadActiveSession jalan sesudahnya). Display-only buat owner;
@@ -1585,20 +1582,15 @@ $('avatarInput').onchange = async (ev) => {
   const f = ev.target.files[0]; if (!f) return;
   try{
     const dataUrl = await resizeImage(f, 400);
-    let simpan = dataUrl;   // cadangan: base64 inline kalau upload gagal
-    let tampil = dataUrl;
-    try{
-      const path = saya.id + '/avatar.jpg';
-      const blob = await (await fetch(dataUrl)).blob();
-      const { error } = await sb.storage.from('profil')
-        .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
-      if (error) throw error;
-      simpan = path;
-      tampil = await urlTayang('profil', path) || dataUrl;
-      console.log('Avatar uploaded to Storage');
-    }catch(storageErr){
-      console.warn('Storage upload gagal, pakai base64 inline:', storageErr.message);
-    }
+    // Tanpa cadangan base64: database cuma menerima path file di map milik sendiri,
+    // jadi kalau upload gagal lebih baik bilang gagal daripada nyimpen setengah.
+    const path = saya.id + '/avatar.jpg';
+    const blob = await (await fetch(dataUrl)).blob();
+    const { error: upErr } = await sb.storage.from(EMBER_PROFIL)
+      .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+    if (upErr) throw upErr;
+    const simpan = path;
+    const tampil = await urlTayang(EMBER_PROFIL, path) || dataUrl;
     const { error } = await sb.rpc('simpan_foto_saya', { p_foto_url: simpan });
     if (error) throw error;
     userProfile.foto = tampil;
@@ -1772,7 +1764,7 @@ async function autoOtThenOut() {
       saya = d;
       if(el('pfNama')) el('pfNama').value = ((typeof userProfile!=='undefined'&&userProfile&&userProfile.nama)?userProfile.nama:'') || d.nama_lengkap || d.nama || '';
       // ID Karyawan (read-only). Kalau belum ada, auto-generate sekali biar user langsung lihat ID-nya.
-      // Skema EMP-XXXX (acak). Owner tetap bisa ganti dari panel.
+      // Skema GG-XXXX (acak). Owner tetap bisa ganti dari panel.
       let _idKar = d.id_karyawan || '';
       if(!_idKar){
         try {
@@ -1788,7 +1780,7 @@ async function autoOtThenOut() {
       pfExistingKtpUrl = d.ktp_url || '';
       const prev = el('pfKtpPreview');
       if(prev){
-        const tayang = await urlTayang('profil', d.ktp_url);
+        const tayang = await urlTayang(EMBER_KTP, d.ktp_url);
         if(tayang){ prev.src = tayang; prev.classList.remove('hidden'); }
         else { prev.src = ''; prev.classList.add('hidden'); }
       }
@@ -1822,9 +1814,10 @@ async function autoOtThenOut() {
         try {
           // Kompres foto KTP biar di bawah 2MB (batas ember) sebelum upload.
           const __ktpToUpload = await kompresGambar(ktpFile, 2*1024*1024 - 50*1024);
-          const path = saya.id + '/ktp.jpg';
-          const { error } = await sb.storage.from('profil')
-            .upload(path, __ktpToUpload, { contentType: 'image/jpeg', upsert: true });
+          // Nama file unik + tanpa upsert: ember KTP sengaja tidak mengizinkan menimpa file.
+          const path = saya.id + '/ktp_' + Date.now() + '.jpg';
+          const { error } = await sb.storage.from(EMBER_KTP)
+            .upload(path, __ktpToUpload, { contentType: 'image/jpeg', upsert: false });
           if (error) throw error;
           ktpUrl = path;
         } catch(upErr){ console.error('Upload KTP gagal', upErr); ktpFailed = true; }
@@ -1842,7 +1835,7 @@ async function autoOtThenOut() {
       pfExistingKtpUrl = ktpUrl || pfExistingKtpUrl;
       const prev = el('pfKtpPreview');
       if(prev && ktpUrl){
-        const tayang = await urlTayang('profil', ktpUrl);
+        const tayang = await urlTayang(EMBER_KTP, ktpUrl);
         if (tayang){ prev.src = tayang; prev.classList.remove('hidden'); }
       }
       applyProfilLocks(true, !!ktpUrl);
@@ -1952,8 +1945,8 @@ async function autoOtThenOut() {
       var ktpUrl = existingKtp;
       if (ktpFile){
         var toUpload = await kompresGambar(ktpFile, 2*1024*1024 - 50*1024);
-        var path = saya.id + '/ktp.jpg';
-        var up = await sb.storage.from('profil').upload(path, toUpload, { contentType:'image/jpeg', upsert:true });
+        var path = saya.id + '/ktp_' + Date.now() + '.jpg';
+        var up = await sb.storage.from(EMBER_KTP).upload(path, toUpload, { contentType:'image/jpeg', upsert:false });
         if (up.error) throw up.error;
         ktpUrl = path;
       }
@@ -1963,7 +1956,7 @@ async function autoOtThenOut() {
       });
       if (res.error) throw res.error;
       var prev = gid('pfKtpPreview');
-      if (prev && ktpUrl){ var tayang = await urlTayang('profil', ktpUrl); if (tayang) { prev.src = tayang; prev.classList.remove('hidden'); } }
+      if (prev && ktpUrl){ var tayang = await urlTayang(EMBER_KTP, ktpUrl); if (tayang) { prev.src = tayang; prev.classList.remove('hidden'); } }
       alert('Data profil tersimpan. Terima kasih!');
       var modal = gid('profilModal'); if (modal) modal.classList.add('hidden');
     } catch(e){ console.error('doSaveFallback', e); alert('Gagal menyimpan: ' + pesanRamah(e)); }

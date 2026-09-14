@@ -7,7 +7,7 @@
 // di database juga menolak SPV membacanya. Jadi batasan ini nyata, bukan sekadar menu
 // yang disembunyikan di tampilan.
 // ============================================================
-import { sb, karyawanSaya, keluar } from './supabase-config.js';
+import { sb, karyawanSaya, keluar, EMBER_PROFIL } from './supabase-config.js';
 
 const $ = id => document.getElementById(id);
 const MAX_SESI_MS = 18 * 60 * 60 * 1000;        // sesi terbuka > 18 jam = lupa clock out, bukan sedang kerja
@@ -82,8 +82,15 @@ async function muat(){
   // semua yang login. Gaji & KTP tidak ikut keluar dari sana.
   try{
     const { data: profil } = await sb.from('karyawan_publik').select('id, nama, foto_url');
+    // Foto profil disimpan sebagai path di ember tertutup -> dibuatkan link sementara sekaligus.
+    const paths = (profil || []).map(p => p.foto_url).filter(Boolean);
+    const link = new Map();
+    if (paths.length){
+      const { data: tt } = await sb.storage.from(EMBER_PROFIL).createSignedUrls(paths, 60 * 60);
+      (tt || []).forEach(t => { if (t && t.path && t.signedUrl) link.set(t.path, t.signedUrl); });
+    }
     for (const p of (profil || [])){
-      if (p.foto_url) fotoMap.set(p.id, p.foto_url);
+      if (p.foto_url && link.get(p.foto_url)) fotoMap.set(p.id, link.get(p.foto_url));
       if (p.nama) namaProfil.set(p.id, p.nama);
     }
   }catch(e){ console.warn('karyawan_publik:', e); }
@@ -175,8 +182,11 @@ setInterval(() => {
 // Penjaga halaman: cuma owner & supervisor yang boleh masuk. Perannya dibaca dari
 // kolom `peran` di database, bukan dari daftar email di dalam kode seperti versi
 // lama — jadi owner bisa mengangkat/mencopot SPV tanpa perlu ganti kode.
+let __sudahMulai = false;
 sb.auth.onAuthStateChange(async (event, session) => {
   if (!session){ location.replace('index.html'); return; }
+  if (__sudahMulai) return;   // token refresh juga memicu event ini; cukup mulai sekali
+  __sudahMulai = true;
 
   let saya = null;
   try { saya = await karyawanSaya({ paksaSegar: true }); }

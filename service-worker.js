@@ -57,7 +57,7 @@ self.addEventListener('fetch', e => {
   const url = e.request.url;
   if (e.request.method !== 'GET') return;
   // Jangan ganggu Firestore/Firebase/Google (data realtime, biar selalu langsung ke server).
-  if (url.includes('firestore') || url.includes('firebase') || url.includes('googleapis') || url.includes('gstatic')) return;
+  if (url.includes('supabase.co') || url.includes('firestore') || url.includes('firebase') || url.includes('googleapis') || url.includes('gstatic')) return;
 
   // App shell -> network-first biar update langsung kelihatan sekali refresh.
   if (e.request.mode === 'navigate' || url.endsWith('.html') || url.endsWith('.js') || url.endsWith('.css')) {

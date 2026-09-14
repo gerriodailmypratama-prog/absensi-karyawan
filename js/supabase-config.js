@@ -11,10 +11,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 // Kunci di bawah ini MEMANG boleh kelihatan publik — pengaman sesungguhnya ada
 // di aturan RLS di database, bukan di sini. Jangan pernah menaruh service role
 // key di file ini; itu kunci master dan tempatnya cuma di server/GitHub Secret.
-const SUPABASE_URL = 'https://llhctygpgvmionmvtrjn.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_8lND6wAdh4WZ84z_07045w_duXWQ1DO';
+// Project Supabase "Wms Goodgems". Absensi numpang di project WMS tapi di skema
+// sendiri (`absensi`), jadi tabelnya tidak campur dengan tabel WMS.
+export const SUPABASE_URL = 'https://ryuwnsxwtwfmndnbysxw.supabase.co';
+export const SUPABASE_KEY = 'sb_publishable_7eEknElzOkWMjw8mmVAOXw_A_eXReqO';
 
 export const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  db: { schema: 'absensi' },   // semua .from() / .rpc() otomatis ke skema absensi
   auth: {
     persistSession: true,      // sesi disimpan di HP, ga perlu login tiap buka
     autoRefreshToken: true,
@@ -23,7 +26,12 @@ export const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
 });
 
 // Kode rahasia pendaftaran karyawan. Ganti kapan saja kalau bocor.
-export const KODE_PENDAFTARAN = 'KOPIKIRI2026';
+export const KODE_PENDAFTARAN = 'GOODGEMS2026';
+
+// Ember foto (semua PRIVAT). Yang disimpan di database cuma path '<karyawan_id>/...'.
+export const EMBER_SELFIE = 'absensi-selfie';
+export const EMBER_PROFIL = 'absensi-profil';
+export const EMBER_KTP    = 'absensi-ktp';
 
 // ============================================================ GEOFENCE
 // Absen di luar radius TETAP BOLEH — cuma ditandai. Ini disengaja: memblokir
@@ -83,13 +91,13 @@ export function cabangTerdekat(daftarCabang, lat, lng) {
 // pulang duluan lalu clock out dari rumah. Ini "pager", bukan gembok baja:
 // cukup untuk disiplin staf, bukan untuk nahan orang yang niat banget.
 //
-// CATATAN: rahasianya SENGAJA beda dari GoodGems. Kalau disamakan, orang yang
-// tahu kode di satu sistem otomatis tahu kode di sistem satunya.
+// Rahasianya SAMA PERSIS dengan versi Firebase GoodGems, supaya kode yang
+// tampil di layar admin tetap cocok selama dua sistem jalan berdampingan.
 export const KODE_SLOT_MS = 10 * 60 * 1000;
 
 export function kodeClockout(geserSlot) {
   const slot = Math.floor(Date.now() / KODE_SLOT_MS) + (geserSlot || 0);
-  const s = 'kopikiri-absensi-kode-2026:' + slot;
+  const s = 'gg-absensi-kode-2026:' + slot;
   let h = 0;
   for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
   // Diaduk biar kode slot yang berurutan hasilnya ga ikut berurutan
@@ -137,7 +145,8 @@ export async function keluar() {
 export function halamanUntuk(karyawan) {
   if (!karyawan) return 'karyawan.html';
   if (karyawan.peran === 'owner') return 'owner.html';
-  if (karyawan.peran === 'spv') return 'spv.html';
+  // SPV GoodGems tetap karyawan yang absen; papan pantau dibuka lewat tombol
+  // "Pantau Tim" di halaman karyawan (PR-CL98).
   return 'karyawan.html';
 }
 
@@ -167,23 +176,32 @@ export function nomorWa(mentah) {
 
 // ================================================================= LIBUR
 export const LIBUR_HARI = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-export const LIBUR_MAX = 3;         // maksimal usulan hari libur yang boleh dipilih
+export const LIBUR_MAX = 3;         // maksimal orang libur di hari yang sama (PR-CL75)
 
 // ================================================================ KASBON
 export const KASBON_PLAFON_DEFAULT = 50;   // persen maksimal dari gaji berjalan
 
 // ====================================================== PERIODE PAYROLL
 // Gaji dihitung per periode yang tutup buku tanggal 25, bukan per tanggal 1.
-// CATATAN: angka 25 ini disalin dari GoodGems. Tanggal tutup buku Kopikiri
-// WAJIB dikonfirmasi ke klien sebelum payroll dipakai beneran — kalau beda,
-// cukup ganti PR_CUTOFF_DAY di bawah.
+// Transisi: periode sebelum 2026-07 = satu bulan kalender penuh (angka yang
+// sudah terlanjur dibayar jangan berubah); 2026-07 sendiri = 1 s/d 25 Juli.
 export const PR_CUTOFF_DAY = 25;
+export const PR_TRANSISI = '2026-07';
 
 export function periodePayroll(yyyymm) {
   const [y, m] = String(yyyymm).split('-').map(Number);
   const cut = PR_CUTOFF_DAY;
-  const start = new Date(y, m - 2, cut + 1, 0, 0, 0, 0);
-  const end   = new Date(y, m - 1, cut, 23, 59, 59, 999);
+  let start, end;
+  if (yyyymm < PR_TRANSISI) {
+    start = new Date(y, m - 1, 1, 0, 0, 0, 0);
+    end   = new Date(y, m, 0, 23, 59, 59, 999);
+  } else if (yyyymm === PR_TRANSISI) {
+    start = new Date(y, m - 1, 1, 0, 0, 0, 0);
+    end   = new Date(y, m - 1, cut, 23, 59, 59, 999);
+  } else {
+    start = new Date(y, m - 2, cut + 1, 0, 0, 0, 0);
+    end   = new Date(y, m - 1, cut, 23, 59, 59, 999);
+  }
   const t = d => d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
   return { yyyymm, start, end, label: t(start) + ' – ' + t(end) + ' ' + end.getFullYear() };
 }
