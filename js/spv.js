@@ -1,14 +1,13 @@
 // ============================================================
-// PANTAU TIM (SPV) — PR-CL98
+// PANTAU TIM (SPV)
 // Halaman read-only buat supervisor: siapa lagi kerja / istirahat / sudah pulang, realtime.
-// SENGAJA cuma baca koleksi `absensi` (event absen) + `profil` (nama & foto). Koleksi
-// `karyawan` — tempat gaji, KTP, rekening — TIDAK pernah disentuh, dan firestore.rules juga
-// menolak SPV membacanya. Jadi batasan ini nyata, bukan sekadar menu yang disembunyikan.
+//
+// SENGAJA cuma baca tabel `absensi` (event absen) + view `karyawan_publik` (nama & foto).
+// Tabel `karyawan` — tempat gaji, KTP, rekening — TIDAK pernah disentuh, dan aturan RLS
+// di database juga menolak SPV membacanya. Jadi batasan ini nyata, bukan sekadar menu
+// yang disembunyikan di tampilan.
 // ============================================================
-import { auth, db, OWNER_EMAILS } from './firebase-config.js';
-import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, doc, getDoc, getDocs, query, where, Timestamp }
-    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { sb, karyawanSaya, keluar } from './supabase-config.js';
 
 const $ = id => document.getElementById(id);
 const MAX_SESI_MS = 18 * 60 * 60 * 1000;        // sesi terbuka > 18 jam = lupa clock out, bukan sedang kerja
@@ -61,35 +60,39 @@ function istirahatSelesai(arr, dari, sampai){
 async function muat(){
   // Ambil dari KEMARIN 00:00 supaya shift yang nembus tengah malam tetap kebaca utuh.
   const dari = new Date(); dari.setDate(dari.getDate() - 1); dari.setHours(0, 0, 0, 0);
-  const snap = await getDocs(query(collection(db, 'absensi'), where('ts', '>=', Timestamp.fromDate(dari))));
+
+  const { data: rows, error } = await sb
+    .from('absensi')
+    .select('karyawan_id, tipe, ts')
+    .gte('ts', dari.toISOString())
+    .order('ts', { ascending: true });
+  if (error) throw error;
 
   const byUid = new Map();
-  snap.forEach(d => {
-    const r = d.data() || {};
-    const t = r.ts && r.ts.toDate ? r.ts.toDate() : null;
-    const uid = r.uid;
-    if (!uid || !t) return;
+  for (const r of (rows || [])){
+    const uid = r.karyawan_id;
+    const t = r.ts ? new Date(r.ts) : null;
+    if (!uid || !t) continue;
     if (!byUid.has(uid)) byUid.set(uid, []);
-    byUid.get(uid).push({ tipe: r.tipe, ms: t.getTime(), nama: r.nama || '' });
-  });
+    byUid.get(uid).push({ tipe: r.tipe, ms: t.getTime() });
+  }
   for (const arr of byUid.values()) arr.sort((a, b) => a.ms - b.ms);
 
-  // Nama & foto dari koleksi profil (boleh dibaca semua yang login).
+  // Nama & foto dari view karyawan_publik — jendela terbatas yang boleh dibaca
+  // semua yang login. Gaji & KTP tidak ikut keluar dari sana.
   try{
-    const ps = await getDocs(collection(db, 'profil'));
-    ps.forEach(d => {
-      const p = d.data() || {};
-      if (p.foto) fotoMap.set(d.id, p.foto);
-      const n = p.ultahNama || p.nama;
-      if (n) namaProfil.set(d.id, n);
-    });
-  }catch(e){ console.warn('profil:', e); }
+    const { data: profil } = await sb.from('karyawan_publik').select('id, nama, foto_url');
+    for (const p of (profil || [])){
+      if (p.foto_url) fotoMap.set(p.id, p.foto_url);
+      if (p.nama) namaProfil.set(p.id, p.nama);
+    }
+  }catch(e){ console.warn('karyawan_publik:', e); }
 
   const now = Date.now();
   const kerja = [], istirahat = [], pulang = [], peringatan = [];
 
   for (const [uid, arr] of byUid){
-    const nama = namaProfil.get(uid) || (arr.find(e => e.nama) || {}).nama || '-';
+    const nama = namaProfil.get(uid) || '-';
     let masukTerakhir = 0, keluarTerakhir = 0, bIn = 0, bOut = 0;
     for (const e of arr){
       if (e.tipe === 'clock_in' || e.tipe === 'overtime_in') masukTerakhir = Math.max(masukTerakhir, e.ms);
@@ -169,22 +172,25 @@ setInterval(() => {
   });
 }, 1000);
 
-onAuthStateChanged(auth, async u => {
-  if (!u){ location.replace('index.html'); return; }
-  const owner = OWNER_EMAILS.includes((u.email || '').toLowerCase());
-  let boleh = owner;
-  if (!owner){
-    try{
-      const s = await getDoc(doc(db, 'karyawan', u.uid));
-      boleh = s.exists() && s.data().spvAkses === true;
-    }catch(e){ boleh = false; }
-  }
+// Penjaga halaman: cuma owner & supervisor yang boleh masuk. Perannya dibaca dari
+// kolom `peran` di database, bukan dari daftar email di dalam kode seperti versi
+// lama — jadi owner bisa mengangkat/mencopot SPV tanpa perlu ganti kode.
+sb.auth.onAuthStateChange(async (event, session) => {
+  if (!session){ location.replace('index.html'); return; }
+
+  let saya = null;
+  try { saya = await karyawanSaya({ paksaSegar: true }); }
+  catch (e) { console.error(e); }
+
+  const boleh = saya && (saya.peran === 'owner' || saya.peran === 'spv') && !saya.nonaktif;
   if (!boleh){ alert('Halaman ini khusus supervisor.'); location.replace('karyawan.html'); return; }
-  $('spvNama').textContent = u.email || '';
+
+  $('spvNama').textContent = saya.nama || session.user.email || '';
   $('spvDate').textContent = new Date().toLocaleDateString('id-ID', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
+
   try{ await muat(); }catch(e){ console.error(e); alert('Gagal memuat data: ' + (e.message || e)); }
   setInterval(() => { muat().catch(e => console.warn('refresh:', e)); }, 60000);
 });
 
-$('btnLogout').onclick = () => signOut(auth).then(() => location.replace('index.html')).catch(() => location.replace('index.html'));
+$('btnLogout').onclick = () => keluar();
 $('spvTitle').onclick = () => location.reload();
