@@ -1,5 +1,5 @@
 /* ====================================================================
-   Kopikiri Absensi — Telegram Bot, shared library
+   GoodGems Absensi — Telegram Bot, shared library
    Baca-saja dari Postgres (Supabase) pakai service role key, hitung jam
    efektif SAMA PERSIS kayak dashboard (span jam masuk->keluar - istirahat,
    di-clamp ke sesi), lalu kirim plain text ke Telegram.
@@ -47,7 +47,8 @@ function sb() {
   _sb = createClient(supabaseUrl, serviceKey, {
     // Job cron, bukan browser: ga usah simpan/refresh sesi.
     auth: { persistSession: false, autoRefreshToken: false },
-    global: { headers: { 'x-client-info': 'kopikiri-telegram-bot' } }
+    db: { schema: 'absensi' },   // tabel absensi GoodGems ada di skema absensi (project WMS)
+    global: { headers: { 'x-client-info': 'goodgems-absensi-telegram-bot' } }
   });
   return _sb;
 }
@@ -128,7 +129,7 @@ async function fetchKaryawan() {
     map.set(k.id, {
       id: k.id,
       nama: String(k.nama || '(tanpa nama)').trim(),
-      jamKerja: Number(k.jam_kerja) || 8,
+      jamKerja: Number(k.jam_kerja) || 9,
       nonaktif: k.nonaktif === true,
       liburHari: (k.libur_hari != null ? Number(k.libur_hari) : null),
       // kolom date di Postgres balik sebagai 'YYYY-MM-DD' — sama persis kayak
@@ -165,9 +166,7 @@ async function fetchEventsByKaryawan(start, end) {
    efektif = span(jam masuk -> jam keluar) - istirahat, di-clamp ke
    [masuk..keluar]. Jam keluar: utamakan clock_out, fallback overtime_out.
    Untuk "masih in" (belum clock-out), pakai endFallbackMs sebagai penutup.
-   Catatan: skema Kopikiri ga punya event pause_in/pause_out (enum tipe_absen
-   cuma clock/break/overtime), jadi bagian pause versi lama dibuang — bukan
-   kelupaan. Kalau nanti pause dipasang lagi, tinggal tambah sumPairs-nya. */
+   Pause (pause_in/pause_out) ikut dipotong, sama seperti versi Firebase. */
 function computeDay(events, jamKerja, endFallbackMs) {
   const ev = events.slice().sort((a, b) => a.ts - b.ts);
   const ci = ev.find(e => e.tipe === 'clock_in') || ev.find(e => e.tipe === 'overtime_in');
@@ -202,7 +201,8 @@ function computeDay(events, jamKerja, endFallbackMs) {
     return tot;
   }
   const brk = sumPairs('break_in', 'break_out');
-  let efektifMs = spanMs - brk;
+  const pse = sumPairs('pause_in', 'pause_out');   // GoodGems masih punya event pause (skema absensi mendukung)
+  let efektifMs = spanMs - brk - pse;
   if (efektifMs < 0) efektifMs = 0;
 
   const durJam = spanMs / 3600000;
@@ -214,7 +214,7 @@ function computeDay(events, jamKerja, endFallbackMs) {
   return {
     ci: ci.ts, ciMs,
     out: outMs ? new Date(outMs) : null, stillIn,
-    spanMs, brkMs: brk, efektifMs,
+    spanMs, brkMs: brk, pseMs: pse, efektifMs,
     hadir, parsial,
     lateMinute: wibParts(ci.ts).mi   // menit clock-in (buat cek telat, sama kayak versi lama)
   };
