@@ -233,5 +233,5 @@ const PESAN_ERROR = [
 export function pesanRamah(err) {
   const t = String((err && (err.message || err.error_description)) || err || '');
   for (const [pola, pesan] of PESAN_ERROR) if (pola.test(t)) return pesan;
-  return 'Gagal: ' + (t || 'ada yang error, coba lagi sebentar lagi');
+  return (t || 'Ada yang error, coba lagi sebentar lagi').replace(/^Gagal:s*/i, '');
 }

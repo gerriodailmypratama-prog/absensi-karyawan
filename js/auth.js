@@ -43,6 +43,9 @@ if (dalamAppSosmed) {
 async function arahkan() {
   lupakanCacheSaya();
   let saya = null;
+  // Sambungkan akun login ke data karyawan yang emailnya cocok (karyawan lama yang
+  // baru pertama kali login ke sistem baru). Gagal di sini tidak menghalangi login.
+  try { await sb.rpc('klaim_akun_saya'); } catch (e) { console.warn('klaim akun:', e); }
   try { saya = await karyawanSaya({ paksaSegar: true }); }
   catch (e) { msg(pesanRamah(e)); return; }
 
@@ -57,12 +60,8 @@ async function arahkan() {
     return;
   }
 
-  if (saya.nonaktif) {
-    msg('Akun kamu sudah dinonaktifkan. Hubungi admin kalau ini keliru.');
-    await sb.auth.signOut();
-    return;
-  }
-
+  // Karyawan nonaktif tetap boleh masuk (lihat slip & profil terakhir); tombol absennya
+  // dikunci di halaman karyawan (PR-CL97), sama seperti versi Firebase.
   location.href = halamanUntuk(saya);
 }
 

@@ -188,7 +188,8 @@ async function pindahData(sql: any, sa: any, gtok: string, uji: boolean) {
       ktp_url: teks(x.ktpUrl),
       rekening_locked: x.rekeningLocked !== undefined ? x.rekeningLocked === true : x.profilLocked === true,
       cabang_kode: "ruko",
-      created_at: x.createdAt instanceof Date ? x.createdAt.toISOString() : new Date().toISOString(),
+      created_at: x.createdAt instanceof Date ? x.createdAt.toISOString()
+        : (x.tanggalJoin instanceof Date ? x.tanggalJoin.toISOString() : new Date().toISOString()),
       ekstra: sisa(x, KAR_DIPAKAI),
       _x: x,
     };

@@ -651,7 +651,7 @@ async function loadUserProfile(){
       const { data } = await sb.from('payroll_status')
         .select('slip, dibayar_at, periode')
         .eq('status', 'dibayar').not('slip', 'is', null)
-        .order('dibayar_at', { ascending: false }).limit(1);
+        .order('dibayar_at', { ascending: false, nullsFirst: false }).limit(1);
       const r = data && data[0];
       slipData = r && r.slip ? Object.assign({}, r.slip, { paidAt: stempel(r.dibayar_at) }) : null;
     }catch(e){ console.warn('slip load err:', e); }
@@ -669,7 +669,9 @@ async function loadUserProfile(){
     // Ditaruh di sini, bukan di blok profilKurang bersama rekening & KTP,
     // karena nilai foto baru selesai dibaca dari koleksi 'profil' beberapa baris
     // di atas — di blok itu nilainya masih kosong.
-    if (!String(foto || '').trim()) {
+    // Patokannya kolom foto_url (bukan link tayang): kalau link sementara gagal dibuat karena
+    // sinyal, foto yang sebenarnya ada jangan dianggap kosong lalu ditimpa selfie.
+    if (!String((saya && saya.foto_url) || foto || '').trim()) {
       // Eskalasi: lewat 2 hari belum upload -> warning tegas: selfie absen bakal dipakai.
       const _umurHari = sayaJoinMs ? (Date.now() - sayaJoinMs) / 86400000 : 0;
       if (_umurHari >= 2) {
@@ -1001,7 +1003,7 @@ $('btnSelfieShoot').onclick = async ()=>{
     // Selfie & foto profil beda ember, jadi filenya disalin ke ember profil dulu.
     try{
       const _umurHari = sayaJoinMs ? (Date.now() - sayaJoinMs) / 86400000 : 0;
-      if (selfieUrl && !String(userProfile.foto || '').trim() && _umurHari >= 3){
+      if (selfieUrl && !String((saya && saya.foto_url) || userProfile.foto || '').trim() && _umurHari >= 3){
         const { data: _blob, error: _e1 } = await sb.storage.from(EMBER_SELFIE).download(selfieUrl);
         if (_e1) throw _e1;
         const _path = saya.id + '/avatar.jpg';
@@ -1009,6 +1011,7 @@ $('btnSelfieShoot').onclick = async ()=>{
         if (_e2) throw _e2;
         const { error: _e3 } = await sb.rpc('simpan_foto_saya', { p_foto_url: _path });
         if (_e3) throw _e3;
+        if (saya) saya.foto_url = _path;
         const _tayang = await urlTayang(EMBER_PROFIL, _path);
         userProfile.foto = _tayang;
         const _ai = $('avatarImg'); if (_ai){ _ai.src = _tayang; _ai.style.display = 'block'; }
@@ -1593,6 +1596,7 @@ $('avatarInput').onchange = async (ev) => {
     const tampil = await urlTayang(EMBER_PROFIL, path) || dataUrl;
     const { error } = await sb.rpc('simpan_foto_saya', { p_foto_url: simpan });
     if (error) throw error;
+    if (saya) saya.foto_url = simpan;
     userProfile.foto = tampil;
     $('avatarImg').src = tampil;
     $('avatarImg').style.display = 'block';
@@ -1760,8 +1764,8 @@ async function autoOtThenOut() {
     try{
       // Baris karyawan diambil ulang biar isinya segar (mis. owner baru saja
       // membuka kunci rekening sementara halaman ini belum di-refresh).
-      const d = await karyawanSaya({ paksaSegar: true }) || {};
-      saya = d;
+      const d = await karyawanSaya({ paksaSegar: true }) || saya || {};
+      if (d && d.id) saya = d;
       if(el('pfNama')) el('pfNama').value = ((typeof userProfile!=='undefined'&&userProfile&&userProfile.nama)?userProfile.nama:'') || d.nama_lengkap || d.nama || '';
       // ID Karyawan (read-only). Kalau belum ada, auto-generate sekali biar user langsung lihat ID-nya.
       // Skema GG-XXXX (acak). Owner tetap bisa ganti dari panel.
@@ -1817,7 +1821,7 @@ async function autoOtThenOut() {
           // Nama file unik + tanpa upsert: ember KTP sengaja tidak mengizinkan menimpa file.
           const path = saya.id + '/ktp_' + Date.now() + '.jpg';
           const { error } = await sb.storage.from(EMBER_KTP)
-            .upload(path, __ktpToUpload, { contentType: 'image/jpeg', upsert: false });
+            .upload(path, __ktpToUpload, { contentType: (__ktpToUpload && __ktpToUpload.type) || 'image/jpeg', upsert: false });
           if (error) throw error;
           ktpUrl = path;
         } catch(upErr){ console.error('Upload KTP gagal', upErr); ktpFailed = true; }
@@ -1946,7 +1950,7 @@ async function autoOtThenOut() {
       if (ktpFile){
         var toUpload = await kompresGambar(ktpFile, 2*1024*1024 - 50*1024);
         var path = saya.id + '/ktp_' + Date.now() + '.jpg';
-        var up = await sb.storage.from(EMBER_KTP).upload(path, toUpload, { contentType:'image/jpeg', upsert:false });
+        var up = await sb.storage.from(EMBER_KTP).upload(path, toUpload, { contentType: (toUpload && toUpload.type) || 'image/jpeg', upsert:false });
         if (up.error) throw up.error;
         ktpUrl = path;
       }
