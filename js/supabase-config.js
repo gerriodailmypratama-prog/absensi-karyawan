@@ -25,6 +25,21 @@ export const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
   }
 });
 
+// Mode uji coba: salinan app dibuka dari /uji/ sebelum peralihan. Datanya Supabase beneran,
+// tapi notif Telegram dimatikan dan ada pita penanda supaya tidak tertukar dengan app asli.
+export const MODE_UJI = typeof location !== 'undefined' && location.pathname.includes('/uji/');
+if (MODE_UJI && typeof document !== 'undefined') {
+  const pasangPita = () => {
+    if (document.getElementById('pitaUji')) return;
+    const el = document.createElement('div');
+    el.id = 'pitaUji';
+    el.textContent = 'UJI COBA — sistem baru (Supabase). Absen di sini tidak masuk gaji.';
+    el.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99999;background:#facc15;color:#111;font:600 12px/1.4 system-ui;text-align:center;padding:6px 8px;pointer-events:none';
+    document.body.appendChild(el);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pasangPita); else pasangPita();
+}
+
 // Kode rahasia pendaftaran karyawan. Ganti kapan saja kalau bocor.
 export const KODE_PENDAFTARAN = 'GOODGEMS2026';
 

@@ -318,6 +318,7 @@ async function pindahData(sql: any, sa: any, gtok: string, uji: boolean) {
     await tx`delete from absensi.payroll_status   where karyawan_id = any (${idsKar}::uuid[])`;
     await tx`delete from absensi.penyesuaian_gaji where karyawan_id = any (${idsKar}::uuid[])`;
     await tx`delete from absensi.libur_request    where karyawan_id = any (${idsKar}::uuid[])`;
+    await tx`delete from absensi.kasbon_request   where karyawan_id = any (${idsKar}::uuid[])`;
 
     for (const r of karRows) {
       const kid = idByUid.get(r.firebase_uid)!;
@@ -347,6 +348,18 @@ async function pindahData(sql: any, sa: any, gtok: string, uji: boolean) {
           await tx`insert into absensi.penyesuaian_gaji (karyawan_id, periode, jenis, jumlah) values (${kid}, ${p}, ${jenis}, ${n})`;
           inc("penyesuaian_" + jenis);
         }
+      }
+      // Pengajuan kasbon (Firestore cuma simpan SATU, yang terakhir) -> satu baris kasbon_request.
+      const kr = x.kasbonRequest;
+      const krPer = kr && periodeKey(kr.yyyymm);
+      if (kr && krPer && bulat(kr.jumlah) && ["menunggu", "disetujui", "ditolak"].includes(kr.status)) {
+        await tx`
+          insert into absensi.kasbon_request (karyawan_id, jumlah, alasan, status, periode, periode_label, disetujui_jumlah, catatan_owner, diputus_at, created_at)
+          values (${kid}, ${bulat(kr.jumlah)}, ${teks(kr.alasan)}, ${kr.status}, ${krPer}, ${teks(kr.periodeLabel)},
+                  ${bulat(kr.disetujuiJumlah)}, ${teks(kr.catatanOwner)},
+                  ${kr.status !== "menunggu" && Number.isFinite(Number(kr.decidedAt)) ? new Date(Number(kr.decidedAt)).toISOString() : null},
+                  ${x.kasbonRequestAt instanceof Date ? x.kasbonRequestAt.toISOString() : new Date().toISOString()})`;
+        inc("kasbon_" + kr.status);
       }
       const pil = Array.isArray(x.liburRequest) ? x.liburRequest.map(bulat).filter((n: any) => n != null && n >= 0 && n <= 6) : [];
       if (pil.length) {

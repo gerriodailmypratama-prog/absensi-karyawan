@@ -23,19 +23,27 @@ Semua yang ada di sini sudah disiapkan dan diuji per 15 Sep 2026; malam itu ting
 3. Beri tahu 4 karyawan yang login pakai password saja: akun lama tidak ikut pindah, mereka login pakai Google
    atau daftar ulang dengan email yang sama (datanya tersambung otomatis lewat email, tanpa kode).
 4. Ganti kode pendaftaran `GOODGEMS2026` (sudah terlihat publik di repo) — di `absensi.daftar_karyawan` dan `js/supabase-config.js`.
-5. Jalankan banding sekali lagi: `select absensi.panggil_pindah('{"mode":"banding","periode":["2026-10"]}'::jsonb);`
+5. Deploy ulang `absensi-pindah` dari repo (versi terbaru ikut memindahkan pengajuan kasbon & `created_at` dari tanggal masuk),
+   lalu salin juga 2 foto profil yang di Firestore masih base64 (belum didukung mode foto).
+6. Jalankan banding sekali lagi: `select absensi.panggil_pindah('{"mode":"banding","periode":["2026-10"]}'::jsonb);`
 
 ## Malam H — urutan
 
 1. **Bekukan Firebase** (sekitar 04:00 WIB 26 Okt, saat tidak ada yang absen): deploy `firestore.rules` hanya-baca
    (semua `allow write: if false`) lewat workflow firestore-rules. Karyawan yang masih buka app lama tidak bisa menulis.
-2. **Salinan data terakhir:**
+2. **Salinan data terakhir** (buang dulu jejak uji coba dari `/uji/` — sebelum peralihan semua absen
+   yang sah berasal dari Firebase, jadi baris tanpa `firebase_doc_id` pasti hasil uji):
+   ```sql
+   delete from absensi.absensi where firebase_doc_id is null;
+   -- kasbon_request, libur_request, payroll_status, penyesuaian_gaji ikut ditulis ulang utuh oleh mode data
+   ```
    ```sql
    select absensi.panggil_pindah('{"mode":"data","uji":false}'::jsonb);
    select absensi.panggil_pindah('{"mode":"foto","batas_detik":20}'::jsonb);  -- ulang sampai selfie_sisa = 0
    select absensi.panggil_pindah('{"mode":"banding","periode":["2026-10"]}'::jsonb);  -- wajib 100% cocok
    ```
-3. **Rilis app:** merge cabang `migrasi/app-supabase` ke `main` (naikkan versi cache service worker), tunggu GitHub Pages, cek `absensi.goodgems.online` bisa login.
+3. **Rilis app:** merge cabang `migrasi/app-supabase` ke `main` (naikkan versi cache service worker) dan hapus folder `uji/`,
+   tunggu GitHub Pages, cek `absensi.goodgems.online` bisa login.
 4. **WMS sinkron dari Supabase:**
    ```sql
    -- ganti body-nya saja; header Authorization di perintah lama tetap dipakai

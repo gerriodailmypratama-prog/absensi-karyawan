@@ -22,7 +22,7 @@
 import {
   sb, karyawanSaya, keluar, jarakMeter, dalamRadius,
   kodeClockout, KODE_SLOT_MS, LIBUR_HARI, LIBUR_MAX,
-  periodeBerjalan, KASBON_PLAFON_DEFAULT, pesanRamah,
+  periodeBerjalan, KASBON_PLAFON_DEFAULT, pesanRamah, MODE_UJI,
   EMBER_SELFIE, EMBER_PROFIL, EMBER_KTP
 } from './supabase-config.js';
 
@@ -1135,6 +1135,7 @@ function totalMenitAbsen(tipe){
 }
 
 function pingTelegramAbsen(data){
+  if (MODE_UJI) return;   // uji coba: jangan ramaikan grup Telegram asli
   try {
     sb.auth.getSession().then(function(res){
       var tok = res && res.data && res.data.session && res.data.session.access_token;
