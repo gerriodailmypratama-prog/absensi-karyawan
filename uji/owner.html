@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+
+
+
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noindex,nofollow">
+<script>if(location.protocol==='http:'&&location.hostname!=='localhost'){location.replace('https://'+location.host+location.pathname+location.search+location.hash);}</script>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0a0a0a">
+<title>Dashboard Owner</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Geist:wght@400;500;600;700;800&family=Orbitron:wght@600;800&display=swap" rel="stylesheet">
+</head>
+<body class="owner-body">
+<header class="topbar">
+  <div class="brand-wrap">
+    <button id="btnSidebar" class="btn-icon" style="background:transparent;padding:4px 10px;font-size:20px">&#x2630;</button>
+    <span class="brand-logo" id="brandLogo" role="button" title="Klik untuk refresh" style="cursor:pointer">GOODGEMS<span class="brand-logo-accent">ABSENSI</span></span>
+    <small id="ownerEmail" class="muted"></small>
+  </div>
+  <button id="btnLogout" class="btn-icon">Keluar</button>
+</header>
+
+<div class="layout">
+  <aside id="sidebar" class="sidebar">
+    <nav>
+      <a href="#beranda" class="nav-link active" data-page="beranda">&#x1F4CA; Beranda</a>
+      <a href="#kehadiran" class="nav-link" data-page="kehadiran">&#x1F5D3; Kehadiran Harian</a>
+      <a href="#rekap" class="nav-link" data-page="rekap">&#x1F4C8; Rekap Kehadiran</a>
+<a href="#karyawan" class="nav-link" data-page="karyawan">&#x1F465; Karyawan</a>
+<a href="#payroll" class="nav-link" data-page="payroll">&#x1F4B0; Payroll</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <!-- BERANDA -->
+    <section id="page-beranda" class="page active">
+      <h2 class="page-title" id="berandaTitle" title="Klik untuk refresh" style="cursor:pointer;user-select:none">Beranda <span id="berandaRefreshIcon" style="font-size:14px;color:#f97316">&#x21BB;</span></h2>
+      <p class="muted" id="berandaDate">-</p>
+
+      <div id="hadirFloating" class="hadir-floating">
+          <div class="hadir-floating-left">
+            <div class="hadir-title">Kehadiran hari ini <span class="pres-count" id="hadirCount">0/0</span></div>
+            <div class="hadir-sub muted small">Karyawan yang sudah Clock In</div>
+          </div>
+          <div class="hadir-floating-right" id="hadirAvatars"></div>
+        </div>
+
+        <div id="ultahBox" class="ultah-box hidden"></div>
+        <div id="kasbonBox" class="ultah-box hidden" style="border-left-color:#fcd34d"></div>
+
+        <div class="pres-grid">
+          <div id="workingFloating" class="pres-card pres-work">
+            <div class="pres-head"><span class="pres-dot"></span><b>On Working</b><span class="pres-count" id="workingCount">0/0</span></div>
+            <div class="pres-sub muted small">Sedang bekerja &middot; total &middot; efektif</div>
+            <div id="workTimers" class="pres-list"></div>
+          </div>
+
+          <div id="breakFloating" class="pres-card pres-break">
+            <div class="pres-head"><span class="pres-dot"></span><b>On Break</b><span class="pres-count" id="breakCount">0/0</span></div>
+            <div class="pres-sub muted small">Sedang istirahat &middot; berjalan &middot; total</div>
+            <div id="breakTimers" class="pres-list"></div>
+          </div>
+
+          <div id="finishFloating" class="pres-card pres-finish">
+            <div class="pres-head"><span class="pres-dot"></span><b>Finish Working</b><span class="pres-count" id="finishCount">0/0</span></div>
+            <div class="pres-sub muted small">Sudah Clock Out / OT Out &middot; total &middot; efektif</div>
+            <div id="finishTimers" class="pres-list"></div>
+          </div>
+        </div>
+        <div class="stats" id="berandaStats"></div>
+
+      <div class="grid-2-chart">
+        <div class="card">
+          <h3>Kehadiran Hari Ini</h3>
+          <p class="muted" style="margin-bottom:8px">Total karyawan yang sudah Clock In hari ini</p>
+          <div class="chart-wrap"><canvas id="chartHadir"></canvas></div>
+          <p class="chart-caption" id="capHadir">-</p>
+        </div>
+        <div class="card">
+          <h3>Lokasi Clock In</h3>
+          <p class="muted" style="margin-bottom:8px">Berapa absen masuk hari ini di dalam radius vs luar lokasi</p>
+          <div class="chart-wrap"><canvas id="chartLokasi"></canvas></div>
+          <p class="chart-caption" id="capLokasi">-</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Aktivitas Terbaru Hari Ini</h3>
+        <div class="table-wrap">
+          <table id="tblToday">
+            <thead><tr><th>Jam</th><th>Nama</th><th>Tipe</th><th>Status</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="emptyToday" class="muted center"></p>
+      </div>
+
+      <div class="card" id="berandaLogCard">
+        <h3>Data Absensi</h3>
+        <p class="muted small">Filter & lihat semua catatan absensi (raw events). Untuk edit jam, gunakan menu Kehadiran Harian.</p>
+        <div class="filter-row">
+          <div><label>Dari</label><input type="date" id="dateFrom"></div>
+          <div><label>Sampai</label><input type="date" id="dateTo"></div>
+          <div><label>Karyawan</label>
+            <select id="selKaryawan"><option value="">Semua</option></select>
+          </div>
+          <div><label>Tipe</label>
+            <select id="selType">
+              <option value="">Semua</option>
+              <option value="clock_in">Clock In</option>
+              <option value="clock_out">Clock Out</option>
+              <option value="break_in">Istirahat</option>
+              <option value="break_out">Selesai Istirahat</option>
+              <option value="pause_in">Pause Kerja</option>
+              <option value="pause_out">Lanjut Kerja</option>
+              <option value="overtime_in">Mulai Lembur</option>
+              <option value="overtime_out">Selesai Lembur</option>
+            </select>
+          </div>
+          <div><label>Status Lokasi</label>
+            <select id="selLocation">
+              <option value="">Semua</option>
+              <option value="in">Di Ruko</option>
+              <option value="out">Luar Lokasi</option>
+            </select>
+          </div>
+          <div class="filter-actions">
+            <button id="btnFilter" class="btn btn-primary">Cari</button>
+            <button id="btnExport" class="btn btn-success">Export CSV</button>
+          </div>
+        </div>
+        <div class="stats" id="stats" style="margin-top:12px"></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table id="tblAbsen">
+            <thead>
+              <tr><th>Tanggal</th><th>Jam</th><th>Nama</th><th>Tipe</th><th>Status</th><th>Lokasi</th><th>Foto</th><th>Aksi</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="emptyMsg" class="muted center"></p>
+      </div>
+    </section>
+
+    <!-- KEHADIRAN HARIAN (Matrix per Karyawan) -->
+    <section id="page-kehadiran" class="page">
+      <h2 class="page-title">Kehadiran Harian</h2>
+
+      <div class="card kh-toolbar">
+        <div class="kh-date-row">
+          <input type="date" id="khDate" class="kh-date-input">
+          <button id="khPrevDay" class="btn btn-ghost btn-sm" title="Hari sebelumnya">&lsaquo;</button>
+          <button id="khNextDay" class="btn btn-ghost btn-sm" title="Hari berikutnya">&rsaquo;</button>
+          <button id="khToday" class="btn btn-ghost btn-sm">Hari ini</button>
+        </div>
+        <div id="khWeekNav" class="kh-week-nav"></div>
+      </div>
+
+      <div class="kh-summary" id="khSummary"></div>
+
+      <div class="card">
+        <div class="kh-table-header">
+          <h3 id="khTitle">Kehadiran Harian</h3>
+          <div class="kh-legend">
+            <span class="gps-dot gps-in"></span> GPS dalam jangkauan
+            <span class="gps-dot gps-out"></span> GPS di luar
+            <span class="gps-dot gps-na"></span> Tidak terdeteksi
+          </div>
+        </div>
+        <div class="table-wrap kh-matrix-wrap">
+          <table id="tblKehadiranMatrix" class="kh-matrix">
+            <thead>
+              <tr>
+                <th class="col-nama">Nama</th>
+                <th>Status</th>
+                <th>Jam Masuk</th>
+                <th>Jam Keluar</th>
+                <th class="col-dur">Total Kerja</th>
+                <th class="col-dur">Kerja Efektif</th>
+                <th class="col-dur">Dur. Istirahat</th>
+                <th class="col-dur">Dur. Pause</th>
+                <th class="col-dur">Dur. Lembur</th>
+                <th class="col-aksi">Aksi</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="khEmpty" class="muted center"></p>
+      </div>
+    </section>
+
+    <!-- REKAP KEHADIRAN -->
+<section id="page-rekap" class="page">
+<h2 class="page-title">Rekap Kehadiran</h2>
+
+<div class="card rekap-toolbar">
+<div class="rekap-date-row">
+<div><label>Dari</label><input type="date" id="rekapFrom"></div>
+<div><label>Sampai</label><input type="date" id="rekapTo"></div>
+<div class="rekap-quick">
+<button id="btnRekapToday" class="btn btn-ghost btn-sm">Hari ini</button>
+<button id="btnRekapWeek" class="btn btn-ghost btn-sm">7 Hari</button>
+<button id="btnRekapMonth" class="btn btn-ghost btn-sm">Bulan ini</button>
+</div>
+<div class="rekap-actions">
+<button id="btnRekapLoad" class="btn btn-primary">Tampilkan</button>
+<button id="btnRekapExport" class="btn btn-success">Export CSV</button>
+</div>
+</div>
+<div class="rekap-search-row">
+<input type="search" id="rekapSearch" placeholder="Cari nama karyawan..." class="rekap-search">
+</div>
+</div>
+
+<div class="kh-summary" id="rekapSummary"></div>
+
+<div class="card">
+<div class="kh-table-header">
+<h3 id="rekapTitle">Ringkasan Kehadiran</h3>
+<p class="muted small">Agregasi per karyawan dalam rentang tanggal. Klik Export CSV untuk download.</p>
+</div>
+<div class="table-wrap">
+<table id="tblRekap" class="rekap-table">
+<thead>
+<tr>
+<th>No</th>
+<th>Nama</th>
+<th class="num">Hari Hadir</th>
+<th class="num">Jam Kerja</th>
+<th class="num">Jam Istirahat</th>
+<th class="num">Jam Lembur</th>
+<th class="num">Telat</th>
+<th class="num">Belum Lengkap</th>
+<th class="num">Total Event</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+<p id="rekapEmpty" class="muted center"></p>
+</div>
+</section>
+
+<!-- KARYAWAN -->
+    <section id="page-karyawan" class="page">
+      <h2 class="page-title">Karyawan</h2>
+      <div class="card" style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between">
+        <div style="flex:1 1 320px">
+          <h3 style="margin:0 0 4px">👋 Karyawan Baru</h3>
+          <p class="muted small" style="margin:0">Karyawan baru daftar sendiri dari halaman login pakai kode pendaftaran — nama lengkap, panggilan &amp; no. HP WhatsApp langsung keisi otomatis. Form tambah manual sudah dipensiunkan.</p>
+        </div>
+        <div>
+          <button type="button" id="btnSyncNama" class="btn btn-secondary">🔗 Sinkronkan Nama ke WMS</button>
+          <small style="color:#9ca3af;display:block;margin-top:4px;max-width:280px">Rapikan nama karyawan lama jadi panggilan huruf kecil + nama lengkap.</small>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Daftar Karyawan</h3>
+        <div class="table-wrap">
+          <table id="tblKaryawan">
+            <thead><tr><th>No.</th><th></th><th>Nama Lengkap</th><th>Panggilan</th><th>Libur</th><th>Email</th><th>No. HP</th><th>ID</th><th>Jam Kerja</th><th>Tanggal Join</th><th>Aksi</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="emptyKaryawan" class="muted center"></p>
+      </div>
+    </section>
+<section id="page-payroll" class="page">
+  <div class="page-head">
+    <h2>&#x1F4B0; Payroll</h2>
+    <p class="muted small">Estimasi gaji berjalan berdasarkan kehadiran. Tipe: harian, dibayar bulanan.</p>
+  </div>
+
+  <div class="card" style="margin-bottom:12px">
+    <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:end">
+      <div>
+        <label for="prBulan" class="muted small">Bulan gajian</label><br>
+        <input type="month" id="prBulan" style="font-size:14px; padding:6px 8px">
+        <div class="muted small" id="prPeriodeInfo" style="margin-top:5px"></div>
+      </div>
+      <button id="btnPrRefresh" class="btn btn-primary">Hitung Ulang</button>
+      <button id="btnPrExportCSV" class="btn btn-secondary">Export CSV</button>
+      <div class="muted small" id="prLastCalc" style="margin-left:auto"></div>
+    </div>
+  </div>
+
+  <div class="payroll-summary" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:10px; margin-bottom:14px">
+    <div class="card pr-stat"><b id="prTotalKaryawan">0</b><small>Total Karyawan</small></div>
+    <div class="card pr-stat"><b id="prTotalGross">Rp 0</b><small>Total Sebelum Potongan</small></div>
+    <div class="card pr-stat"><b id="prTotalPotongan" style="color:#f0a58a">Rp 0</b><small>Total Potongan</small></div>
+    <div class="card pr-stat"><b id="prTotalBonus" style="color:#86efac">Rp 0</b><small>Total Bonus</small></div>
+    <div class="card pr-stat"><b id="prTotalBudget">Rp 0</b><small>Total Payroll (setelah potongan)</small></div>
+    <div class="card pr-stat"><b id="prSudahBayar" style="color:#34d399">Rp 0</b><small>Sudah Dibayarkan</small></div>
+    <div class="card pr-stat"><b id="prBelumBayar" style="color:#fcd34d">Rp 0</b><small>Belum Dibayarkan</small></div>
+    <div class="card pr-stat"><b id="prTotalHari">0</b><small>Total Hari Hadir</small></div>
+    <div class="card pr-stat"><b id="prTotalLembur">0 jam</b><small>Total Jam Lembur</small></div>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table id="tblPayroll" class="table">
+        <thead><tr>
+          <th>Nama</th><th>Base/hari</th><th title="Hari masuk penuh (kerja minimal 75% jam standar). Angka (+N parsial) = masuk tapi kerja kurang dari itu, dibayar proporsional.">Hari Hadir</th><th title="Total jam kerja efektif bulan ini (sudah dikurangi istirahat).">Total Jam</th><th>Jam Lembur</th>
+          <th>Upah Pokok</th><th>Upah Lembur</th><th title="TUNJANGAN TETAP JABATAN — nilai flat per bulan buat peran penting (superadmin, host live, kepala gudang). Bisa di-set langsung di sini (tombol Edit) atau di menu Karyawan. Dibayar penuh selama ada kehadiran bulan itu, gak dipotong per hari.">Tunjangan Jabatan</th><th>Total</th><th title="BONUS SEKALI BAYAR — cuma buat bulan terpilih, bulan depan otomatis balik nol (beda sama Tunjangan Jabatan yang kebayar tiap bulan)">Bonus</th><th>Potongan</th><th title="Total + Bonus - Potongan = yang ditransfer">Total Bayar</th><th>Status</th><th>Aksi</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <p id="prEmpty" class="muted small center" style="padding:18px">Belum ada data. Pilih bulan lalu tap Hitung Ulang.</p>
+    </div>
+  </div>
+</section>
+
+<div id="payrollDetailModal" class="modal hidden">
+  <div class="modal-content card" style="max-width:780px; width:90%; max-height:90vh; display:flex; flex-direction:column">
+    <div class="modal-head">
+      <h3 id="prDetailTitle">Detail Payroll</h3>
+      <button class="modal-close" id="btnPrDetailClose">&times;</button>
+    </div>
+    <p class="muted small" id="prDetailSub"></p>
+    <div class="table-wrap" style="overflow-y:auto; min-height:0; flex:1">
+      <table id="tblPayrollDetail" class="table table-sm">
+        <thead><tr><th>Tanggal</th><th>Masuk</th><th>Keluar</th><th>Total Kerja</th><th>Kategori</th><th>Upah Pokok</th><th>Jam Lembur</th><th>Upah Lembur</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="bayarModal" class="modal hidden">
+  <div class="modal-content card" style="max-width:460px; width:92%; max-height:90vh; overflow-y:auto">
+    <div class="modal-head">
+      <h3 id="bayarTitle">Bayar Gaji</h3>
+      <button class="modal-close" id="btnBayarClose">&times;</button>
+    </div>
+    <div id="bayarBody"></div>
+  </div>
+</div>
+
+<div id="lupaModal" class="modal hidden">
+  <div class="modal-content card" style="max-width:680px; width:92%; max-height:88vh; overflow-y:auto">
+    <div class="modal-head">
+      <h3>Hari "Lupa Clock Out"</h3>
+      <button class="modal-close" id="btnLupaClose">&times;</button>
+    </div>
+    <p class="muted small" id="lupaSub"></p>
+    <div class="table-wrap">
+      <table class="table table-sm">
+        <thead><tr><th>Nama</th><th>Tanggal</th><th>Masuk</th><th>Dibayar (auto)</th><th></th></tr></thead>
+        <tbody id="lupaTbody"></tbody>
+      </table>
+    </div>
+    <p class="muted small" style="margin-top:10px">Hari-hari ini dibayar penuh otomatis (kontrak dikurangi 1 jam istirahat). Klik <b>Cek &amp; Edit</b> untuk buka harinya di Kehadiran Harian dan isi jam pulang aslinya &mdash; atau tutup saja kalau memang dibiarkan.</p>
+  </div>
+</div>
+
+  </main>
+</div>
+
+<div id="editKaryawanModal" class="modal hidden">
+  <div class="modal-content kedit">
+    <form id="formEditKaryawan">
+      <input type="hidden" id="editUid">
+
+      <div class="kedit-head">
+        <div>
+          <h3>Edit Karyawan</h3>
+          <p class="kedit-sub">Perubahan baru tersimpan setelah tekan <b>Simpan</b> di bawah</p>
+        </div>
+        <button type="button" class="modal-close" id="btnEditCancel" aria-label="Tutup">&times;</button>
+      </div>
+
+      <div class="kedit-body">
+
+        <section class="ksec">
+          <div class="ksec-head"><span class="ksec-ico">&#x1F464;</span><div><b>Data Pribadi</b><small>Identitas &amp; kontak karyawan</small></div></div>
+          <div class="kgrid">
+            <div class="kfield kfull"><label>Nama Lengkap</label><input type="text" id="editNama" required></div>
+            <div class="kfield"><label>Nama Panggilan</label><input type="text" id="editNamaPanggilan" placeholder="cth: mila" maxlength="20" required><small class="kfield-note">1 kata huruf kecil &mdash; dipakai sync WMS</small></div>
+            <div class="kfield"><label>No. HP</label><input type="text" id="editPhone" inputmode="numeric" placeholder="+62..."></div>
+            <div class="kfield"><label>ID Karyawan</label><input type="text" id="editIdKaryawan"></div>
+            <div class="kfield"><label>Jabatan</label><input type="text" id="editJabatan" placeholder="cth: Staff Operasional"></div>
+            <div class="kfield"><label>Status Kerja</label><select id="editStatusKaryawan"><option value="">-</option><option value="tetap">Tetap</option><option value="kontrak">Kontrak</option><option value="freelance">Freelance</option><option value="magang">Magang</option></select></div>
+            <div class="kfield"><label>Tanggal Join</label><input type="date" id="editTanggalJoin"></div>
+            <div class="kfield"><label>Tanggal Lahir</label><input type="date" id="editTanggalLahir"><small class="kfield-note">Buat notifikasi ulang tahun di Beranda</small></div>
+          </div>
+        </section>
+
+        <section class="ksec">
+          <div class="ksec-head"><span class="ksec-ico">&#x1F4B0;</span><div><b>Payroll</b><small>Gaji harian, dibayar bulanan &mdash; total = base &times; hari hadir + lembur + tunjangan peran</small></div></div>
+          <div class="kgrid kgrid-3">
+            <div class="kfield"><label>Base Harian (Rp)</label><input type="number" id="editBaseHarian" min="0" step="1000" placeholder="100000"></div>
+            <div class="kfield"><label>Jam Kerja / Hari</label><input type="number" id="editJamKerja" min="1" max="24" value="9"></div>
+            <div class="kfield"><label>Multiplier Lembur</label><input type="number" id="editMultiplierLembur" min="1" max="5" step="0.1" value="1.5" placeholder="1.5"></div>
+            <!-- PR-CL78: tunjangan peran flat bulanan (superadmin/admin/host live/PIC) — di luar base harian -->
+            <div class="kfield"><label>Tunjangan Jabatan / bln (Rp) <small class="muted">tetap per bulan buat peran penting, 0 = tidak ada</small></label><input type="text" inputmode="numeric" id="editTunjangan" placeholder="cth: 1.750.000"></div>
+            <div class="kfield"><label>Plafon Kasbon (%) <small class="muted">maks % dari gaji berjalan, default 50</small></label><input type="number" id="editKasbonPlafon" min="0" max="100" step="5" placeholder="50"></div>
+          </div>
+        </section>
+
+        <section class="ksec">
+          <div class="ksec-head"><span class="ksec-ico">&#x1F334;</span><div><b>Hari Libur Mingguan</b><small>Maks 3 orang/hari &middot; ga dianggap mangkir &middot; ga mengubah gaji</small></div></div>
+          <div class="kfield"><label>Hari Libur</label>
+            <select id="editLiburHari">
+              <option value="">Tidak ada</option>
+              <option value="0">Minggu</option>
+              <option value="1">Senin</option>
+              <option value="2">Selasa</option>
+              <option value="3">Rabu</option>
+              <option value="4">Kamis</option>
+              <option value="5">Jumat</option>
+              <option value="6">Sabtu</option>
+            </select>
+            <small class="kfield-note" id="editLiburHint">Kuota tiap hari muncul di daftar pilihan.</small>
+            <div id="editLiburReq" style="display:none;margin-top:8px;padding:8px 10px;border:1px solid rgba(249,115,22,.35);border-radius:9px;background:rgba(249,115,22,.06);font-size:12.5px;color:var(--gg-text-2)"></div>
+          </div>
+        </section>
+
+        <section class="ksec">
+          <div class="ksec-head"><span class="ksec-ico">&#x1F6F0;</span><div><b>Absensi &amp; Verifikasi</b><small>Aturan khusus untuk karyawan ini</small></div></div>
+          <div class="ktog-list">
+            <label class="ktog">
+              <input type="checkbox" id="editGpsExempt">
+              <span><b>Lewati cek GPS</b><small>HANYA kalau HP-nya lokasinya rusak. Absen tidak ditandai "luar radius", berbasis kepercayaan.</small></span>
+            </label>
+            <label class="ktog">
+              <input type="checkbox" id="editWajibKode">
+              <span><b>Wajib kode admin saat Clock Out</b><small>Harus minta kode 4 angka ke admin tiap pulang (cek fisik). Darurat tanpa kode tetap bisa, tapi ditandai merah.</small></span>
+            </label>
+            <label class="ktog">
+              <input type="checkbox" id="editKodeAdmin">
+              <span><b>Admin kode</b><small>Bisa lihat &amp; kasih kode Clock Out (admin bertugas/nginap, mis. Ila, Mila, Desty).</small></span>
+            </label>
+            <label class="ktog">
+              <input type="checkbox" id="editSpvAkses">
+              <span><b>Akses SPV (pantau tim)</b><small>Buka halaman Pantau Tim: lihat siapa yang lagi kerja / istirahat / sudah pulang secara realtime. Cuma melihat &mdash; TIDAK bisa lihat gaji, KTP, rekening, atau mengubah data apa pun.</small></span>
+            </label>
+            <label class="ktog">
+              <input type="checkbox" id="editKasbonAktif">
+              <span><b>Boleh ajukan kasbon</b><small>Buka tombol Kasbon di aplikasi karyawan (patokan: sudah kerja 1 tahun+). Mereka yang ajukan sendiri, maksimal 1x per periode gaji &mdash; kamu tinggal setujui / tolak.</small></span>
+            </label>
+          </div>
+        </section>
+
+        <section class="ksec">
+          <div class="ksec-head"><span class="ksec-ico">&#x1F3E6;</span><div><b>Rekening Bank</b><small>Tujuan transfer gaji</small></div></div>
+          <div class="kgrid kgrid-3">
+            <div class="kfield"><label>Nama Bank</label><input type="text" id="editNamaBank" placeholder="cth: BCA"></div>
+            <div class="kfield"><label>Atas Nama</label><input type="text" id="editAtasNamaRek" placeholder="Sesuai buku tabungan"></div>
+            <div class="kfield"><label>No. Rekening</label><input type="text" inputmode="numeric" id="editNomorRekening" placeholder="1234567890"></div>
+          </div>
+        </section>
+
+        <section class="ksec">
+          <div class="ksec-head"><span class="ksec-ico">&#x1FAAA;</span><div><b>Dokumen (Privat)</b><small>KTP diupload karyawan lewat menu Profil &mdash; owner hanya melihat</small></div></div>
+          <div style="font-size:13px;color:var(--gg-text-2)">Foto KTP: <span id="ktpStatus" class="muted"></span></div>
+          <div id="editKtpPreviewWrap" style="margin-top:10px;display:none">
+            <a id="editKtpLink" href="#" target="_blank" rel="noopener">
+              <img id="editKtpPreview" alt="Foto KTP" style="max-width:100%;max-height:220px;border-radius:12px;border:1px solid #2a2a2a" />
+            </a>
+          </div>
+          <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span id="profilLockStatus" class="muted" style="font-size:12.5px"></span>
+            <button type="button" id="btnResetLockProfil" class="btn btn-ghost btn-sm" style="display:none">Buka Kunci Rekening</button>
+          </div>
+        </section>
+
+        <section class="ksec kdanger">
+          <div class="ksec-head"><span class="ksec-ico">&#x1F4E6;</span><div><b>Arsip Karyawan</b><small>Untuk yang sudah resign &mdash; data &amp; histori tetap aman</small></div></div>
+          <label class="ktog kwarn">
+            <input type="checkbox" id="editNonaktif">
+            <span><b>Nonaktif (sudah resign)</b><small>Hilang dari daftar "ga masuk" harian &amp; laporan Telegram. Payroll bulan berjalan tetap muncul buat settle gaji terakhir. Un-ceklis kalau kerja lagi.</small></span>
+          </label>
+        </section>
+
+      </div>
+
+      <div class="kedit-foot">
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('editKaryawanModal').classList.add('hidden')">Batal</button>
+        <button type="submit" class="btn btn-primary">&#x1F4BE; Simpan Perubahan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="profilViewModal" class="modal hidden">
+  <div class="modal-content card" style="max-width:560px;max-height:90vh;overflow-y:auto;">
+    <h3 id="pvTitle">Profil Karyawan</h3>
+    <div id="profilViewBody"></div>
+    <div style="margin-top:16px;text-align:right;">
+      <button type="button" class="btn btn-secondary" id="btnProfilViewClose">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<div id="editAbsenModal" class="modal hidden">
+  <div class="modal-content card" style="max-width:480px">
+    <h3>Edit Absensi (Owner Only)</h3>
+    <form id="formEditAbsen" class="form-grid">
+      <input type="hidden" id="editAbsenId">
+      <div><label>Nama</label><input type="text" id="editAbsenNama" disabled></div>
+      <div><label>Tipe</label>
+        <select id="editAbsenTipe">
+          <option value="clock_in">Clock In</option>
+          <option value="clock_out">Clock Out</option>
+          <option value="break_in">Istirahat</option>
+          <option value="break_out">Selesai Istirahat</option>
+          <option value="pause_in">Pause Kerja</option>
+          <option value="pause_out">Lanjut Kerja</option>
+          <option value="overtime_in">Mulai Lembur</option>
+          <option value="overtime_out">Selesai Lembur</option>
+        </select>
+      </div>
+      <div><label>Tanggal</label><input type="date" id="editAbsenDate" required></div>
+      <div><label>Jam</label><input type="time" id="editAbsenTime" step="1" required></div>
+      <div><label>Catatan Edit (opsional)</label><input type="text" id="editAbsenNote" placeholder="alasan edit"></div>
+      <div class="form-actions" style="display:flex;gap:8px">
+        <button type="submit" class="btn btn-primary">Simpan</button>
+        <button type="button" class="btn btn-secondary" id="btnEditAbsenCancel">Batal</button>
+      </div>
+    </form>
+    <p class="muted small">Catatan: Edit dicatat dengan penanda "editedByOwner".</p>
+  </div>
+</div>
+
+<div id="deleteAbsenModal" class="modal hidden">
+  <div class="modal-content card" style="max-width:440px">
+    <h3 style="color:#dc2626">Hapus Absen</h3>
+    <p id="deleteAbsenMsg" style="margin:8px 0 16px">Yakin hapus absen ini?</p>
+    <input type="hidden" id="deleteAbsenId">
+    <p class="muted small">Setelah dihapus, data tidak bisa dikembalikan. Karyawan dapat melakukan Clock In ulang untuk hari tersebut.</p>
+    <div class="form-actions" style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+      <button type="button" class="btn btn-secondary" id="btnDeleteAbsenCancel">Batal</button>
+      <button type="button" class="btn" id="btnDeleteAbsenConfirm" style="background:#dc2626;color:#fff">Hapus</button>
+    </div>
+  </div>
+</div>
+
+
+<div id="photoModal" class="modal hidden" onclick="this.classList.remove('show')">
+  <img id="modalImg" alt="Foto absen">
+</div>
+
+<script type="module" src="js/owner.js"></script>
+
+<!-- ===== Modal Detail Rekap (drill-down per karyawan) ===== -->
+<div id="rekapDetailModal" class="modal hidden">
+  <div class="modal-content rekap-detail-content">
+    <div class="modal-head">
+      <h3 id="rekapDetailTitle">Detail Kehadiran</h3>
+      <button class="modal-close" id="btnRekapDetailClose" aria-label="Tutup">×</button>
+    </div>
+    <p class="muted small" id="rekapDetailSub">Klik jam / tipe untuk edit langsung. Perubahan tersimpan otomatis.</p>
+    <div class="table-wrap">
+      <table id="tblRekapDetail" class="rekap-detail-table">
+        <thead><tr>
+          <th>Tanggal</th><th>Jam</th><th>Tipe</th><th>Status</th><th>Aksi</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p id="rekapDetailEmpty" class="muted center"></p>
+  </div>
+</div>
+
+<script src="js/update-banner.js" defer></script>
+</body>
+</html>
