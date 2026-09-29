@@ -147,7 +147,7 @@ import { auth, db, storage, OWNER_EMAILS, firebaseConfig, kodeClockout, KODE_SLO
   collection, query, where, orderBy, limit, getDocs, onSnapshot, Timestamp, setDoc, updateDoc, deleteDoc, getDoc, addDoc, doc, serverTimestamp,
   initializeApp, deleteApp, getAuth, createUserWithEmailAndPassword, signOut as authSignOut } from './firebase-shim.js';
 import { sb as sbAbsen } from './supabase-config.js';
-import { renderAntrianLembur } from './lembur-acc.js';   // PR-CL127
+import { renderLemburHariIni } from './lembur-acc.js';   // PR-CL127 / PR-CL128
 
 const $ = id => document.getElementById(id);
 const TIPE = { clock_in:'Clock In', clock_out:'Clock Out', break_in:'Istirahat', break_out:'Selesai Istirahat', pause_in:'Pause Kerja', pause_out:'Lanjut Kerja', overtime_in:'Mulai Lembur', overtime_out:'Selesai Lembur' };
@@ -392,7 +392,7 @@ async function renderBeranda(rows){
     try{
       if (!window.__lemburAccAt || Date.now() - window.__lemburAccAt > 60000){
         window.__lemburAccAt = Date.now();
-        await renderAntrianLembur($('lemburAccBox'), { sesudahPutus: () => { window.__lemburAccAt = 0; } });
+        await renderLemburHariIni($('lemburAccBox'), { sesudahPutus: () => { window.__lemburAccAt = 0; } });
       }
     }catch(e){ console.warn('lembur acc err', e); }
     const total = await getTotalKaryawan();
@@ -2638,29 +2638,37 @@ const RATE_LEMBUR_FLAT = 12500;
 // jam normal tetap. Override manual owner (lemburOverrideMin) tetap menang.
 // Tanggal ini SAMA dengan absensi.lembur_acc_mulai() di database. Hari sebelumnya tidak berubah.
 const LEMBUR_ACC_MULAI = '2026-09-29';
+// PR-CL128: mulai tanggal yang sama, lembur semua orang KECUALI yang bebas ACC (Mila) dibayar
+// 1,5x rate flat (Rp 12.500 x 1,5 = Rp 18.750/jam). Sengaja dihitung per hari di sini, bukan
+// lewat kolom karyawan.multiplier_lembur, supaya periode lama tidak ikut berubah.
+const LEMBUR_MULT_BARU = 1.5;
 async function muatLemburAcc(start, end){
   const tgl = d => new Date(d).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
-  const res = { mulai: LEMBUR_ACC_MULAI, acc: [], bebas: new Set(), nowMs: Date.now() };
+  const res = { mulai: LEMBUR_ACC_MULAI, acc: [], bebas: new Set(), izin: [], nowMs: Date.now() };
   if (tgl(end) < LEMBUR_ACC_MULAI) return res;          // periode lama: tidak ada yang perlu dibaca
   const batas = q => { try{ return q.abortSignal(AbortSignal.timeout(15000)); }catch(_){ return q; } };
-  const [r1, r2] = await Promise.all([
+  const [r1, r2, r3] = await Promise.all([
     batas(sbAbsen.rpc('lembur_acc_rentang', { p_dari: tgl(start), p_sampai: tgl(end) }, { get: true })),
-    batas(sbAbsen.from('lembur_akses').select('karyawan_id').eq('bebas_acc', true))
+    batas(sbAbsen.from('lembur_akses').select('karyawan_id').eq('bebas_acc', true)),
+    batas(sbAbsen.rpc('lembur_izin_rentang', { p_dari: tgl(start), p_sampai: tgl(end) }, { get: true }))
   ]);
   if (r1.error) throw r1.error;
   if (r2.error) throw r2.error;
+  if (r3.error) throw r3.error;
   res.acc = r1.data || [];
   res.bebas = new Set((r2.data || []).map(x => x.karyawan_id));
+  res.izin = r3.data || [];
   return res;
 }
 const LEMBUR_STATUS_LABEL = {
   menunggu: ['nunggu', '⏳ nunggu ACC'], ditolak: ['tolak', '❌ ditolak'],
   kedaluwarsa: ['tolak', '⌛ tidak di-ACC'], tanpa_pengajuan: ['tolak', '⚠ belum diajukan'],
-  disetujui: ['ok', '✅ ACC'], bebas: ['ok', 'bebas ACC']
+  disetujui: ['ok', '✅ ACC'], bebas: ['ok', 'bebas ACC'],
+  izin_minta: ['ok', '✅ ACC'], izin_suruh: ['ok', '📣 disuruh'], belum_selesai: ['nunggu', '⚠ belum Selesai Lembur']
 };
 function lemburTag(status, penyetuju){
   const l = LEMBUR_STATUS_LABEL[status]; if (!l) return '';
-  return '<span class="lembur-tag ' + l[0] + '">' + l[1] + (status === 'disetujui' && penyetuju ? ' ' + penyetuju : '') + '</span>';
+  return '<span class="lembur-tag ' + l[0] + '">' + l[1] + ((status === 'disetujui' || status === 'izin_minta' || status === 'izin_suruh') && penyetuju ? ' ' + penyetuju : '') + '</span>';
 }
 
 function prFormatRp(n){
@@ -2749,6 +2757,8 @@ catch (e) {
 }
 const __accByAbsen = new Map(), __accByHari = new Map();
 for (const __a of __lemburAcc.acc){ __accByAbsen.set(__a.absen_id, __a); __accByHari.set(__a.karyawan_id + '|' + __a.tanggal, __a); }
+const __izinByMulai = new Map();   // PR-CL128: event overtime_in -> izin lembur
+for (const __z of (__lemburAcc.izin || [])){ if (__z.mulai_absen_id) __izinByMulai.set(__z.mulai_absen_id, __z); }
 function __cariAcc(uid, dateStr, evs){
   for (let __i = evs.length - 1; __i >= 0; __i--){ const __e = evs[__i]; if (__e.tipe === 'overtime_out' && __accByAbsen.has(__e.id)) return __accByAbsen.get(__e.id); }
   return __accByHari.get(uid + '|' + dateStr) || null;
@@ -2803,6 +2813,7 @@ const paMulai = k.paMulai ? String(k.paMulai) : '';
 const tarifPA = Number(k.paTarifHarian) || 0;
 let hariPA = 0;
 let totalJamLemburTertahan = 0, hariLemburNunggu = 0, hariLemburTolak = 0;   // PR-CL127
+let jamLemburLama = 0, jamLemburBaru = 0;   // PR-CL128: rate lama (x multiplier karyawan) vs 1,5x
 const dailyDetails = [];
 for (const entry of personMap){ entry[1].sort((a,b)=>a.ts - b.ts); }
 const sortedDateKeys = Array.from(personMap.keys()).sort();
@@ -2835,7 +2846,8 @@ if (ci){
           const idxR = nextEvts.indexOf(nextCoCandidate);
           if (idxR>=0) nextEvts.splice(idxR,1);
         }
-        ['overtime_out','break_out','pause_out'].forEach(function(__tp){
+        // PR-CL128: hari aturan baru ikut bawa Mulai Lembur / mulai istirahat yang lewat tengah malam.
+        ((__lemburAcc.mulai && dateStr >= __lemburAcc.mulai) ? ['overtime_in','overtime_out','break_in','break_out','pause_in','pause_out'] : ['overtime_out','break_out','pause_out']).forEach(function(__tp){
           for (let __z=0; __z<nextEvts.length; __z++){
             if (nextEvts[__z].tipe===__tp && nextEvts[__z].ts.getTime() < __cut){
               events.push(nextEvts[__z]);
@@ -2914,7 +2926,34 @@ let lemburJam = 0;
 const _ovrEv = events.find(e => e.lemburOverrideMin !== undefined && e.lemburOverrideMin !== null && e.lemburOverrideMin !== '');
 const __ovr = _ovrEv ? (Number(_ovrEv.lemburOverrideMin)/60) : null;
 let lemburStatus = '', lemburTertahanJam = 0, lemburAccRow = null;   // PR-CL127
-if (__ovr !== null){ lemburJam = Math.max(0, __ovr); totalJamLembur += lemburJam; }
+// PR-CL128: hari >= LEMBUR_ACC_MULAI dan bukan Mila -> rate 1,5x. Lembur lewat izin dihitung dari
+// Mulai Lembur sampai Selesai Lembur, dipotong istirahat/pause di jendela itu.
+const __hariBaru = !!(__lemburAcc.mulai && dateStr >= __lemburAcc.mulai) && !__lemburAcc.bebas.has(k.uid);
+let lemburIzin = null, __oiIzin = null;
+if (__hariBaru){ for (const __e of events){ if (__e.tipe === 'overtime_in' && __izinByMulai.has(__e.id)) __oiIzin = __e; } }
+if (__oiIzin) lemburIzin = __izinByMulai.get(__oiIzin.id);
+if (__ovr !== null){ lemburJam = Math.max(0, __ovr); totalJamLembur += lemburJam; if (lemburIzin) lemburStatus = 'izin_' + lemburIzin.jenis; }
+else if (__oiIzin){
+  const __oiMs = __oiIzin.ts.getTime();
+  const __sel = events.find(e => (e.tipe === 'overtime_out' || e.tipe === 'clock_out') && e.ts.getTime() >= __oiMs);
+  if (__sel){
+    const __selMs = __sel.ts.getTime();
+    const __jedaJam = (function(){
+      let tot = 0; const pasang = [['break_in','break_out'], ['pause_in','pause_out']];
+      for (const [tIn, tOut] of pasang){
+        let s = null;
+        for (const e of events){
+          if (e.tipe === tIn) s = e.ts.getTime();
+          else if (e.tipe === tOut && s !== null){ const a = Math.max(s, __oiMs), b = Math.min(e.ts.getTime(), __selMs); if (b > a) tot += (b - a); s = null; }
+        }
+      }
+      return tot / 3600000;
+    })();
+    lemburJam = Math.max(0, (__selMs - __oiMs) / 3600000 - __jedaJam);
+    lemburStatus = 'izin_' + lemburIzin.jenis;
+  } else { lemburStatus = 'belum_selesai'; }
+  totalJamLembur += lemburJam;
+}
 else if (oo){
   const __netH = Math.max(0, jamKerja - 1); lemburJam = Math.max(0, durJam - __netH);
   // PR-CL127: sesi mulai LEMBUR_ACC_MULAI -> lembur cuma dibayar kalau di-ACC (atau bebas ACC).
@@ -2929,6 +2968,8 @@ else if (oo){
   }
   totalJamLembur += lemburJam;
 }
+if (__hariBaru) jamLemburBaru += lemburJam; else jamLemburLama += lemburJam;   // PR-CL128
+const lemburMult = __hariBaru ? LEMBUR_MULT_BARU : multiplierLembur;
 dailyDetails.push({
 date: dateStr,
 jamMasuk: ci ? ci.ts.toTimeString().substring(0,5) : '--',
@@ -2939,11 +2980,15 @@ lemburJam: lemburJam.toFixed(2),
 kategori: kategori,
 kontribusi: kontribusi,
 lemburStatus: lemburStatus, lemburTertahanJam: lemburTertahanJam, // PR-CL127
-lemburPenyetuju: (lemburAccRow && lemburAccRow.penyetuju) || '', lemburAlasan: (lemburAccRow && lemburAccRow.alasan) || ''
+lemburPenyetuju: (lemburIzin && lemburIzin.penyetuju) || (lemburAccRow && lemburAccRow.penyetuju) || '',
+lemburAlasan: (lemburIzin && lemburIzin.alasan) || (lemburAccRow && lemburAccRow.alasan) || '',
+lemburMult: lemburMult // PR-CL128
 });
 }
 const upahPokok = totalKontribusi;
-const upahLembur = totalJamLembur * rateLemburPerJam * multiplierLembur; // PR-CL84: pakai rate lembur seragam
+// PR-CL84: rate lembur seragam. PR-CL128: jam hari aturan baru (>= LEMBUR_ACC_MULAI, bukan Mila) x 1,5.
+// Kalau tidak ada jam baru, jamLemburLama === totalJamLembur (penjumlahan sama persis) -> angka lama identik.
+const upahLembur = jamLemburLama * rateLemburPerJam * multiplierLembur + jamLemburBaru * rateLemburPerJam * LEMBUR_MULT_BARU;
 // PR-CL78: tunjangan peran flat bulanan — dibayar penuh selama ada kehadiran bulan itu
 // (baris tanpa kehadiran sudah di-skip oleh guard di bawah, jadi otomatis ikut aturan itu).
 const tunjangan = parseInt(k.tunjanganBulanan, 10) || 0;
@@ -2965,6 +3010,7 @@ hariHadir: hariHadir, hariParsial: hariParsial, hariLupaCO: hariLupaCO,
 hariPA: hariPA, tarifPA: tarifPA, modePA: hariPA > 0 && hariPA === (hariHadir + hariParsial), // PR-CL124
 totalJamKerja: totalJamKerja, totalJamLembur: totalJamLembur,
 totalJamLemburTertahan: totalJamLemburTertahan, hariLemburNunggu: hariLemburNunggu, hariLemburTolak: hariLemburTolak, // PR-CL127
+jamLemburBaru: jamLemburBaru, // PR-CL128
 upahPokok: upahPokok, upahLembur: upahLembur, tunjangan: tunjangan, total: total,
 potongan: potongan, bonus: bonus, totalBayar: totalBayar,
 namaBank: k.namaBank || '', atasNamaRek: k.atasNamaRek || '', nomorRekening: k.nomorRekening || '',
@@ -3190,7 +3236,7 @@ tr.innerHTML = '<td><div class="pr-name-cell">' + __prAvatar(r) + '<div class="p
   + (r.totalJamLemburTertahan > 0 ? '<br><small class="lembur-tag ' + (r.hariLemburNunggu ? 'nunggu' : 'tolak') + '" title="Lembur sesi sejak ' + LEMBUR_ACC_MULAI + ' yang belum / tidak di-ACC. Tidak dibayar kecuali di-ACC sebelum batas.">'
     + fmtLemburHM(r.totalJamLemburTertahan) + ' tdk dibayar' + (r.hariLemburNunggu ? ' (' + r.hariLemburNunggu + ' nunggu ACC)' : '') + '</small>' : '')) + '</td>' +
 '<td class="num">' + prFormatRp(r.upahPokok) + '</td>' +
-'<td class="num">' + prFormatRp(r.upahLembur) + '</td>' +
+'<td class="num">' + prFormatRp(r.upahLembur) + (r.jamLemburBaru > 0 ? '<br><small class="lembur-tag ok" title="Lembur mulai ' + LEMBUR_ACC_MULAI + ' dibayar 1,5× = ' + prFormatRp((r.rateLemburPerJam||0) * LEMBUR_MULT_BARU) + '/jam">' + fmtLemburHM(r.jamLemburBaru) + ' × 1,5</small>' : '') + '</td>' +
 '<td class="num pr-tun-cell" data-uid="' + r.uid + '"><span class="pr-tun-val">' + (r.tunjangan ? prFormatRp(r.tunjangan) : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-tun-edit" data-uid="' + r.uid + '" style="color:#f97316">Edit</button></td>' +
 '<td class="num">' + prFormatRp(r.total) + '</td>' +
 '<td class="num pr-bon-cell" data-uid="' + r.uid + '"><span class="pr-bon-val">' + (r.bonus ? '<span style="color:#86efac">+' + prFormatRp(r.bonus) + '</span>' : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-bon-edit" data-uid="' + r.uid + '" style="color:#f97316">Edit</button></td>' +
@@ -3422,7 +3468,7 @@ const r = __payrollData.rows.find(x => x.uid === uid);
 if (!r) return;
 $('prDetailTitle').textContent = 'Detail Payroll \u2014 ' + r.nama;
 if (r.modePA) $('prDetailSub').textContent = 'Periode: ' + __payrollData.label + ' \u2014 Personal Assistant: ' + r.hariHadir + ' hari \u00d7 ' + prFormatRp(r.tarifPA) + ' \u2014 Total: ' + prFormatRp(r.total);
-else $('prDetailSub').textContent = 'Periode: ' + __payrollData.label + ' \u2014 Total Jam: ' + r.totalJamKerja.toFixed(1) + ' jam \u2014 Rate pokok: ' + prFormatRp(r.ratePerJam||0) + '/jam \u2014 Rate lembur: ' + prFormatRp(r.rateLemburPerJam||r.ratePerJam||0) + '/jam \u2014 Total: ' + prFormatRp(r.total);
+else $('prDetailSub').textContent = 'Periode: ' + __payrollData.label + ' \u2014 Total Jam: ' + r.totalJamKerja.toFixed(1) + ' jam \u2014 Rate pokok: ' + prFormatRp(r.ratePerJam||0) + '/jam \u2014 Rate lembur: ' + prFormatRp(r.rateLemburPerJam||r.ratePerJam||0) + '/jam' + (r.jamLemburBaru > 0 ? ' (1,5× = ' + prFormatRp((r.rateLemburPerJam||0) * LEMBUR_MULT_BARU) + '/jam mulai ' + LEMBUR_ACC_MULAI + ')' : '') + ' \u2014 Total: ' + prFormatRp(r.total);
 const tb = document.querySelector('#tblPayrollDetail tbody');
 tb.innerHTML = '';
 if (!r.dailyDetails.length){
@@ -3440,10 +3486,11 @@ const kategoriBadge = d.kategori === 'hadir' ? '<span style="color:#16a34a">\u27
 : '<span class="muted">' + d.kategori + '</span>';
 const jamLabel = d.durJam + ' jam' + (parseFloat(d.effJam) < parseFloat(d.durJam) ? ' <small class="muted">(eff ' + d.effJam + ')</small>' : '');
 const _lemJam = parseFloat(d.lemburJam) || 0;
-const _lemRp = _lemJam * _rate * _mult;
+const _lemRp = _lemJam * _rate * (d.lemburMult || _mult);   // PR-CL128: 1,5x per hari
 let _lemJamCell = _lemJam > 0 ? fmtLemburHM(_lemJam) : '<span class="muted">-</span>';
 // PR-CL127: status ACC lembur per hari (sesi sejak LEMBUR_ACC_MULAI)
-if (d.lemburStatus && (d.lemburTertahanJam > 0 || _lemJam > 0)){
+if (_lemJam > 0 && d.lemburMult === LEMBUR_MULT_BARU) _lemJamCell += ' <span class="lembur-tag ok">1,5×</span>';
+if (d.lemburStatus && (d.lemburTertahanJam > 0 || _lemJam > 0 || d.lemburStatus === 'belum_selesai')){
   _lemJamCell += ' ' + lemburTag(d.lemburStatus, d.lemburPenyetuju)
     + (d.lemburTertahanJam > 0 ? '<br><small class="muted">' + fmtLemburHM(d.lemburTertahanJam) + ' tdk dibayar</small>' : '');
   if (d.lemburAlasan) _lemJamCell += '<br><small class="muted" title="Alasan lembur">&ldquo;' + String(d.lemburAlasan).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])) + '&rdquo;</small>';
