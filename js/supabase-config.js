@@ -40,8 +40,6 @@ if (MODE_UJI && typeof document !== 'undefined') {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pasangPita); else pasangPita();
 }
 
-// Kode rahasia pendaftaran karyawan. Ganti kapan saja kalau bocor.
-export const KODE_PENDAFTARAN = 'GOODGEMS2026';
 
 // Ember foto (semua PRIVAT). Yang disimpan di database cuma path '<karyawan_id>/...'.
 export const EMBER_SELFIE = 'absensi-selfie';
