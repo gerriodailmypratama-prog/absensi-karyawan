@@ -1,0 +1,287 @@
+/* ==========================================================================
+   PR-CL122 — Owner dashboard redesign (dark-only, scoped to body.owner-v2)
+   Loaded after style.css. Only uses --gg-* tokens + existing semantic hues.
+   All element IDs/classes consumed by owner.js are unchanged.
+   ========================================================================== */
+
+body.owner-v2{
+  background:
+    radial-gradient(900px 420px at 110% -10%,rgba(249,115,22,.07),transparent 60%),
+    radial-gradient(700px 380px at -10% 110%,rgba(249,115,22,.04),transparent 60%),
+    var(--gg-bg);
+  background-attachment:fixed;
+}
+
+/* ---------- Topbar ---------- */
+.owner-v2 .topbar{
+  position:sticky;top:0;z-index:50;height:60px;padding:0 20px;
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--gg-topbar);
+  -webkit-backdrop-filter:saturate(1.4) blur(14px);backdrop-filter:saturate(1.4) blur(14px);
+  border-bottom:1px solid var(--gg-hairline);box-shadow:none;
+}
+.owner-v2 .brand-wrap{gap:14px}
+.owner-v2 .brand-logo{font-size:18px;letter-spacing:2.5px}
+.owner-v2 .brand-logo-accent{font-size:14px;padding:3px 8px;border-radius:7px;background-color:rgba(249,115,22,.08)}
+.owner-v2 #ownerEmail{
+  display:inline-flex;align-items:center;gap:7px;padding:5px 11px 5px 9px;border-radius:999px;
+  background:var(--gg-surface);border:1px solid var(--gg-border);color:var(--gg-muted);font-size:12px;
+}
+.owner-v2 #ownerEmail:empty{display:none}
+.owner-v2 #ownerEmail::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--gg-success);box-shadow:0 0 8px rgba(34,197,94,.7)}
+.owner-v2 #btnLogout{
+  background:transparent;border:1px solid var(--gg-border-2);color:var(--gg-text-2);
+  border-radius:10px;padding:7px 14px;font-size:13px;font-weight:600;
+}
+.owner-v2 #btnLogout:hover{border-color:rgba(239,68,68,.55);color:var(--gg-danger-t);background:rgba(239,68,68,.08)}
+
+/* ---------- Sidebar ---------- */
+.owner-v2 .layout{min-height:calc(100vh - 60px)}
+.owner-v2 .sidebar{
+  width:248px;top:60px;height:calc(100vh - 60px);padding:14px 0 18px;
+  background:rgba(14,14,14,.72);border-right:1px solid var(--gg-hairline);
+  display:flex;flex-direction:column;
+}
+.owner-v2 .sidebar nav{gap:3px;padding:6px 12px}
+.owner-v2 .sb-label{
+  padding:6px 10px 8px;font-size:10.5px;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--gg-muted-2);
+}
+.owner-v2 .sidebar .nav-link{
+  position:relative;display:flex;align-items:center;gap:11px;
+  padding:8px 10px;border-radius:12px;font-size:13.5px;font-weight:550;color:var(--gg-muted);
+}
+.owner-v2 .sidebar .nav-link:hover{background:rgba(255,255,255,.04);color:var(--gg-text);transform:none}
+.owner-v2 .nav-ic{
+  width:32px;height:32px;flex:0 0 32px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;
+  background:var(--gg-surface-2);border:1px solid var(--gg-border);color:var(--gg-muted);
+  transition:background var(--gg-ease),color var(--gg-ease),border-color var(--gg-ease);
+}
+.owner-v2 .nav-ic svg{width:17px;height:17px}
+.owner-v2 .sidebar .nav-link:hover .nav-ic{color:var(--gg-text);border-color:var(--gg-border-2)}
+.owner-v2 .sidebar .nav-link.active{
+  background:linear-gradient(90deg,rgba(249,115,22,.16),rgba(249,115,22,.03));
+  color:var(--gg-text);box-shadow:inset 0 0 0 1px rgba(249,115,22,.22);
+}
+.owner-v2 .sidebar .nav-link.active::before{
+  content:'';position:absolute;left:-12px;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;
+  background:var(--gg-primary);box-shadow:0 0 12px var(--gg-glow);
+}
+.owner-v2 .sidebar .nav-link.active .nav-ic{background:var(--gg-grad);border-color:transparent;color:#fff;box-shadow:0 4px 14px var(--gg-glow)}
+
+/* Kode clock-out (injected by owner.js) */
+.owner-v2 .sb-kode{
+  margin:auto 14px 0;padding:14px 14px 12px;border-radius:var(--gg-radius);
+  background:linear-gradient(160deg,rgba(249,115,22,.14),rgba(249,115,22,.02) 60%),var(--gg-surface);
+  border:1px solid rgba(249,115,22,.25);
+}
+.owner-v2 .sb-kode-lbl{font-size:10.5px;font-weight:700;letter-spacing:.12em;color:var(--gg-muted)}
+.owner-v2 .sb-kode-val{
+  margin:6px 0 4px;font-family:var(--gg-mono);font-size:26px;font-weight:800;letter-spacing:.28em;
+  color:var(--gg-primary-2);text-shadow:0 0 18px var(--gg-glow);font-variant-numeric:tabular-nums;
+}
+.owner-v2 .sb-kode-timer{font-size:11px;color:var(--gg-muted)}
+
+/* ---------- Content & page headers ---------- */
+.owner-v2 .content{padding:28px 32px 48px;max-width:1480px}
+.owner-v2 .page-title{font-size:28px;font-weight:800;letter-spacing:-.03em;margin-bottom:2px}
+.owner-v2 #berandaTitle{display:inline-flex;align-items:center;gap:10px}
+.owner-v2 #berandaRefreshIcon{
+  display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:9px;
+  background:var(--gg-surface);border:1px solid var(--gg-border);font-size:14px !important;
+  transition:transform .4s ease,border-color var(--gg-ease);
+}
+.owner-v2 #berandaTitle:hover #berandaRefreshIcon{transform:rotate(180deg);border-color:rgba(249,115,22,.45)}
+.owner-v2 #berandaDate{margin:2px 0 18px;font-size:13.5px}
+.owner-v2 .page-head{margin-bottom:18px}
+.owner-v2 .page > .page-title + p,.owner-v2 .page > .page-title + .muted{margin-bottom:16px}
+
+/* ---------- Cards ---------- */
+.owner-v2 .card{
+  border-radius:var(--gg-radius-lg);padding:20px 22px;margin-bottom:16px;
+  background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,0) 40%),var(--gg-surface);
+  border:1px solid var(--gg-border);box-shadow:var(--gg-shadow);
+}
+.owner-v2 .card > h3{font-size:15.5px;font-weight:700;letter-spacing:-.01em;color:var(--gg-text);margin:0 0 4px}
+
+/* ---------- Beranda: hadir hero ---------- */
+.owner-v2 .hadir-floating{
+  padding:18px 22px 18px 24px;margin-bottom:16px;border-radius:var(--gg-radius-lg);
+  background:
+    radial-gradient(520px 160px at 0% 0%,rgba(249,115,22,.16),transparent 70%),
+    linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,0) 50%),var(--gg-surface);
+  border:1px solid rgba(249,115,22,.22);box-shadow:var(--gg-shadow);
+}
+.owner-v2 .hadir-floating::before{width:4px;background:var(--gg-grad)}
+.owner-v2 .hadir-floating-left .hadir-title{font-size:16px;font-weight:700;display:flex;align-items:center;gap:10px}
+.owner-v2 .hadir-title .pres-count{
+  margin-left:0;font-size:13px;padding:3px 11px;
+  background:rgba(249,115,22,.14);border-color:rgba(249,115,22,.35);color:var(--gg-primary-2);
+}
+.owner-v2 .hadir-floating-left .hadir-sub{font-size:12px;margin-top:4px}
+.owner-v2 .hadir-floating-right{gap:0;padding-left:10px}
+.owner-v2 .hadir-floating-right .hadir-avatar,
+.owner-v2 .hadir-floating-right img.hadir-avatar{
+  width:38px !important;height:38px !important;max-width:38px !important;max-height:38px !important;
+  margin-left:-9px !important;border:2px solid var(--gg-surface) !important;
+  transition:transform var(--gg-ease);
+}
+.owner-v2 .hadir-floating-right .hadir-avatar:first-child{margin-left:0 !important}
+.owner-v2 .hadir-floating-right .hadir-avatar:hover{transform:translateY(-3px);z-index:2}
+
+/* ---------- Beranda: presence cards ---------- */
+.owner-v2 .pres-grid{gap:14px;margin-bottom:16px}
+.owner-v2 .pres-card{
+  --pc:var(--gg-success);
+  position:relative;overflow:hidden;border-radius:var(--gg-radius-lg);padding:16px 16px 14px;
+  border-top:1px solid var(--gg-border);
+  background:
+    radial-gradient(360px 120px at 100% 0%,color-mix(in srgb,var(--pc) 14%,transparent),transparent 70%),
+    var(--gg-surface);
+}
+.owner-v2 .pres-card::before{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:var(--pc);opacity:.85}
+.owner-v2 #workingFloating,.owner-v2 #breakFloating{margin-top:0}
+.owner-v2 #workingFloating::before,.owner-v2 #breakFloating::before,.owner-v2 #finishFloating::before{background:var(--pc)}
+.owner-v2 .pres-work{--pc:#22c55e}
+.owner-v2 .pres-break{--pc:#eab308}
+.owner-v2 .pres-finish{--pc:#60a5fa}
+.owner-v2 .pres-head b{font-size:14.5px}
+.owner-v2 .pres-count{font-size:12px;padding:2px 10px}
+.owner-v2 .pres-list{gap:7px;margin-top:12px}
+.owner-v2 .p-row{padding:7px 12px 7px 8px;border-radius:12px;background:rgba(255,255,255,.028);border:1px solid var(--gg-hairline)}
+.owner-v2 .p-row:hover{background:rgba(255,255,255,.05)}
+.owner-v2 .p-ava{width:30px;height:30px;max-width:30px;max-height:30px}
+.owner-v2 .p-empty{padding:18px 4px;text-align:center}
+
+/* ---------- Beranda: stat tiles ---------- */
+.owner-v2 .stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:0 0 16px}
+.owner-v2 .stat{
+  --sc:var(--gg-primary);
+  position:relative;overflow:hidden;text-align:left;padding:15px 16px 14px;border-radius:var(--gg-radius);
+  background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,0) 55%),var(--gg-surface);
+}
+.owner-v2 .stat::after{
+  content:'';position:absolute;right:-18px;top:-18px;width:64px;height:64px;border-radius:50%;
+  background:var(--sc);opacity:.1;filter:blur(2px);
+}
+.owner-v2 .stat b,.owner-v2 .stat strong{font-size:28px;font-weight:800;color:var(--gg-text);font-variant-numeric:tabular-nums}
+.owner-v2 .stat small{
+  display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11.5px;font-weight:600;
+  letter-spacing:.04em;text-transform:uppercase;color:var(--gg-muted);
+}
+.owner-v2 .stat small::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--sc);flex-shrink:0}
+.owner-v2 .stat.st-hadir{--sc:var(--gg-primary)}
+.owner-v2 .stat.st-hadir b{color:var(--gg-primary-2)}
+.owner-v2 .stat.st-in{--sc:#22c55e}
+.owner-v2 .stat.st-out{--sc:#f43f5e}
+.owner-v2 .stat.st-ot{--sc:#a78bfa}
+.owner-v2 .stat.st-otout{--sc:#60a5fa}
+.owner-v2 .stat.st-radius{--sc:var(--gg-muted-2)}
+.owner-v2 .stat.st-radius.is-alert{--sc:var(--gg-danger);background:linear-gradient(180deg,rgba(239,68,68,.12),rgba(239,68,68,.03)),var(--gg-surface);border-color:rgba(239,68,68,.4)}
+.owner-v2 .stat.st-radius.is-alert b{color:var(--gg-danger-t)}
+
+/* ---------- Charts ---------- */
+.owner-v2 .grid-2-chart{gap:16px;margin-top:0}
+.owner-v2 .chart-wrap{max-width:300px}
+.owner-v2 .chart-caption{font-size:12.5px;margin-top:10px}
+
+/* ---------- Tables ---------- */
+.owner-v2 .table-wrap{border-radius:var(--gg-radius);border:1px solid var(--gg-border);background:rgba(0,0,0,.18)}
+.owner-v2 table{font-size:13px}
+.owner-v2 th,.owner-v2 td{padding:12px 12px;border-bottom:1px solid var(--gg-hairline)}
+.owner-v2 thead th{background:#121212;color:var(--gg-muted-2);font-size:10.5px;letter-spacing:.09em;border-bottom:1px solid var(--gg-border)}
+.owner-v2 tbody tr:nth-child(even) td{background:transparent}
+.owner-v2 tbody tr:hover td{background:rgba(249,115,22,.045)}
+.owner-v2 tbody tr:last-child td{border-bottom:0}
+.owner-v2 td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ---------- Filters & inputs ---------- */
+.owner-v2 .filter-row label,.owner-v2 .filters label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gg-muted-2)}
+.owner-v2 .content input,.owner-v2 .content select{border-radius:10px}
+
+/* ---------- Payroll ---------- */
+.owner-v2 .payroll-summary{grid-template-columns:repeat(4,minmax(0,1fr)) !important;gap:12px !important;margin-bottom:16px !important}
+.owner-v2 .pr-stat{
+  position:relative;margin:0;padding:15px 16px;border-radius:var(--gg-radius);gap:6px;
+  flex-direction:column-reverse;justify-content:flex-end;
+}
+.owner-v2 .pr-stat small{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gg-muted-2)}
+.owner-v2 .pr-stat b{font-size:20px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+/* Hero: Total Payroll (setelah potongan) */
+.owner-v2 .payroll-summary .pr-stat:nth-child(5){
+  grid-column:1 / span 2;grid-row:1 / span 2;justify-content:center;padding:22px 24px;
+  background:
+    radial-gradient(420px 200px at 100% 0%,rgba(249,115,22,.28),transparent 70%),
+    linear-gradient(160deg,rgba(249,115,22,.12),rgba(249,115,22,.02)),var(--gg-surface);
+  border-color:rgba(249,115,22,.35);box-shadow:0 10px 40px rgba(249,115,22,.10),var(--gg-shadow);
+}
+.owner-v2 .payroll-summary .pr-stat:nth-child(5) b{font-size:38px;color:var(--gg-text);letter-spacing:-.03em}
+.owner-v2 .payroll-summary .pr-stat:nth-child(5) small{color:var(--gg-primary-2)}
+/* Sudah / belum dibayarkan */
+.owner-v2 .payroll-summary .pr-stat:nth-child(6){border-color:rgba(52,211,153,.3);background:linear-gradient(160deg,rgba(52,211,153,.10),transparent 70%),var(--gg-surface)}
+.owner-v2 .payroll-summary .pr-stat:nth-child(7){border-color:rgba(252,211,77,.3);background:linear-gradient(160deg,rgba(252,211,77,.09),transparent 70%),var(--gg-surface)}
+.owner-v2 #tblPayroll td{vertical-align:middle}
+.owner-v2 #tblPayroll .pr-totalbayar{font-size:14px}
+.owner-v2 #tblPayroll .btn-sm{border-radius:9px;padding:6px 12px;font-size:12px;font-weight:700}
+.owner-v2 #tblPayroll .btn-link{font-size:11.5px;font-weight:600;opacity:.75}
+.owner-v2 #tblPayroll tr:hover .btn-link{opacity:1}
+.owner-v2 .pr-ava{border-color:var(--gg-border-2)}
+
+/* Payroll toolbar: buttons sit inline next to the month picker */
+.owner-v2 #btnPrRefresh,.owner-v2 #btnPrExportCSV{width:auto;display:inline-flex;align-items:center;margin-top:0;padding:10px 16px;font-size:13.5px;border-radius:11px}
+.owner-v2 label[for="prBulan"]{display:inline;margin:0;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gg-muted-2)}
+.owner-v2 #prBulan{margin-top:6px;border-radius:10px}
+/* Payroll name column: keep name + ID readable */
+.owner-v2 #tblPayroll .pr-name-cell{min-width:170px}
+.owner-v2 #tblPayroll .pr-name-txt small{white-space:nowrap}
+.owner-v2 #tblPayroll th{white-space:nowrap}
+.owner-v2 #tblPayroll td:last-child{white-space:nowrap}
+.owner-v2 #tblPayroll td:last-child .btn-sm{display:inline-flex;width:auto;margin-top:0}
+
+/* ---------- Modals ---------- */
+.owner-v2 .modal-content,.owner-v2 .modal-box{border-color:var(--gg-border-2)}
+
+/* ---------- Responsive ---------- */
+@media (max-width:1100px){
+  .owner-v2 .payroll-summary{grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+  .owner-v2 .payroll-summary .pr-stat:nth-child(5){grid-column:1 / -1;grid-row:auto;order:-1}
+}
+@media (max-width:768px){
+  .owner-v2 .topbar{height:56px;padding:0 12px}
+  .owner-v2 #ownerEmail{display:none}
+  .owner-v2 #btnSidebar{
+    width:38px;height:38px;padding:0 !important;border-radius:10px;
+    background:var(--gg-surface) !important;border:1px solid var(--gg-border);color:var(--gg-text);font-size:17px !important;
+  }
+  .owner-v2 .brand-logo{font-size:15px;letter-spacing:1.5px}
+  .owner-v2 .brand-logo-accent{font-size:11px}
+  .owner-v2 .sidebar{top:0;height:100vh;width:264px;left:-280px;background:#101010;padding-top:18px}
+  body.owner-v2.sidebar-open .sidebar{left:0}
+  .owner-v2 .content{padding:18px 14px 40px}
+  .owner-v2 .page-title{font-size:23px}
+  .owner-v2 .card{padding:16px}
+  .owner-v2 .hadir-floating{padding:16px}
+  .owner-v2 .hadir-floating-right{padding-left:0}
+  .owner-v2 .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .owner-v2 .stat b{font-size:24px}
+  .owner-v2 .payroll-summary .pr-stat:nth-child(5) b{font-size:30px}
+
+  /* Payroll cards on phones — relabel for the current 14-column table
+     (Nama, Base, Hari, Jam, Lembur, Pokok, Upah Lembur, Tunjangan, Total, Bonus,
+     Potongan, Total Bayar, Status, Aksi). style.css still assumes 12 columns. */
+  .owner-v2 #tblPayroll td:nth-child(8)::before{content:'Tunjangan'}
+  .owner-v2 #tblPayroll td:nth-child(9)::before{content:'Total'}
+  .owner-v2 #tblPayroll td:nth-child(10){font-size:14px;padding-top:5px;margin-top:0;border-top:0}
+  .owner-v2 #tblPayroll td:nth-child(10)::before{content:'Bonus';font-weight:400;font-size:12px;color:var(--gg-muted)}
+  .owner-v2 #tblPayroll td:nth-child(11)::before{content:'Potongan'}
+  .owner-v2 #tblPayroll td:nth-child(12){display:flex;gap:12px;margin-top:4px;padding-top:8px;font-size:20px;border-top:1px dashed var(--gg-border-2)}
+  .owner-v2 #tblPayroll td:nth-child(12)::before{content:'Total Bayar';font-weight:700;font-size:13px;color:var(--gg-text-2)}
+  .owner-v2 #tblPayroll td:nth-child(12) .btn{flex:none}
+  .owner-v2 #tblPayroll .pr-tun-val,.owner-v2 #tblPayroll .pr-bon-val,.owner-v2 #tblPayroll .pr-pot-val{margin-left:auto}
+  .owner-v2 #tblPayroll td:nth-child(13)::before{content:'Status'}
+  .owner-v2 #tblPayroll td:nth-child(14){display:flex;gap:8px;margin-top:10px;white-space:normal}
+  .owner-v2 #tblPayroll td:nth-child(14)::before{content:none}
+  .owner-v2 #tblPayroll td:nth-child(14) .btn{flex:1;justify-content:center}
+  .owner-v2 #tblPayroll tr.pr-nonaktif-sep td{display:block;text-align:left}
+  .owner-v2 #tblPayroll tr.pr-nonaktif-sep td::before{content:none}
+}

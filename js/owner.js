@@ -413,12 +413,12 @@ async function renderBeranda(rows){
     const belum = Math.max(total - hadir, 0);
 
     $('berandaStats').innerHTML =
-        '<div class="stat"><b>' + hadir + '/' + total + '</b><small>Clocked In</small></div>' +
-        '<div class="stat"><b>' + stat.clock_in + '</b><small>Total Clock In</small></div>' +
-        '<div class="stat"><b>' + stat.clock_out + '</b><small>Clock Out</small></div>' +
-        '<div class="stat"><b>' + stat.overtime_in + '</b><small>OT In</small></div>' +
-        '<div class="stat"><b>' + stat.overtime_out + '</b><small>OT Out</small></div>' +
-        '<div class="stat" style="background:#3b1d1d"><b style="color:#dc2626">' + outRuko + '</b><small>Out of Radius</small></div>';
+        '<div class="stat st-hadir"><b>' + hadir + '/' + total + '</b><small>Clocked In</small></div>' +
+        '<div class="stat st-in"><b>' + stat.clock_in + '</b><small>Total Clock In</small></div>' +
+        '<div class="stat st-out"><b>' + stat.clock_out + '</b><small>Clock Out</small></div>' +
+        '<div class="stat st-ot"><b>' + stat.overtime_in + '</b><small>OT In</small></div>' +
+        '<div class="stat st-otout"><b>' + stat.overtime_out + '</b><small>OT Out</small></div>' +
+        '<div class="stat st-radius' + (outRuko ? ' is-alert' : '') + '"><b>' + outRuko + '</b><small>Out of Radius</small></div>';
 
     const ctx1 = document.getElementById('chartHadir');
     if (ctx1 && window.Chart) {
@@ -3549,10 +3549,11 @@ async function showProfilKaryawan(uid){
   const sb = document.getElementById('sidebar');
   if (!sb) return;
   const box = document.createElement('div');
-  box.style.cssText = 'margin:14px 12px;padding:10px 12px;border-radius:10px;background:#141414;border:1px solid #2a2a2a;display:none';
-  box.innerHTML = '<div style="font-size:11px;color:#9ca3af;font-weight:600;letter-spacing:.05em">&#x1F511; KODE CLOCK-OUT</div>'
-    + '<div id="sbKodeVal" style="font-size:22px;font-weight:800;letter-spacing:.3em;color:#f97316">----</div>'
-    + '<div id="sbKodeTimer" style="font-size:11px;color:#9ca3af">-</div>';
+  box.className = 'sb-kode';
+  box.style.display = 'none';
+  box.innerHTML = '<div class="sb-kode-lbl">KODE CLOCK-OUT</div>'
+    + '<div id="sbKodeVal" class="sb-kode-val">----</div>'
+    + '<div id="sbKodeTimer" class="sb-kode-timer">-</div>';
   sb.appendChild(box);
   const render = ()=>{
     const u = auth.currentUser;

@@ -11,12 +11,13 @@
 <title>Dashboard Owner</title>
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/owner-v2.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Geist:wght@400;500;600;700;800&family=Orbitron:wght@600;800&display=swap" rel="stylesheet">
 </head>
-<body class="owner-body">
+<body class="owner-body owner-v2">
 <header class="topbar">
   <div class="brand-wrap">
     <button id="btnSidebar" class="btn-icon" style="background:transparent;padding:4px 10px;font-size:20px">&#x2630;</button>
@@ -29,11 +30,12 @@
 <div class="layout">
   <aside id="sidebar" class="sidebar">
     <nav>
-      <a href="#beranda" class="nav-link active" data-page="beranda">&#x1F4CA; Beranda</a>
-      <a href="#kehadiran" class="nav-link" data-page="kehadiran">&#x1F5D3; Kehadiran Harian</a>
-      <a href="#rekap" class="nav-link" data-page="rekap">&#x1F4C8; Rekap Kehadiran</a>
-<a href="#karyawan" class="nav-link" data-page="karyawan">&#x1F465; Karyawan</a>
-<a href="#payroll" class="nav-link" data-page="payroll">&#x1F4B0; Payroll</a>
+      <div class="sb-label">Menu</div>
+      <a href="#beranda" class="nav-link active" data-page="beranda"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span><span class="nav-txt">Beranda</span></a>
+      <a href="#kehadiran" class="nav-link" data-page="kehadiran"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m9 15 2 2 4-4"/></svg></span><span class="nav-txt">Kehadiran Harian</span></a>
+      <a href="#rekap" class="nav-link" data-page="rekap"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></span><span class="nav-txt">Rekap Kehadiran</span></a>
+      <a href="#karyawan" class="nav-link" data-page="karyawan"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span class="nav-txt">Karyawan</span></a>
+      <a href="#payroll" class="nav-link" data-page="payroll"><span class="nav-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="13" rx="2"/><circle cx="12" cy="12.5" r="2.5"/><path d="M6 10v.01M18 15v.01"/></svg></span><span class="nav-txt">Payroll</span></a>
     </nav>
   </aside>
 
@@ -275,7 +277,7 @@
     </section>
 <section id="page-payroll" class="page">
   <div class="page-head">
-    <h2>&#x1F4B0; Payroll</h2>
+    <h2 class="page-title">Payroll</h2>
     <p class="muted small">Estimasi gaji berjalan berdasarkan kehadiran. Tipe: harian, dibayar bulanan.</p>
   </div>
 
