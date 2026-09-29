@@ -139,7 +139,10 @@ async function bacaKaryawan(id) {
   for (const r of [kar, pay, peny, kas, lib]) if (r.error) throw r.error;
   // Disembunyikan: karyawan yang "dihapus" owner, dan baris yatim hasil pindahan (dokumennya
   // sudah dihapus di Firebase tapi absennya masih ada) — di Firebase dua-duanya tidak tampil.
-  const baris = (kar.data || []).filter(k => !(k.ekstra && (k.ekstra.dihapus_owner_at || k.ekstra.yatim_firebase)));
+  // Owner juga disembunyikan: baris owner cuma ada supaya bisa login (di Firebase owner tidak punya
+  // dokumen karyawan), jadi tidak boleh muncul di daftar Karyawan, Payroll, atau hitungan tim.
+  const baris = (kar.data || []).filter(k => k.peran !== 'owner'
+    && !(k.ekstra && (k.ekstra.dihapus_owner_at || k.ekstra.yatim_firebase)));
   const fotoUrl = await tandatangani(EMBER_PROFIL, baris.map(k => k.foto_url));
   const ktpUrl = await tandatangani(EMBER_KTP, baris.map(k => k.ktp_url));
   const per = (rows, kid) => (rows || []).filter(r => r.karyawan_id === kid);
