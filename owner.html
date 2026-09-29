@@ -75,6 +75,12 @@
             <div id="finishTimers" class="pres-list"></div>
           </div>
         </div>
+        <!-- PR-CL124: Personal Assistant dipisah dari tim (tanpa efektif, istirahat, lembur) -->
+        <div id="paFloating" class="pres-card hidden" style="margin-top:12px">
+          <div class="pres-head"><span class="pres-dot"></span><b>Personal Assistant</b><span class="pres-count" id="paCount">0/0</span></div>
+          <div class="pres-sub muted small">Dibayar per hari hadir &middot; status &middot; lama hadir</div>
+          <div id="paTimers" class="pres-list"></div>
+        </div>
         <div class="stats" id="berandaStats"></div>
 
       <div class="grid-2-chart">
@@ -404,6 +410,15 @@
             <!-- PR-CL78: tunjangan peran flat bulanan (superadmin/admin/host live/PIC) — di luar base harian -->
             <div class="kfield"><label>Tunjangan Jabatan / bln (Rp) <small class="muted">tetap per bulan buat peran penting, 0 = tidak ada</small></label><input type="text" inputmode="numeric" id="editTunjangan" placeholder="cth: 1.750.000"></div>
             <div class="kfield"><label>Plafon Kasbon (%) <small class="muted">maks % dari gaji berjalan, default 50</small></label><input type="number" id="editKasbonPlafon" min="0" max="100" step="5" placeholder="50"></div>
+          </div>
+        </section>
+
+        <!-- PR-CL124: mode Personal Assistant -->
+        <section class="ksec">
+          <div class="ksec-head"><span class="ksec-ico">&#x1F9D1;&#x200D;&#x1F4BC;</span><div><b>Personal Assistant</b><small>Dibayar per hari hadir, tanpa jam, istirahat &amp; lembur. Tombol di HP-nya cuma Mulai &amp; Selesai Kerja, dan SPV tidak melihatnya di Pantau Tim. Kosongkan tanggal = karyawan biasa.</small></div></div>
+          <div class="kgrid kgrid-3">
+            <div class="kfield"><label>Mode PA mulai tanggal <small class="muted">hari sebelumnya tetap dihitung cara lama</small></label><input type="date" id="editPaMulai"></div>
+            <div class="kfield"><label>Tarif per Hari Hadir (Rp)</label><input type="text" inputmode="numeric" id="editPaTarif" placeholder="cth: 135.000"></div>
           </div>
         </section>
 

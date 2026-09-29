@@ -123,7 +123,8 @@ const PETA_KOLOM_KARYAWAN = {
   multiplierLembur: 'multiplier_lembur', tunjanganBulanan: 'tunjangan_bulanan', liburHari: 'libur_hari',
   nonaktif: 'nonaktif', gpsExempt: 'gps_exempt', wajibKodeClockout: 'wajib_kode_clockout', kodeAdmin: 'kode_admin',
   noShiftBarrier: 'no_shift_barrier', kasbonAktif: 'kasbon_aktif', kasbonPlafonPersen: 'kasbon_plafon_persen',
-  namaBank: 'nama_bank', nomorRekening: 'nomor_rekening', atasNamaRek: 'atas_nama_rek', rekeningLocked: 'rekening_locked'
+  namaBank: 'nama_bank', nomorRekening: 'nomor_rekening', atasNamaRek: 'atas_nama_rek', rekeningLocked: 'rekening_locked',
+  paMulai: 'pa_mulai', paTarifHarian: 'pa_tarif_harian'   // PR-CL124: mode Personal Assistant
 };
 
 async function bacaKaryawan(id) {
@@ -194,6 +195,8 @@ async function bacaKaryawan(id) {
       ktpUrl: ktpUrl(k.ktp_url),
       rekeningLocked: k.rekening_locked === true,
       profilLocked: k.rekening_locked === true,
+      paMulai: k.pa_mulai || '',
+      paTarifHarian: k.pa_tarif_harian == null ? null : Number(k.pa_tarif_harian),
       spvAkses: k.peran === 'spv',
       peran: k.peran,
       photoURL: fotoUrl(k.foto_url),
