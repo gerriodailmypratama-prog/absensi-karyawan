@@ -1,4 +1,6 @@
-const CACHE = 'absensi-v120';
+// Salinan uji coba di /uji/ punya cache sendiri supaya tidak saling hapus dengan app asli.
+const PREFIX = (self.registration && self.registration.scope.includes('/uji/')) ? 'absensi-uji-' : 'absensi-';
+const CACHE = PREFIX + 'v121';
 const ASSETS = [
   './', './index.html', './karyawan.html', './owner.html',
   './css/style.css', './manifest.json', './icon.svg', './js/update-banner.js'
@@ -16,7 +18,9 @@ self.addEventListener('activate', e => {
   e.waitUntil((async () => {
     // Hapus cache versi lama.
     const keys = await caches.keys();
-    await Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)));
+    // Cuma cache milik app ini sendiri (app asli vs salinan uji coba tidak saling hapus).
+    const punyaSaya = k => PREFIX === 'absensi-' ? (k.startsWith('absensi-') && !k.startsWith('absensi-uji-')) : k.startsWith(PREFIX);
+    await Promise.all(keys.filter(k => k !== CACHE && punyaSaya(k)).map(k => caches.delete(k)));
     // Ambil alih semua tab yang lagi kebuka biar SW baru langsung dipakai (ga nunggu semua tab ditutup).
     if (self.clients && self.clients.claim) await self.clients.claim();
   })());
@@ -57,7 +61,7 @@ self.addEventListener('fetch', e => {
   const url = e.request.url;
   if (e.request.method !== 'GET') return;
   // Jangan ganggu Firestore/Firebase/Google (data realtime, biar selalu langsung ke server).
-  if (url.includes('firestore') || url.includes('firebase') || url.includes('googleapis') || url.includes('gstatic')) return;
+  if (url.includes('supabase.co') || url.includes('firestore') || url.includes('firebase') || url.includes('googleapis') || url.includes('gstatic')) return;
 
   // App shell -> network-first biar update langsung kelihatan sekali refresh.
   if (e.request.mode === 'navigate' || url.endsWith('.html') || url.endsWith('.js') || url.endsWith('.css')) {

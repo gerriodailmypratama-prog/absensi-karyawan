@@ -139,16 +139,13 @@ async function saveSingleKehadiranCell(uid, inp){
     }
 }
 
-import { auth, db, storage, OWNER_EMAILS, firebaseConfig, kodeClockout, KODE_SLOT_MS, normalizePanggilan, suggestPanggilan, LIBUR_HARI, LIBUR_MAX } from './firebase-config.js';
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
-
-
-
-import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { collection, query, where, orderBy, limit, getDocs, onSnapshot, Timestamp, setDoc, updateDoc, deleteDoc, getDoc, addDoc, doc, serverTimestamp }
-    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signOut as authSignOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+// PR-CL114: Firebase diganti Supabase lewat penerjemah js/firebase-shim.js — nama & bentuk
+// fungsinya sama, jadi logika dashboard (termasuk rumus gaji) tidak diubah.
+import { auth, db, storage, OWNER_EMAILS, firebaseConfig, kodeClockout, KODE_SLOT_MS, normalizePanggilan, suggestPanggilan, LIBUR_HARI, LIBUR_MAX,
+  ref as storageRef, uploadBytes, getDownloadURL, deleteObject,
+  onAuthStateChanged, signOut,
+  collection, query, where, orderBy, limit, getDocs, onSnapshot, Timestamp, setDoc, updateDoc, deleteDoc, getDoc, addDoc, doc, serverTimestamp,
+  initializeApp, deleteApp, getAuth, createUserWithEmailAndPassword, signOut as authSignOut } from './firebase-shim.js';
 
 const $ = id => document.getElementById(id);
 const TIPE = { clock_in:'Clock In', clock_out:'Clock Out', break_in:'Istirahat', break_out:'Selesai Istirahat', pause_in:'Pause Kerja', pause_out:'Lanjut Kerja', overtime_in:'Mulai Lembur', overtime_out:'Selesai Lembur' };
