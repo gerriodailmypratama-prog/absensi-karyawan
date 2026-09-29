@@ -329,6 +329,38 @@
 <div id="panduanModal" class="modal hidden">
   <div class="modal-box" style="max-width:440px">
     <h3 style="margin:0 0 4px">&#x1F44B; Panduan Absensi</h3>
+    <!-- PR-CL124: versi Personal Assistant (cuma Mulai & Selesai Kerja, dibayar per hari hadir) -->
+    <div class="pd-pa">
+    <p class="muted small" style="margin:0 0 12px">Absensi kamu sekarang versi <strong>Personal Assistant</strong>. Lebih simpel, cuma dua tombol &#x1F642;</p>
+
+    <div class="panduan-item">
+      <span class="panduan-emo">&#x1F7E2;</span>
+      <div><strong>Mulai Kerja</strong><span class="muted small">Pencet pas kamu mulai kerja hari itu. Foto selfie dulu, lokasi (GPS) kebaca otomatis.</span></div>
+    </div>
+    <div class="panduan-item">
+      <span class="panduan-emo">&#x1F534;</span>
+      <div><strong>Selesai Kerja</strong><span class="muted small">Pencet pas kerjaan hari itu udah beres &amp; kamu pulang. Foto selfie lagi. Jangan lupa ya, biar catatan hari itu rapi.</span></div>
+    </div>
+    <div class="panduan-item">
+      <span class="panduan-emo">&#x1F697;</span>
+      <div><strong>Nganter, nunggu, keluar-masuk</strong><span class="muted small">Itu semua tetap dihitung kerja. Makan &amp; istirahat silakan diselipin sendiri di sela-sela, <strong>gak perlu tap apa-apa</strong>. Tombol istirahat &amp; lembur memang udah gak ada.</span></div>
+    </div>
+    <div class="panduan-item">
+      <span class="panduan-emo">&#x1F4CD;</span>
+      <div><strong>Lokasi (GPS)</strong><span class="muted small">Lokasi tetap kecatat tiap absen. Kalau kamu mulai atau selesai kerja di luar ruko karena lagi tugas, absen kamu TETAP masuk kok.</span></div>
+    </div>
+    <div class="panduan-item">
+      <span class="panduan-emo">&#x1F464;</span>
+      <div><strong>Lengkapi Profil</strong><span class="muted small">Pastikan rekening + foto KTP udah diisi (tombol &ldquo;Profil&rdquo; di menu) &mdash; ini buat transfer gaji kamu.</span></div>
+    </div>
+
+    <div style="margin-top:14px;padding:12px 14px;border-radius:10px;background:var(--gg-warning-bg);border:1px solid #a16207;font-size:13px;line-height:1.55">
+      <strong style="color:var(--gg-warning-t)">&#x1F4A1; Soal gaji</strong><br>
+      <span style="color:var(--gg-text)">Gaji kamu dihitung <strong>per hari hadir</strong>, bukan per jam. Asal hari itu kamu Mulai Kerja, harinya dihitung. Gak ada hitungan istirahat maupun lembur lagi.</span>
+    </div>
+    </div>
+
+    <div class="pd-umum">
     <p class="muted small" style="margin:0 0 12px">Selamat datang! Ini cara pakai aplikasinya, gampang kok &#x1F642;</p>
 
     <div class="panduan-item">
@@ -364,6 +396,7 @@
       <strong style="color:#fcd34d">&#x1F4A1; Soal gaji</strong><br>
       <span style="color:#e6e3d8">Seluruh perhitungan gaji didasarkan pada <strong>jam kerja efektif</strong> &mdash; yaitu total waktu kamu benar-benar bekerja, di luar jam istirahat. Jadi, semakin rapi absenmu, semakin akurat dan adil pula hitungan gajimu.</span>
     </div>
+    </div>
     <button id="btnPanduanOk" class="btn btn-primary" style="margin-top:14px">Oke, Ngerti! &#x1F44D;</button>
   </div>
 </div>
@@ -373,6 +406,9 @@
   #panduanModal .panduan-emo{font-size:24px;line-height:1.25;flex-shrink:0;width:30px;text-align:center}
   #panduanModal .panduan-item strong{font-size:15px}
   #panduanModal .panduan-item .muted{display:block;margin-top:2px;line-height:1.5}
+  #panduanModal .pd-pa{display:none}
+  body.mode-pa #panduanModal .pd-pa{display:block}
+  body.mode-pa #panduanModal .pd-umum{display:none}
 </style>
 <script>
   (function(){
@@ -382,7 +418,7 @@
       var btn=document.getElementById('btnPanduan');
       var ok=document.getElementById('btnPanduanOk');
       function show(){ if(modal) modal.classList.remove('hidden'); }
-      function seen(){ try{ localStorage.setItem('gg_panduan_seen','1'); }catch(e){} }
+      function seen(){ try{ localStorage.setItem('gg_panduan_seen','1'); if(document.body.classList.contains('mode-pa')) localStorage.setItem('gg_panduan_pa_seen','1'); }catch(e){} }
       function hide(){ if(modal) modal.classList.add('hidden'); seen(); }
       if(btn) btn.addEventListener('click', show);
       if(ok) ok.addEventListener('click', hide);

@@ -16,6 +16,10 @@ const BARU_PULANG_MS = 6 * 60 * 60 * 1000;      // yang pulang > 6 jam lalu ga u
 
 const fotoMap = new Map();
 const namaProfil = new Map();
+// PR-CL124: Personal Assistant (lapor langsung ke owner) dipisah dari tim. SPV tidak melihat PA
+// sama sekali; owner melihatnya di kotak sendiri tanpa timer efektif / peringatan istirahat.
+const paSet = new Set();
+let lihatPA = false;
 
 function fmtDur(ms){
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -44,6 +48,41 @@ function mulaiSesi(arr){
   for (const e of arr) if ((e.tipe === 'clock_in' || e.tipe === 'overtime_in') && e.ms >= keluar){ if (!mulai || e.ms < mulai) mulai = e.ms; }
   return mulai;
 }
+// PR-CL124: status PA hari ini — cuma hadir/pulang + lama hadir, tanpa efektif & istirahat.
+function jamWib(ms){ return new Date(ms).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', timeZone:'Asia/Jakarta' }); }
+function statusPA(uid, nama, arr, now){
+  let masuk = 0, keluar = 0;
+  for (const e of arr){
+    if (e.tipe === 'clock_in' || e.tipe === 'overtime_in') masuk = Math.max(masuk, e.ms);
+    if (e.tipe === 'clock_out' || e.tipe === 'overtime_out') keluar = Math.max(keluar, e.ms);
+  }
+  const mulai = mulaiSesi(arr);
+  if (masuk > keluar && mulai){
+    if (now - mulai > MAX_SESI_MS) return { uid, nama, jenis: 'lupa', mulai };
+    return { uid, nama, jenis: 'hadir', mulai };
+  }
+  const hariIni = d => new Date(d).toLocaleDateString('sv-SE', { timeZone:'Asia/Jakarta' });
+  if (keluar && hariIni(keluar) === hariIni(now)){
+    let m = 0;
+    for (const e of arr) if ((e.tipe === 'clock_in' || e.tipe === 'overtime_in') && e.ms <= keluar && e.ms > m) m = e.ms;
+    return { uid, nama, jenis: 'pulang', mulai: m, keluar };
+  }
+  return null;
+}
+function renderPA(pa){
+  const kartu = $('paCard'); if (!kartu) return;
+  kartu.classList.toggle('hidden', !lihatPA);
+  if (!lihatPA) return;
+  $('cPA').textContent = pa.length;
+  $('listPA').innerHTML = pa.length ? pa.map(x => {
+    let ket;
+    if (x.jenis === 'hadir') ket = '<span class="p-main" style="color:var(--gg-success-t)">Hadir</span><small class="p-sep">sejak ' + jamWib(x.mulai) + '</small><span class="spv-t p-dim" data-start="' + x.mulai + '">--:--</span>';
+    else if (x.jenis === 'pulang') ket = '<span class="p-main">Pulang ' + jamWib(x.keluar) + '</span><small class="p-sep">lama hadir</small><span class="p-dim">' + (x.mulai ? fmtDur(x.keluar - x.mulai) : '-') + '</span>';
+    else ket = '<span class="p-main" style="color:var(--gg-warning-t)">Lupa Selesai Kerja</span><small class="p-sep">masuk</small><span class="p-dim">' + new Date(x.mulai).toLocaleString('id-ID', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', timeZone:'Asia/Jakarta' }) + '</span>';
+    return '<div class="p-row">' + avaHtml(x.uid, x.nama) + '<span class="p-name">' + esc(x.nama) + '</span><span class="p-time">' + ket + '</span></div>';
+  }).join('') : '<div class="p-empty">PA belum ada yang masuk hari ini</div>';
+}
+
 // Total istirahat + pause yang SUDAH ditutup dalam rentang tertentu.
 function istirahatSelesai(arr, dari, sampai){
   let tot = 0, ob = 0, op = 0;
@@ -81,7 +120,9 @@ async function muat(){
   // Nama & foto dari view karyawan_publik — jendela terbatas yang boleh dibaca
   // semua yang login. Gaji & KTP tidak ikut keluar dari sana.
   try{
-    const { data: profil } = await sb.from('karyawan_publik').select('id, nama, foto_url');
+    const { data: profil } = await sb.from('karyawan_publik').select('id, nama, foto_url, is_pa');
+    paSet.clear();
+    (profil || []).forEach(p => { if (p.is_pa) paSet.add(p.id); });
     // Foto profil disimpan sebagai path di ember tertutup -> dibuatkan link sementara sekaligus.
     const paths = (profil || []).map(p => p.foto_url).filter(Boolean);
     const link = new Map();
@@ -96,10 +137,14 @@ async function muat(){
   }catch(e){ console.warn('karyawan_publik:', e); }
 
   const now = Date.now();
-  const kerja = [], istirahat = [], pulang = [], peringatan = [];
+  const kerja = [], istirahat = [], pulang = [], peringatan = [], pa = [];
 
   for (const [uid, arr] of byUid){
     const nama = namaProfil.get(uid) || '-';
+    if (paSet.has(uid)){
+      if (lihatPA){ const s = statusPA(uid, nama, arr, now); if (s) pa.push(s); }
+      continue;
+    }
     let masukTerakhir = 0, keluarTerakhir = 0, bIn = 0, bOut = 0;
     for (const e of arr){
       if (e.tipe === 'clock_in' || e.tipe === 'overtime_in') masukTerakhir = Math.max(masukTerakhir, e.ms);
@@ -125,6 +170,7 @@ async function muat(){
 
   kerja.sort((a, b) => a.mulai - b.mulai);
   istirahat.sort((a, b) => a.mulaiBreak - b.mulaiBreak);
+  renderPA(pa);
 
   $('cWork').textContent = kerja.length;
   $('cBreak').textContent = istirahat.length;
@@ -195,6 +241,7 @@ sb.auth.onAuthStateChange(async (event, session) => {
   const boleh = saya && (saya.peran === 'owner' || saya.peran === 'spv') && !saya.nonaktif;
   if (!boleh){ alert('Halaman ini khusus supervisor.'); location.replace('karyawan.html'); return; }
 
+  lihatPA = saya.peran === 'owner';
   $('spvNama').textContent = saya.nama || session.user.email || '';
   $('spvDate').textContent = new Date().toLocaleDateString('id-ID', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
 

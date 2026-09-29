@@ -909,6 +909,8 @@ async function openEditKaryawan(uid){
         if ($('editBaseHarian')) $('editBaseHarian').value = d.baseHarian || '';
         if ($('editTunjangan')) $('editTunjangan').value = __fmtRpPlain(d.tunjanganBulanan); // PR-CL78/87
         if ($('editMultiplierLembur')) $('editMultiplierLembur').value = d.multiplierLembur || 1;
+        if ($('editPaMulai')) $('editPaMulai').value = d.paMulai || '';                      // PR-CL124
+        if ($('editPaTarif')) $('editPaTarif').value = __fmtRpPlain(d.paTarifHarian);
         if ($('editGpsExempt')) $('editGpsExempt').checked = !!d.gpsExempt;
         if ($('editNamaBank')) $('editNamaBank').value = d.namaBank || '';
         if ($('editAtasNamaRek')) $('editAtasNamaRek').value = d.atasNamaRek || '';
@@ -971,6 +973,10 @@ $('formEditKaryawan').onsubmit = async (e) => {
     const tunjanganBulanan = $('editTunjangan') ? __parseRp($('editTunjangan').value) : 0; // PR-CL78/87
     const multiplierLembur = $('editMultiplierLembur') ? (parseFloat($('editMultiplierLembur').value) || 1) : 1;
     const gpsExempt = $('editGpsExempt') ? $('editGpsExempt').checked : false;
+    // PR-CL124: mode PA — tanggal kosong = karyawan biasa.
+    const paMulai = ($('editPaMulai') && $('editPaMulai').value) ? $('editPaMulai').value : null;
+    const paTarifHarian = paMulai ? (__parseRp($('editPaTarif') ? $('editPaTarif').value : '') || null) : null;
+    if (paMulai && !paTarifHarian){ alert('Mode PA butuh Tarif per Hari Hadir. Isi dulu, atau kosongkan tanggal mode PA.'); return; }
     const namaBank = $('editNamaBank') ? $('editNamaBank').value.trim() : '';
     const atasNamaRek = $('editAtasNamaRek') ? $('editAtasNamaRek').value.trim() : '';
     const nomorRekening = $('editNomorRekening') ? $('editNomorRekening').value.trim() : '';
@@ -994,7 +1000,7 @@ $('formEditKaryawan').onsubmit = async (e) => {
             nama: pg.value, namaPanggilan: pg.value, full_name: fullName, phone, idKaryawan, jamKerja, tanggalJoin: tjPayload, tanggalLahir,
             jabatan, statusKaryawan, baseHarian, tunjanganBulanan, multiplierLembur, gpsExempt,
             namaBank, atasNamaRek, nomorRekening, nonaktif, wajibKodeClockout, kodeAdmin,
-            kasbonAktif, kasbonPlafonPersen, spvAkses,
+            kasbonAktif, kasbonPlafonPersen, spvAkses, paMulai, paTarifHarian,
             liburHari, liburSetBy: (liburHari != null ? 'owner' : null), liburRequestPending: false,
             updatedAt: serverTimestamp()
         };
@@ -1178,6 +1184,18 @@ function openDeleteAbsen(id, nama, tipe, tsIso){
 })();
 
 // ===== Floating Bar Kehadiran di Beranda =====
+// ===== PR-CL124: Personal Assistant =====
+// PA dibayar per hari hadir sejak `paMulai` (YYYY-MM-DD WIB). Hari sebelum tanggal itu tetap
+// dihitung cara lama. Di semua tampilan owner, PA dipisah dari tim: tanpa efektif/istirahat/lembur.
+const PA_MAP = new Map(); // uid -> { mulai, tarif }
+function catatPA(uid, d){
+    if (d && d.paMulai) PA_MAP.set(uid, { mulai: String(d.paMulai), tarif: Number(d.paTarifHarian) || 0 });
+    else PA_MAP.delete(uid);
+}
+function hariWib(ms){ return new Date(ms).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }); }
+function isPAHari(uid, ymd){ const p = PA_MAP.get(uid); return !!(p && ymd >= p.mulai); }
+const PA_BADGE = ' <span class="kh-badge" style="background:var(--gg-info-bg);color:var(--gg-info-t)" title="Personal Assistant: dibayar per hari hadir, tanpa istirahat &amp; lembur">PA</span>';
+
 async function renderHadirFloating(rows){
     const total = await getTotalKaryawan();
 
@@ -1187,7 +1205,7 @@ async function renderHadirFloating(rows){
     const _nonaktifUid = new Set();
     try{
         const _ks = await getDocs(collection(db,'karyawan'));
-        _ks.forEach(d => { if ((d.data() || {}).nonaktif === true) _nonaktifUid.add(d.id); });
+        _ks.forEach(d => { if ((d.data() || {}).nonaktif === true) _nonaktifUid.add(d.id); catatPA(d.id, d.data()); });
     }catch(e){ console.warn('baca nonaktif:', e); }
 
     // group by uid, get all events sorted by time asc
@@ -1250,6 +1268,13 @@ async function renderHadirFloating(rows){
             workingUids.push(uid);
         }
     }
+
+    // PR-CL124: PA keluar dari On Working/Break/Finish, pindah ke kotak Personal Assistant.
+    const _hariIniPA = hariWib(Date.now());
+    const paUids = hadirUids.filter(u => isPAHari(u, _hariIniPA));
+    [workingUids, breakUids, finishUids].forEach(a => {
+        const sisa = a.filter(u => !isPAHari(u, _hariIniPA)); a.length = 0; a.push(...sisa);
+    });
 
     function namaOf(uid){
         const r = rows.find(x=>(x.uid||x.email)===uid);
@@ -1438,6 +1463,29 @@ async function renderHadirFloating(rows){
                  + '</div>';
         }).join('') : '<div class="p-empty">Belum ada yang pulang</div>';
     }
+    // PR-CL124: kotak Personal Assistant — status hadir + lama hadir saja.
+    const _paBox = $('paTimers'), _paCard = $('paFloating');
+    if (_paCard) _paCard.classList.toggle('hidden', PA_MAP.size === 0);
+    if (_paBox){
+        const _jam = ms => new Date(ms).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', timeZone:'Asia/Jakarta' });
+        const el = $('paCount'); if (el) el.textContent = paUids.length + '/' + PA_MAP.size;
+        _paBox.innerHTML = paUids.length ? paUids.map(function(u){
+            const _masih = workStartMs(u);
+            const _sess = finishedSessionMs(u);
+            const _terbuka = _masih && (!_sess || _masih > _sess.end);
+            let ket;
+            if (_terbuka && (Date.now() - _masih) > _LUPA_CO_MS){
+                ket = '<span class="p-main" style="color:var(--gg-warning-t)">Lupa Selesai Kerja</span>';
+            } else if (_terbuka){
+                ket = '<span class="p-main" style="color:var(--gg-success-t)">Hadir</span><small class="p-sep">sejak ' + _jam(_masih) + '</small>'
+                    + '<span class="work-timer p-dim" data-start="' + _masih + '">--:--</span>';
+            } else if (_sess){
+                ket = '<span class="p-main">Pulang ' + _jam(_sess.end) + '</span><small class="p-sep">lama hadir</small>'
+                    + '<span class="p-dim">' + fmtDurMs(_sess.end - _sess.start) + '</span>';
+            } else { ket = '<span class="p-main">Hadir</span>'; }
+            return '<div class="p-row">' + avaHtml(u) + '<span class="p-name">' + (namaOf(u)||'-') + '</span><span class="p-time">' + ket + '</span></div>';
+        }).join('') : '<div class="p-empty">PA belum ada yang masuk hari ini</div>';
+    }
     if (!window.__ggBreakTick){
         window.__ggBreakTick = setInterval(function(){
             const _now = Date.now();
@@ -1567,8 +1615,10 @@ async function loadKehadiranMatrix(){
         const k = docSnap.data() || {};
         const uid = docSnap.id || k.uid || k.email || '';
         if (!uid) return;
+        catatPA(uid, k);
         byUid[uid] = {
           uid,
+          isPA: isPAHari(uid, dateToInputStr(d)), // PR-CL124
           nama: k.nama || (k.email||'').split('@')[0] || '-',
           email: k.email || '',
           jamKerja: (k.jamKerja!=null ? Number(k.jamKerja) : 9),
@@ -1770,6 +1820,9 @@ function renderKehadiranMatrix(){
   if (!tb) return;
   tb.innerHTML = '';
   const uids = Object.keys(khRowsCache).sort((a,b)=>{
+    // PR-CL124: PA dikumpulkan di bawah, terpisah dari tim.
+    const pa = (khRowsCache[a].isPA ? 1 : 0) - (khRowsCache[b].isPA ? 1 : 0);
+    if (pa) return pa;
     const na = (khRowsCache[a].nama||'').toLowerCase();
     const nb = (khRowsCache[b].nama||'').toLowerCase();
     return na.localeCompare(nb);
@@ -1840,7 +1893,8 @@ function renderKehadiranMatrix(){
       row._durAnom = (!_brkOvr && _brk.maxOne > 2*60*60*1000) || (_pse.maxOne > 2*60*60*1000) || (_efektifMs < 0);
     })();
     tr.dataset.uid = uid;
-    let cells = '<td class="col-nama">'+ gpsDotFor(row) +' '+ (row.nama||'-') + (row.nonaktif ? ' <span class="kh-badge" title="Sudah resign / dinonaktifkan">Nonaktif</span>' : '') + (row.libur ? ' <span class="kh-badge" style="background:#12291f;color:#6ee7b7" title="Dijadwalkan libur hari ini">🌴 Libur</span>' : '') +'</td>';
+    if (row.isPA) tr.classList.add('kh-pa');
+    let cells = '<td class="col-nama">'+ gpsDotFor(row) +' '+ (row.nama||'-') + (row.isPA ? PA_BADGE : '') + (row.nonaktif ? ' <span class="kh-badge" title="Sudah resign / dinonaktifkan">Nonaktif</span>' : '') + (row.libur ? ' <span class="kh-badge" style="background:#12291f;color:#6ee7b7" title="Dijadwalkan libur hari ini">🌴 Libur</span>' : '') +'</td>';
     cells += '<td>'+ statusBadgeFor(row) +'</td>';
     // Pairs untuk akumulasi durasi: durasi disisipkan setelah kolom *_out pasangannya
     const DUR_PAIRS = {
@@ -1886,6 +1940,11 @@ function renderKehadiranMatrix(){
           if (!Number.isFinite(_lemMin)) _lemMin = null;
           if (_lemMin !== null) durTxt = _fmtMs(_lemMin*60000);
         }
+        // PR-CL124: PA tidak punya istirahat/pause/lembur — kolomnya strip, Total Kerja = lama hadir.
+        if (row.isPA && col.tipe !== 'clock_out'){
+          cells += '<td class="kh-dur muted" title="Personal Assistant: tidak dihitung">&mdash;</td>';
+          return;
+        }
         const _anomMark = (col.tipe === 'overtime_out' && row._durAnom) ? ' kh-anom' : '';
         const _anomTitle = (col.tipe === 'overtime_out' && row._durAnom) ? ' (DATA PERLU REVIEW: tap istirahat/pause tidak lengkap)' : '';
         if (col.tipe === 'overtime_out'){
@@ -1904,7 +1963,8 @@ function renderKehadiranMatrix(){
           cells += '<td class="kh-dur'+_anomMark+'" title="'+pair.label+_anomTitle+'">'+(_anomMark?'\u26a0 ':'')+durTxt+'</td>';
         }
         // Sisipkan kolom Kerja Efektif tepat setelah Total Kerja.
-        if (col.tipe === 'clock_out') { const _ef = (row._efektifMs!=null) ? _fmtMs(row._efektifMs) : '0'; cells += '<td class="kh-dur" title="Kerja Efektif (Total Kerja - istirahat - pause)">'+_ef+'</td>'; }
+        if (col.tipe === 'clock_out' && row.isPA) { cells += '<td class="kh-dur muted" title="Personal Assistant: dibayar per hari hadir, lama hadir = Total Kerja">&mdash;</td>'; }
+        else if (col.tipe === 'clock_out') { const _ef = (row._efektifMs!=null) ? _fmtMs(row._efektifMs) : '0'; cells +='<td class="kh-dur" title="Kerja Efektif (Total Kerja - istirahat - pause)">'+_ef+'</td>'; }
       }
     });
     cells += '<td class="col-aksi">'+
@@ -2126,6 +2186,7 @@ async function loadRekap(){
       where('ts','<=', Timestamp.fromDate(to)),
       orderBy('ts','asc'));
     const snap = await getDocs(qy);
+    try { (await getDocs(collection(db,'karyawan'))).forEach(d => catatPA(d.id, d.data())); } catch(e){ console.warn('rekap PA:', e); } // PR-CL124
     const events = [];
     snap.forEach(d=>{
       const x = d.data();
@@ -2153,7 +2214,7 @@ async function loadRekap(){
     for (const uid of Object.keys(byUserDay)){
       const meta = userMeta[uid];
       let hariHadir = 0, jamKerjaMs = 0, jamIstirahatMs = 0, jamLemburMs = 0;
-      let terlambat = 0, belumLengkap = 0, totalEvents = 0;
+      let terlambat = 0, belumLengkap = 0, totalEvents = 0, hariPA = 0;
       const _dayKeys = Object.keys(byUserDay[uid]).sort();
       for (let _i=0; _i<_dayKeys.length; _i++){
         const dk = _dayKeys[_i];
@@ -2194,6 +2255,15 @@ async function loadRekap(){
         const hasCO = byTipe.clock_out && byTipe.clock_out.length;
         if (hasCI) hariHadir++;
         if (hasCI && byTipe.clock_in[0].terlambat) terlambat++;
+        // PR-CL124: hari PA -> cuma lama hadir (masuk->pulang), tanpa istirahat & lembur.
+        if (isPAHari(uid, dk)){
+          if (hasCI) hariPA++;
+          if (hasCI && hasCO){
+            const _span = byTipe.clock_out[byTipe.clock_out.length-1].waktu - byTipe.clock_in[0].waktu;
+            if (_span > 0) jamKerjaMs += _span;
+          } else if (hasCI) belumLengkap++;
+          continue;
+        }
         if (hasCI && hasCO){
           const ci = byTipe.clock_in[0].waktu;
           const co = byTipe.clock_out[byTipe.clock_out.length-1].waktu;
@@ -2227,9 +2297,10 @@ async function loadRekap(){
           if (s && e && e>s) jamLemburMs += (e-s);
         }
       }
-      rows.push({ uid, nama: meta.nama, hariHadir, jamKerjaMs, jamIstirahatMs, jamLemburMs, terlambat, belumLengkap, totalEvents });
+      rows.push({ uid, nama: meta.nama, hariHadir, jamKerjaMs, jamIstirahatMs, jamLemburMs, terlambat, belumLengkap, totalEvents,
+                  isPA: hariPA > 0, semuaPA: hariPA > 0 && hariPA === hariHadir });
     }
-    rows.sort((a,b)=>a.nama.localeCompare(b.nama));
+    rows.sort((a,b)=>((a.isPA?1:0)-(b.isPA?1:0)) || a.nama.localeCompare(b.nama)); // PR-CL124: PA di bawah
     rekapEventsCache = events;
     rekapDataCache = rows;
     renderRekap();
@@ -2277,11 +2348,11 @@ function renderRekap(){
   tbody.innerHTML = rows.map((r,i)=>
       '<tr data-uid="'+(r.uid||'')+'" data-nama="'+((r.nama||'').replace(/"/g,'&quot;'))+'" class="rekap-row-clickable">'+
         '<td>'+(i+1)+'</td>'+
-        '<td>'+r.nama+'</td>'+
+        '<td>'+r.nama+(r.isPA ? PA_BADGE : '')+'</td>'+
         '<td class="num">'+r.hariHadir+'</td>'+
-        '<td class="num">'+fmtHMr(r.jamKerjaMs)+'</td>'+
-        '<td class="num">'+fmtHMr(r.jamIstirahatMs)+'</td>'+
-        '<td class="num">'+fmtHMr(r.jamLemburMs)+'</td>'+
+        '<td class="num"'+(r.isPA ? ' title="PA: lama hadir (masuk sampai pulang)"' : '')+'>'+fmtHMr(r.jamKerjaMs)+'</td>'+
+        '<td class="num">'+(r.semuaPA ? '&mdash;' : fmtHMr(r.jamIstirahatMs))+'</td>'+
+        '<td class="num">'+(r.semuaPA ? '&mdash;' : fmtHMr(r.jamLemburMs))+'</td>'+
         '<td class="num">'+r.terlambat+'</td>'+
         '<td class="num">'+r.belumLengkap+'</td>'+
         '<td class="num">'+r.totalEvents+'</td>'+
@@ -2661,6 +2732,10 @@ const ratePerJam = netJamKerja > 0 ? (baseHarian / netJamKerja) : 0;
 const rateLemburPerJam = RATE_LEMBUR_FLAT;
 const personMap = byPerson.get(k.uid) || byPerson.get(k.email) || new Map();
 let hariHadir = 0, hariParsial = 0, totalJamLembur = 0, totalJamKerja = 0, totalKontribusi = 0, hariLupaCO = 0;
+// PR-CL124: hari mode PA (tanggal >= paMulai) dibayar per hari hadir; hari sebelumnya tetap cara lama.
+const paMulai = k.paMulai ? String(k.paMulai) : '';
+const tarifPA = Number(k.paTarifHarian) || 0;
+let hariPA = 0;
 const dailyDetails = [];
 for (const entry of personMap){ entry[1].sort((a,b)=>a.ts - b.ts); }
 const sortedDateKeys = Array.from(personMap.keys()).sort();
@@ -2736,6 +2811,23 @@ if (_brkOvrEv){ _brkHrP = Math.max(0, Number(_brkOvrEv.istirahatOverrideMin)/60)
 durJam -= _brkHrP;
 }
 if (durJam < 0) durJam = 0;
+// PR-CL124: hari PA -> satu hari hadir = satu tarif harian. Jam, istirahat, lembur tidak dihitung.
+// Lupa Selesai Kerja tetap dihitung hadir (ditandai hariLupaCO supaya owner bisa cek).
+if (paMulai && dateStr >= paMulai){
+  if (ci){
+    hariHadir++; hariPA++;
+    if (!__end) hariLupaCO++;
+    totalKontribusi += tarifPA;
+    dailyDetails.push({
+      date: dateStr,
+      jamMasuk: ci.ts.toTimeString().substring(0,5),
+      jamKeluar: __end ? __end.ts.toTimeString().substring(0,5) : '--',
+      durJam: durJam.toFixed(2), effJam: '-', lemburJam: '0.00',
+      kategori: __end ? 'pa' : 'tidak-clockout', kontribusi: tarifPA
+    });
+  }
+  continue;
+}
 const effJam = Math.min(durJam, netJamKerja);
   let effJamFinal = effJam;
 let kategori = 'absen', kontribusi = 0;
@@ -2787,6 +2879,7 @@ uid: k.uid, nama: k.nama || '-', idKaryawan: k.idKaryawan || '-', nonaktif: (k.n
 baseHarian: baseHarian, jamKerja: jamKerja, multiplierLembur: multiplierLembur,
 ratePerJam: ratePerJam, rateLemburPerJam: rateLemburPerJam, // PR-CL84
 hariHadir: hariHadir, hariParsial: hariParsial, hariLupaCO: hariLupaCO,
+hariPA: hariPA, tarifPA: tarifPA, modePA: hariPA > 0 && hariPA === (hariHadir + hariParsial), // PR-CL124
 totalJamKerja: totalJamKerja, totalJamLembur: totalJamLembur,
 upahPokok: upahPokok, upahLembur: upahLembur, tunjangan: tunjangan, total: total,
 potongan: potongan, bonus: bonus, totalBayar: totalBayar,
@@ -2837,6 +2930,7 @@ function __slipUntukKaryawan(row, yyyymm){
   return {
     yyyymm: yyyymm, label: (__payrollData && __payrollData.label) || yyyymm,
     hariHadir: row.hariHadir || 0, hariParsial: row.hariParsial || 0,
+    modePA: row.modePA === true, tarifPA: row.modePA ? Math.round(row.tarifPA || 0) : 0, // PR-CL124
     totalJamKerja: Math.round((row.totalJamKerja || 0) * 10) / 10,
     totalJamLembur: Math.round((row.totalJamLembur || 0) * 100) / 100,
     upahPokok: Math.round(row.upahPokok || 0), upahLembur: Math.round(row.upahLembur || 0),
@@ -3001,10 +3095,13 @@ const tr = document.createElement('tr');
 if (r.nonaktif){ tr.className = 'pr-nonaktif-row'; tr.style.opacity = '.6'; tr.style.display = 'none'; }
 // PR-CL89: foto profil + badge jabatan (kosakata role WMS) di kolom nama
 tr.innerHTML = '<td><div class="pr-name-cell">' + __prAvatar(r) + '<div class="pr-name-txt"><div class="pr-name-top"><b>' + r.nama + '</b>' + __prRoleBadge(r) + (r.nonaktif ? ' <span class="tag" title="Sudah resign / dinonaktifkan. Muncul karena masih ada absen bulan ini.">Nonaktif</span>' : '') + '</div><small class="muted">' + r.idKaryawan + '</small>' + ((r.hariLupaCO||0) > 0 ? '<br><small style="color:#fcd34d">⚠ ' + r.hariLupaCO + ' hr lupa clock-out</small>' : '') + '</div></div></td>' +
-'<td class="num">' + prFormatRp(r.baseHarian) + '</td>' +
+(r.modePA
+  // PR-CL124: PA — tarif per hari hadir, jam & lembur tidak dihitung.
+  ? '<td class="num">' + prFormatRp(r.tarifPA) + '<br><small class="muted">per hari (PA)</small></td>'
+  : '<td class="num">' + prFormatRp(r.baseHarian) + (r.hariPA ? '<br><small class="muted" title="Sebagian hari di periode ini sudah mode PA">+ PA ' + prFormatRp(r.tarifPA) + '/hr</small>' : '') + '</td>') +
 '<td class="num">' + r.hariHadir + (r.hariParsial ? ' <small class="muted" title="TETAP DIHITUNG HARI MASUK KERJA - cuma karena jamnya kurang dari 75% jam standar, bayarannya dihitung sesuai jam (bukan sehari penuh)">(+' + r.hariParsial + ' parsial)</small>' : '') + '</td>' +
-'<td class="num">' + r.totalJamKerja.toFixed(1) + ' jam</td>' +
-'<td class="num">' + fmtLemburHM(r.totalJamLembur) + '</td>' +
+'<td class="num">' + (r.modePA ? '<span class="muted">&mdash;</span>' : r.totalJamKerja.toFixed(1) + ' jam') + '</td>' +
+'<td class="num">' + (r.modePA ? '<span class="muted">&mdash;</span>' : fmtLemburHM(r.totalJamLembur)) + '</td>' +
 '<td class="num">' + prFormatRp(r.upahPokok) + '</td>' +
 '<td class="num">' + prFormatRp(r.upahLembur) + '</td>' +
 '<td class="num pr-tun-cell" data-uid="' + r.uid + '"><span class="pr-tun-val">' + (r.tunjangan ? prFormatRp(r.tunjangan) : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-tun-edit" data-uid="' + r.uid + '" style="color:#f97316">Edit</button></td>' +
@@ -3237,7 +3334,8 @@ if (!__payrollData) return;
 const r = __payrollData.rows.find(x => x.uid === uid);
 if (!r) return;
 $('prDetailTitle').textContent = 'Detail Payroll \u2014 ' + r.nama;
-$('prDetailSub').textContent = 'Periode: ' + __payrollData.label + ' \u2014 Total Jam: ' + r.totalJamKerja.toFixed(1) + ' jam \u2014 Rate pokok: ' + prFormatRp(r.ratePerJam||0) + '/jam \u2014 Rate lembur: ' + prFormatRp(r.rateLemburPerJam||r.ratePerJam||0) + '/jam \u2014 Total: ' + prFormatRp(r.total);
+if (r.modePA) $('prDetailSub').textContent = 'Periode: ' + __payrollData.label + ' \u2014 Personal Assistant: ' + r.hariHadir + ' hari \u00d7 ' + prFormatRp(r.tarifPA) + ' \u2014 Total: ' + prFormatRp(r.total);
+else $('prDetailSub').textContent = 'Periode: ' + __payrollData.label + ' \u2014 Total Jam: ' + r.totalJamKerja.toFixed(1) + ' jam \u2014 Rate pokok: ' + prFormatRp(r.ratePerJam||0) + '/jam \u2014 Rate lembur: ' + prFormatRp(r.rateLemburPerJam||r.ratePerJam||0) + '/jam \u2014 Total: ' + prFormatRp(r.total);
 const tb = document.querySelector('#tblPayrollDetail tbody');
 tb.innerHTML = '';
 if (!r.dailyDetails.length){
@@ -3251,6 +3349,7 @@ const kategoriBadge = d.kategori === 'hadir' ? '<span style="color:#16a34a">\u27
 : d.kategori === 'parsial' ? '<span style="color:#ea580c">Parsial</span>'
 : d.kategori === 'short' ? '<span style="color:#94a3b8">Short</span>'
 : d.kategori === 'tidak-clockout' ? '<span style="color:#dc2626">Belum Clock Out</span>'
+: d.kategori === 'pa' ? '<span style="color:#16a34a">✓ Hadir (PA)</span>'
 : '<span class="muted">' + d.kategori + '</span>';
 const jamLabel = d.durJam + ' jam' + (parseFloat(d.effJam) < parseFloat(d.durJam) ? ' <small class="muted">(eff ' + d.effJam + ')</small>' : '');
 const _lemJam = parseFloat(d.lemburJam) || 0;
@@ -3366,6 +3465,7 @@ function __slipKategori(kat) {
     case 'parsial':         return { label: 'Sebagian',   color: '#d97706' };
     case 'short':           return { label: 'Kurang Jam', color: '#d97706' };
     case 'tidak-clockout':  return { label: 'Lupa Clock Out', color: '#dc2626' };
+    case 'pa':              return { label: 'Hadir (PA)', color: '#16a34a' }; // PR-CL124
     case 'absen':           return { label: 'Tidak Hadir', color: '#9ca3af' };
     default:                return { label: kat || '-', color: '#374151' };
   }
@@ -3447,25 +3547,32 @@ function downloadSlipGaji(uid) {
     '<table class="info">' +
     '<tr><td>Nama</td><td class="r">' + (r.nama || '-') + '</td></tr>' +
     '<tr><td>ID Karyawan</td><td class="r">' + (r.idKaryawan || '-') + '</td></tr>' +
-    '<tr><td>Upah Harian</td><td class="r">' + __slipFmtRp(r.baseHarian) + ' / ' + (r.jamKerja || '-') + ' jam</td></tr>' +
-    '<tr><td>Tarif per Jam <span class="muted">(upah pokok)</span></td><td class="r">' + __slipFmtRp(rateJam) + '</td></tr>' +
-    '<tr><td>Tarif Lembur per Jam</td><td class="r">' + __slipFmtRp(rateLembur) + '</td></tr>' +
+    (r.modePA
+      // PR-CL124: PA dibayar per hari hadir.
+      ? '<tr><td>Upah per Hari Hadir <span class="muted">(Personal Assistant)</span></td><td class="r">' + __slipFmtRp(r.tarifPA) + '</td></tr>'
+      : '<tr><td>Upah Harian</td><td class="r">' + __slipFmtRp(r.baseHarian) + ' / ' + (r.jamKerja || '-') + ' jam</td></tr>' +
+        '<tr><td>Tarif per Jam <span class="muted">(upah pokok)</span></td><td class="r">' + __slipFmtRp(rateJam) + '</td></tr>' +
+        '<tr><td>Tarif Lembur per Jam</td><td class="r">' + __slipFmtRp(rateLembur) + '</td></tr>') +
     '<tr><td>Status Pembayaran</td><td class="r">' + ((typeof __payStatus!=='undefined' && __payStatus[uid]==='paid') ? '<strong style=\"color:#16a34a\">LUNAS / PAID</strong>' : 'Belum Dibayar') + '</td></tr>' +
     bankHtml +
     '</table>' +
 
     '<h2>Ringkasan Kehadiran</h2>' +
     '<table class="info">' +
-    '<tr><td>Hari Hadir Penuh</td><td class="r">' + (r.hariHadir != null ? r.hariHadir : '-') + ' hari</td></tr>' +
-    '<tr><td>Hari Kerja Singkat <span style="font-size:10px;color:#888">(tetap dihitung masuk &mdash; dibayar sesuai jam)</span></td><td class="r">' + (r.hariParsial != null ? r.hariParsial : 0) + ' hari</td></tr>' +
-    '<tr><td>Total Jam Kerja Efektif</td><td class="r">' + __slipJam(r.totalJamKerja) + '</td></tr>' +
-    '<tr><td>Total Jam Lembur</td><td class="r">' + __slipJam(jamLembur) + '</td></tr>' +
+    (r.modePA
+      ? '<tr><td>Hari Hadir</td><td class="r">' + (r.hariHadir != null ? r.hariHadir : '-') + ' hari</td></tr>'
+      : '<tr><td>Hari Hadir Penuh</td><td class="r">' + (r.hariHadir != null ? r.hariHadir : '-') + ' hari</td></tr>' +
+        '<tr><td>Hari Kerja Singkat <span style="font-size:10px;color:#888">(tetap dihitung masuk &mdash; dibayar sesuai jam)</span></td><td class="r">' + (r.hariParsial != null ? r.hariParsial : 0) + ' hari</td></tr>' +
+        '<tr><td>Total Jam Kerja Efektif</td><td class="r">' + __slipJam(r.totalJamKerja) + '</td></tr>' +
+        '<tr><td>Total Jam Lembur</td><td class="r">' + __slipJam(jamLembur) + '</td></tr>') +
     '</table>' +
 
     '<h2>Perhitungan Gaji</h2>' +
     '<table class="calc">' +
-    '<tr><td>Upah Pokok <span class="muted">(akumulasi kontribusi harian)</span></td><td class="r">' + __slipFmtRp(r.upahPokok) + '</td></tr>' +
-    '<tr><td>Upah Lembur <span class="muted">(' + __slipJam(jamLembur) + ' &times; ' + __slipFmtRp(rateLembur) + ')</span></td><td class="r">' + __slipFmtRp(r.upahLembur) + '</td></tr>' +
+    (r.modePA
+      ? '<tr><td>Upah Harian <span class="muted">(' + (r.hariHadir || 0) + ' hari &times; ' + __slipFmtRp(r.tarifPA) + ')</span></td><td class="r">' + __slipFmtRp(r.upahPokok) + '</td></tr>'
+      : '<tr><td>Upah Pokok <span class="muted">(akumulasi kontribusi harian)</span></td><td class="r">' + __slipFmtRp(r.upahPokok) + '</td></tr>' +
+        '<tr><td>Upah Lembur <span class="muted">(' + __slipJam(jamLembur) + ' &times; ' + __slipFmtRp(rateLembur) + ')</span></td><td class="r">' + __slipFmtRp(r.upahLembur) + '</td></tr>') +
     ((r.tunjangan && r.tunjangan > 0) ? '<tr><td>Tunjangan Jabatan <span class="muted">(tetap per bulan)</span></td><td class="r">' + __slipFmtRp(r.tunjangan) + '</td></tr>' : '') +
     ((r.bonus && r.bonus > 0) ? '<tr><td>Bonus</td><td class="r">+ ' + __slipFmtRp(r.bonus) + '</td></tr>' : '') +
     ((r.potongan && r.potongan > 0) ? '<tr><td>Potongan / Kasbon</td><td class="r">- ' + __slipFmtRp(r.potongan) + '</td></tr>' : '') +

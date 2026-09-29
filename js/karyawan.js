@@ -121,6 +121,9 @@ let sayaJoinMs = 0;
 let tanggalLahirSaya = '';
 let sayaNonaktif = false;
 let sayaSpv = false; // PR-CL98: akses halaman Pantau Tim
+// PR-CL124: mode Personal Assistant — dibayar per hari hadir, jadi cuma ada tombol
+// Mulai Kerja & Selesai Kerja. Istirahat, lembur, dan timer jam efektif disembunyikan.
+let modePA = false;
 function __mmdd(d){ return String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 
 async function cekUltah(){
@@ -288,13 +291,19 @@ function openSlipModal(){
   const rows = [
     ['Hari Kerja Penuh', (slipData.hariHadir || 0) + ' hari']
   ];
-  if (slipData.hariParsial) rows.push(['Hari Kerja Singkat', (slipData.hariParsial || 0) + ' hari<br><small class="muted">tetap dihitung masuk kerja &mdash; dibayar sesuai jam</small>']);
-  rows.push(
-    ['Total Jam Kerja', (slipData.totalJamKerja || 0) + ' jam'],
-    ['Jam Lembur', jamL],
-    ['Upah Pokok', __slipRp(slipData.upahPokok)],
-    ['Upah Lembur', __slipRp(slipData.upahLembur)]
-  );
+  if (slipData.modePA){
+    // PR-CL124: PA dibayar per hari hadir — jam & lembur tidak relevan.
+    rows[0] = ['Hari Hadir', (slipData.hariHadir || 0) + ' hari'];
+    rows.push(['Upah Harian', (slipData.hariHadir || 0) + ' &times; ' + __slipRp(slipData.tarifPA) + '<br>' + __slipRp(slipData.upahPokok)]);
+  } else {
+    if (slipData.hariParsial) rows.push(['Hari Kerja Singkat', (slipData.hariParsial || 0) + ' hari<br><small class="muted">tetap dihitung masuk kerja &mdash; dibayar sesuai jam</small>']);
+    rows.push(
+      ['Total Jam Kerja', (slipData.totalJamKerja || 0) + ' jam'],
+      ['Jam Lembur', jamL],
+      ['Upah Pokok', __slipRp(slipData.upahPokok)],
+      ['Upah Lembur', __slipRp(slipData.upahLembur)]
+    );
+  }
   if (slipData.tunjangan > 0) rows.push(['Tunjangan Jabatan', __slipRp(slipData.tunjangan)]);
   if (slipData.bonus > 0) rows.push(['Bonus', '+ ' + __slipRp(slipData.bonus)]);
   if (slipData.potongan > 0) rows.push(['Potongan / Kasbon', '- ' + __slipRp(slipData.potongan)]);
@@ -462,6 +471,7 @@ function updateBreakToggleUI(){
 function updateWorkCountdown(){
   const wc = $('workCountdown');
   if(!wc) return;
+  if (modePA){ wc.classList.add('hidden'); return; }
   const clockInEntry = getFirstInSession('clock_in');
   if (!clockInEntry || hasInSession('clock_out')) {
     wc.classList.add('hidden'); return;
@@ -496,6 +506,7 @@ setInterval(updateWorkCountdown, 1000);
 // Tidak ada batas mundur 1 jam lagi; waktu kerja otomatis mundur karena freeze.
 function updateBreakCountdown(){
     var wc = document.getElementById('breakCountdown');
+    if (modePA){ if (wc) wc.classList.add('hidden'); return; }
     var clockedIn = hasInSession('clock_in') && !hasInSession('clock_out');
     var active = isCurrentlyOnBreak() || isCurrentlyPaused();
     var totalMs = clockedIn ? totalNonWorkMs() : 0;
@@ -615,6 +626,8 @@ async function loadUserProfile(){
         // PR-CL98: dulu ini saklar lepas `spvAkses`. Sekarang perannya sudah ada
         // di kolom `peran`, jadi tidak perlu saklar kedua yang bisa beda sendiri.
         sayaSpv = (u.peran === 'spv' || u.peran === 'owner');
+        const _hariIniWib = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+        modePA = !!(u.pa_mulai && String(u.pa_mulai) <= _hariIniWib);
         foto = await urlTayang(EMBER_PROFIL, u.foto_url);
         // Cek kelengkapan profil (rekening + KTP) buat notif "Lengkapi Profil" pas login.
         profilKurang = [];
@@ -658,6 +671,7 @@ async function loadUserProfile(){
 
     userProfile = { nama, namaPanggilan, jamKerja, foto, gpsExempt, wajibKode, kodeAdmin, noShiftBarrier, liburHari, liburRequest };
     initAdminKodeCard();
+    terapkanModePA();
 
     // Foto profil ikut daftar "Profil Belum Lengkap" (PR-CL108).
     //
@@ -1454,6 +1468,9 @@ $('btnBreakToggle').onclick = ()=> handleBreakToggle();
 $('btnOtOut').onclick     = () => autoOtThenOut();
 
 async function handleClockOut(){
+  // PR-CL124: PA tidak punya tombol istirahat -> langsung Selesai Kerja, tanpa ditanya jam istirahat.
+  // Istirahat yang masih terbuka dari sebelum mode PA tetap ditutup lewat alur di bawah.
+  if (modePA && !isCurrentlyOnBreak() && !isCurrentlyPaused()){ proceedClockOut(); return; }
   if (isCurrentlyOnBreak()){
     const bi = getLastInSession('break_in');
     isSubmitting = true;
@@ -1729,6 +1746,24 @@ async function autoOtThenOut() {
     console.error('autoOtThenOut error', e);
     alert('Gagal mencatat lembur: ' + (e && e.message ? e.message : e));
   }
+}
+
+// PR-CL124: tampilan mode PA — cuma Mulai Kerja & Selesai Kerja.
+function terapkanModePA(){
+  document.body.classList.toggle('mode-pa', modePA);
+  if (!modePA) return;
+  ['btnBreakToggle', 'btnOtOut'].forEach(function(id){ const b = $(id); if (b) b.style.display = 'none'; });
+  const lIn = document.querySelector('#btnClockIn .tile-label'); if (lIn) lIn.textContent = 'Mulai Kerja';
+  const lOut = document.querySelector('#btnClockOut .tile-label'); if (lOut) lOut.textContent = 'Selesai Kerja';
+  TIPE.clock_in = 'Mulai Kerja';
+  TIPE.clock_out = 'Selesai Kerja';
+  ['workCountdown', 'breakCountdown'].forEach(function(id){ const w = $(id); if (w) w.classList.add('hidden'); });
+  // Panduan versi PA muncul sekali (disimpan di HP), terpisah dari panduan umum.
+  try{
+    if (localStorage.getItem('gg_panduan_pa_seen') !== '1'){
+      const m = $('panduanModal'); if (m) setTimeout(function(){ m.classList.remove('hidden'); }, 900);
+    }
+  }catch(e){}
 }
 
 // Sembunyikan tombol "Mulai Lembur" karena overtime_in sekarang otomatis.
