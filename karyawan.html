@@ -12,63 +12,34 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/karyawan-v2.css">
 
 <style id="pfProfilFix">.pf-avatar-block{display:flex;flex-direction:column;align-items:center;gap:8px;margin:4px 0 16px}.pf-avatar-circle{position:relative;width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;border:2px solid rgba(255,255,255,.14)}.pf-avatar-img{width:100%;height:100%;object-fit:cover;display:none}.pf-avatar-img.show{display:block}.pf-avatar-ph{font-size:40px;font-weight:300;color:#999;line-height:1}.pf-avatar-ph.hide{display:none}.pf-avatar-label{background:none;border:none;color:#f97316;font-size:13px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline}.profil-input[readonly]{background:rgba(0,0,0,.04);color:#111;opacity:1;cursor:default}.profil-ktp-wrap{margin-top:6px}.profil-ktp-preview{display:block;width:auto;max-width:100%;max-height:200px;object-fit:contain;border-radius:10px;border:1px solid #403d37;margin-top:8px}.profil-ktp-preview.hidden{display:none}.modal-box .profil-form{max-height:none}</style>
 </head>
-<body>
-<header class="topbar topbar-greet">
-  <div class="greet-wrap">
-    <div class="greet-text">
-      <strong id="greetMsg">Halo!</strong>
-      <small id="greetSub" class="muted">selamat beraktivitas</small>
-    </div>
-  </div>
-  <div class="greet-right">
-    <div id="avatarWrap" class="avatar-wrap" title="Ganti foto profil">
-      <img id="avatarImg" src="" alt="" />
-      <span id="avatarPlaceholder" class="avatar-ph">+</span>
-      <input type="file" id="avatarInput" accept="image/*" hidden>
-    </div>
-    <button id="btnPanduan" class="btn-icon" title="Panduan cara pakai absensi">&#x2753; Panduan</button>
-    <button id="btnLibur" class="btn-icon" title="Atur hari libur mingguan">&#x1F334; Libur</button>
-    <a id="btnPantauTim" class="btn-icon hidden" href="spv.html" style="text-decoration:none" title="Pantau kehadiran tim">&#x1F4CA; Pantau Tim</a>
-    <button id="btnKasbon" class="btn-icon hidden" title="Ajukan kasbon (pinjaman gaji)">&#x1F4B5; Kasbon</button>
-    <button id="btnOpenProfil" class="btn-icon" title="Lengkapi profil">Profil</button>
-    <button id="btnLogout" class="btn-icon">Keluar</button>
+<body class="app-v2">
+<header class="app-top">
+  <div class="app-brand"><span class="app-brand-word">GOODGEMS</span><span class="app-brand-tag">ABSENSI</span></div>
+  <div id="avatarWrap" class="avatar-wrap" title="Buka Profil">
+    <img id="avatarImg" src="" alt="" />
+    <span id="avatarPlaceholder" class="avatar-ph">+</span>
+    <input type="file" id="avatarInput" accept="image/*" hidden>
   </div>
 </header>
 
-<main class="container">
-  <div class="card center">
-    <div class="muted" id="liveDate">-</div>
+<main class="container app-main">
+  <section class="hero">
+    <div class="hero-greet greet-text">
+      <strong id="greetMsg">Halo!</strong>
+      <small id="greetSub">selamat beraktivitas</small>
+    </div>
+    <div class="hero-date" id="liveDate">-</div>
     <div id="workCountdown" class="work-countdown hidden">
       <div class="wc-label">Jam kerja efektif berjalan</div>
       <div class="wc-time" id="wcTime">00:00:00</div>
-      </div>
-  </div>
-
-  <div id="ultahTemanCard" class="card hidden" style="border-left:3px solid #f97316">
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <span style="font-size:22px">&#x1F382;</span>
-      <div><b id="ultahTemanTxt">-</b><br><small class="muted">Jangan lupa ucapin ya!</small></div>
     </div>
-  </div>
+  </section>
 
-  <div id="slipCard" class="card hidden" style="border-left:3px solid #34d399">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-      <div><b>&#x1F4B0; Gaji Sudah Ditransfer</b><br><small class="muted" id="slipCardSub">-</small></div>
-      <button id="btnLihatSlip" class="btn btn-sm btn-success" style="margin-top:0">Lihat Slip</button>
-    </div>
-  </div>
-
-  <div id="adminKodeCard" class="card center hidden">
-    <div class="muted" style="font-size:12px;font-weight:600;letter-spacing:.05em">&#x1F511; KODE CLOCK-OUT (ADMIN BERTUGAS)</div>
-    <div id="adminKodeVal" style="font-size:34px;font-weight:800;letter-spacing:.35em;color:#f97316;margin:4px 0 2px">----</div>
-    <div class="muted" id="adminKodeTimer" style="font-size:12px">ganti otomatis tiap 10 menit</div>
-  </div>
-
-  <div class="card">
-    <div class="action-grid">
+  <div class="action-grid">
       <button id="btnClockIn" class="action-tile tile-in">
         <span class="tile-icon">
           <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -119,7 +90,38 @@
         <span class="tile-status" id="sOtOut">-</span>
       </button>
     </div>
+
+  <div id="adminKodeCard" class="card center hidden">
+    <div class="muted" style="font-size:12px;font-weight:600;letter-spacing:.05em">&#x1F511; KODE CLOCK-OUT (ADMIN BERTUGAS)</div>
+    <div id="adminKodeVal" style="font-size:34px;font-weight:800;letter-spacing:.35em;color:#f97316;margin:4px 0 2px">----</div>
+    <div class="muted" id="adminKodeTimer" style="font-size:12px">ganti otomatis tiap 10 menit</div>
   </div>
+
+  <div id="slipCard" class="card hidden" style="border-left:3px solid #34d399">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div><b>&#x1F4B0; Gaji Sudah Ditransfer</b><br><small class="muted" id="slipCardSub">-</small></div>
+      <button id="btnLihatSlip" class="btn btn-sm btn-success" style="margin-top:0">Lihat Slip</button>
+    </div>
+  </div>
+
+  <div id="ultahTemanCard" class="card hidden" style="border-left:3px solid #f97316">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:22px">&#x1F382;</span>
+      <div><b id="ultahTemanTxt">-</b><br><small class="muted">Jangan lupa ucapin ya!</small></div>
+    </div>
+  </div>
+
+  <section class="qm">
+    <div class="qm-title">Menu</div>
+    <div class="qm-grid">
+      <button id="btnPanduan" class="qm-item " title="Panduan cara pakai absensi"><span class="qm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.3a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.3-2.5 3.8"/><path d="M12 17.2h.01"/></svg></span><span class="qm-lbl">Panduan</span></button>
+      <button id="btnLibur" class="qm-item " title="Atur hari libur mingguan"><span class="qm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/><path d="M9.5 14.5l1.8 1.8 3.5-3.6"/></svg></span><span class="qm-lbl">Libur</span></button>
+      <button id="btnKasbon" class="qm-item hidden" title="Ajukan kasbon (pinjaman gaji)"><span class="qm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12.5" rx="2.5"/><circle cx="12" cy="12.25" r="2.6"/><path d="M6 9.5v.01M18 15v.01"/></svg></span><span class="qm-lbl">Kasbon</span></button>
+      <a id="btnPantauTim" class="qm-item hidden" href="spv.html" title="Pantau kehadiran tim"><span class="qm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6"/><circle cx="17" cy="9.5" r="2.4"/><path d="M16.5 14.6c2.1.2 3.5 1.6 4 4.1"/></svg></span><span class="qm-lbl">Pantau Tim</span></a>
+      <button id="btnOpenProfil" class="qm-item " title="Data diri & rekening"><span class="qm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="3"/><circle cx="9.5" cy="10.5" r="2.3"/><path d="M6.3 16.2c.6-1.6 1.8-2.4 3.2-2.4s2.6.8 3.2 2.4M14.5 9.5h3M14.5 13h3"/></svg></span><span class="qm-lbl">Profil</span></button>
+      <button id="btnLogout" class="qm-item qm-danger" title="Keluar dari akun"><span class="qm-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h3.5A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5H14"/><path d="M10 16l-4-4 4-4M6 12h9.5"/></svg></span><span class="qm-lbl">Keluar</span></button>
+    </div>
+  </section>
 </main>
 
 <div id="selfieModal" class="modal hidden">
@@ -404,7 +406,7 @@ if ('serviceWorker' in navigator) {
     var wrap=document.getElementById("avatarWrap");
     var btnOld=document.getElementById("btnOpenProfil");
     var modal=document.getElementById("profilModal");
-    if(btnOld){ btnOld.style.display="none"; }
+    /* btnOpenProfil sekarang tampil di menu (PR-CL118); klik-nya dipasang karyawan.js */
     function openProfilSafe(){
       if(typeof window.openProfil==="function"){ window.openProfil(); }
       else if(modal){ modal.classList.remove("hidden"); }
