@@ -83,7 +83,7 @@ body.owner-v2{
 .owner-v2 .sb-kode-timer{font-size:11px;color:var(--gg-muted)}
 
 /* ---------- Content & page headers ---------- */
-.owner-v2 .content{padding:28px 32px 48px;max-width:1480px}
+.owner-v2 .content{padding:28px 32px 48px;max-width:none}
 .owner-v2 .page-title{font-size:28px;font-weight:800;letter-spacing:-.03em;margin-bottom:2px}
 .owner-v2 #berandaTitle{display:inline-flex;align-items:center;gap:10px}
 .owner-v2 #berandaRefreshIcon{
