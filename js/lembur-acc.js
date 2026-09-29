@@ -233,7 +233,7 @@ function modalSuruh(){
   __modalSuruh = m;
   return m;
 }
-async function bukaSuruh(sesudah){
+async function bukaSuruh(sesudah, div){   // PR-CL129: div = { owner, peta: Map(id -> divisi) }
   const m = modalSuruh();
   const list = m.querySelector('.lembur-pick-list');
   const ok = m.querySelector('.lembur-suruh-ok');
@@ -251,11 +251,17 @@ async function bukaSuruh(sesudah){
     if (error) throw error;
     const rows = data || [];
     const ket = { menunggu: 'minta, nunggu ACC', disetujui: 'udah ada izin', lembur: 'lagi lembur', ditolak: 'tadi ditolak', dibatalkan: 'izin dibatalin' };
+    // PR-CL129: server cuma kirim divisi yang boleh kamu suruh; owner dikelompokin per divisi.
+    const divOf = r => (div && div.peta && div.peta.get(r.karyawan_id)) || 'Divisi belum diisi';
+    if (div && div.owner) rows.sort((a, b) => divOf(a).localeCompare(divOf(b)) || String(a.ci_ts).localeCompare(String(b.ci_ts)));
+    let grp = null;
     list.innerHTML = rows.length ? rows.map(r => {
       const sudah = r.status_izin === 'disetujui' || r.status_izin === 'lembur';
-      return '<label class="lembur-pick' + (sudah ? ' off' : '') + '"><input type="checkbox" value="' + esc(r.karyawan_id) + '"' + (sudah ? ' disabled' : '') + '> '
+      let head = '';
+      if (div && div.owner && divOf(r) !== grp){ grp = divOf(r); head = '<div class="lembur-grup">' + esc(grp) + '</div>'; }
+      return head + '<label class="lembur-pick' + (sudah ? ' off' : '') + '"><input type="checkbox" value="' + esc(r.karyawan_id) + '"' + (sudah ? ' disabled' : '') + '> '
         + esc(r.nama) + ' <small>masuk ' + esc(jam(r.ci_ts)) + (r.status_izin ? ' &middot; ' + esc(ket[r.status_izin] || r.status_izin) : '') + '</small></label>';
-    }).join('') : '<div class="lembur-sub">Belum ada karyawan yang lagi masuk.</div>';
+    }).join('') : '<div class="lembur-sub">Belum ada karyawan ' + (div && !div.owner && div.divisi ? 'divisi ' + esc(div.divisi) + ' ' : '') + 'yang lagi masuk.</div>';
   }catch(e){ list.innerHTML = '<div class="lembur-sub" style="color:var(--gg-danger-t)">Gagal memuat: ' + esc(pesanError(e)) + '</div>'; }
   list.onchange = hitung;
   hitung();
@@ -277,17 +283,25 @@ async function bukaSuruh(sesudah){
 
 export async function renderLemburHariIni(box, opsi = {}){
   if (!box) return;
-  let rows = [], lama = [];
+  let rows = [], lama = [], dinfo = {};
   try{
-    const [a, b] = await Promise.all([baca('lembur_hari_ini'), baca('lembur_acc_antrian')]);
+    const [a, b, c] = await Promise.all([baca('lembur_hari_ini'), baca('lembur_acc_antrian'), baca('lembur_divisi_info')]);
     if (a.error) throw a.error;
     rows = a.data || [];
     lama = (b && !b.error && b.data) || [];
+    dinfo = (c && !c.error && c.data) || {};
   }catch(e){ console.warn('lembur hari ini:', e); box.classList.add('hidden'); return; }
+  // PR-CL129: ACC per divisi. Server sudah menyaring; di sini cuma label & pengelompokan.
+  const div = { owner: !!dinfo.owner, divisi: dinfo.divisi || null, peta: new Map((dinfo.tim || []).map(t => [t.id, t.divisi || 'Divisi belum diisi'])) };
+  const divOf = r => div.peta.get(r.karyawan_id) || 'Divisi belum diisi';
+  if (div.owner) rows.sort((a, b) => divOf(a).localeCompare(divOf(b)));
   const muatUlang = async () => { await renderLemburHariIni(box, opsi); if (opsi.sesudahPutus) try{ opsi.sesudahPutus(); }catch(_){} };
   const nunggu = rows.filter(r => r.status === 'menunggu' && r.sesi_terbuka);
   const now = Date.now();
+  let __grp = null;
   const html = rows.map(r => {
+    let __head = '';
+    if (div.owner && divOf(r) !== __grp){ __grp = divOf(r); __head = '<div class="lembur-grup">' + esc(__grp) + '</div>'; }
     const oleh = r.jenis === 'suruh' ? ('\u{1F4E3} disuruh ' + esc(r.dibuat_oleh || r.penyetuju || '-')) : null;
     let info = '<b>' + esc(r.nama) + '</b> &middot; ', aksi = '';
     if (r.status === 'menunggu'){
@@ -310,10 +324,15 @@ export async function renderLemburHariIni(box, opsi = {}){
     } else {
       info += '<span class="muted">izin dibatalin ' + esc(r.penyetuju || '') + '</span>';
     }
-    return '<div class="lembur-row lembur-antri"><div class="lembur-info">' + info + '</div>' + (aksi ? '<div class="lembur-aksi">' + aksi + '</div>' : '') + '</div>';
+    return __head + '<div class="lembur-row lembur-antri"><div class="lembur-info">' + info + '</div>' + (aksi ? '<div class="lembur-aksi">' + aksi + '</div>' : '') + '</div>';
   }).join('');
+  const kosong = dinfo.kosong || [];
+  const catatanDiv = div.owner
+    ? (kosong.length ? '<div class="lembur-warn">⚠ Divisi belum diisi di WMS: <b>' + kosong.map(esc).join(', ') + '</b>. Lembur mereka cuma bisa di-ACC owner.</div>' : '')
+    : (div.divisi ? '' : '<div class="lembur-warn">⚠ Divisi kamu belum diisi di WMS, jadi kamu belum bisa ACC / nyuruh siapa-siapa. Minta owner isi dulu.</div>');
   box.innerHTML = '<div class="lembur-head">\u{1F319} Lembur Hari Ini</div>'
-    + '<div class="lembur-sub" style="margin-bottom:8px">Permintaan yang nunggu: <b>' + nunggu.length + '</b>. Tanpa izin, gak ada yang bisa mulai lembur.</div>'
+    + '<div class="lembur-sub" style="margin-bottom:8px">' + (div.owner ? 'Semua divisi' : ('Divisi <b>' + esc(div.divisi || '-') + '</b>')) + ' &middot; permintaan yang nunggu: <b>' + nunggu.length + '</b>. Tanpa izin, gak ada yang bisa mulai lembur.</div>'
+    + catatanDiv
     + '<button class="btn btn-sm btn-primary lh-suruh" style="margin:0 0 6px;width:auto;display:inline-block">\u{1F4E3} Suruh Lembur</button>'
     + (html || '<div class="lembur-sub">Belum ada yang minta / disuruh lembur hari ini.</div>')
     + (lama.length ? '<div class="lembur-sub" style="margin-top:12px"><b>Aturan lama (ACC setelah lembur)</b> &mdash; sisa sesi sebelum alur izin, batas s/d akhir hari besoknya:</div><div class="lh-lama"></div>' : '');
@@ -326,7 +345,7 @@ export async function renderLemburHariIni(box, opsi = {}){
     const h = sub.querySelector('.lembur-head'); if (h) h.remove();
     const s = sub.querySelector('.lembur-sub'); if (s) s.remove();
   }
-  box.querySelector('.lh-suruh').onclick = () => bukaSuruh(muatUlang);
+  box.querySelector('.lh-suruh').onclick = () => bukaSuruh(muatUlang, div);
   const aksi = async (b, fn, args, konfirmasi) => {
     if (konfirmasi === null) return;
     b.disabled = true;
