@@ -769,3 +769,19 @@ input.kh-time.kh-save-err{background:var(--gg-danger-bg) !important;border-color
 .pr-ava{width:38px;height:38px;flex:0 0 38px;border-radius:50%;object-fit:cover;border:1px solid #2f2f2f;background:#151515}
 .pr-ava.ph{display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#8a8a8a}
 .pr-role-badge{display:inline-block;padding:1px 7px;border-radius:999px;font-size:9.5px;font-weight:800;letter-spacing:.04em;white-space:nowrap}
+
+/* PR-CL127: lembur wajib ACC (kartu karyawan + antrian Lead/SPV/owner) */
+.lembur-box{display:block}
+.lembur-head{font-size:14px;font-weight:700;color:var(--gg-text);margin-bottom:4px}
+.lembur-sub{font-size:12.5px;color:var(--gg-muted);line-height:1.5}
+.lembur-sub b,.lembur-info b{color:var(--gg-text-2)}
+.lembur-row{border-top:1px solid var(--gg-border);padding-top:8px;margin-top:8px}
+.lembur-st{font-size:13.5px;font-weight:700}
+.lembur-antri{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.lembur-info{font-size:12.5px;color:var(--gg-muted);line-height:1.55;flex:1 1 220px;min-width:0}
+.lembur-aksi{display:flex;gap:6px;flex-wrap:wrap}
+.lembur-aksi .btn,.lembur-row .btn{margin-top:0;width:auto;display:inline-block}
+.lembur-tag{display:inline-block;font-size:11px;font-weight:600;padding:1px 6px;border-radius:6px;margin-left:4px;white-space:nowrap}
+.lembur-tag.nunggu{background:var(--gg-warning-bg);color:var(--gg-warning-t)}
+.lembur-tag.tolak{background:var(--gg-danger-bg);color:var(--gg-danger-t)}
+.lembur-tag.ok{background:var(--gg-success-bg);color:var(--gg-success-t)}
