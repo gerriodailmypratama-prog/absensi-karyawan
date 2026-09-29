@@ -422,6 +422,11 @@ async function renderBeranda(rows){
 
     const ctx1 = document.getElementById('chartHadir');
     if (ctx1 && window.Chart) {
+        // Snapshot fires repeatedly: update the existing chart in place (no replayed animation).
+        if (chartHadir && chartHadir.canvas === ctx1) {
+            chartHadir.data.datasets[0].data = [hadir, belum];
+            chartHadir.update('none');
+        } else {
         if (chartHadir) chartHadir.destroy();
         chartHadir = new Chart(ctx1, {
             type: 'doughnut',
@@ -431,11 +436,16 @@ async function renderBeranda(rows){
             },
             options: { plugins:{ legend:{ position:'bottom' } }, cutout:'65%' }
         });
+        }
         $('capHadir').textContent = hadir + ' dari ' + total + ' karyawan sudah Clock In hari ini';
     }
 
     const ctx2 = document.getElementById('chartLokasi');
     if (ctx2 && window.Chart) {
+        if (chartLokasi && chartLokasi.canvas === ctx2) {
+            chartLokasi.data.datasets[0].data = [inRuko, outRuko];
+            chartLokasi.update('none');
+        } else {
         if (chartLokasi) chartLokasi.destroy();
         chartLokasi = new Chart(ctx2, {
             type: 'doughnut',
@@ -445,6 +455,7 @@ async function renderBeranda(rows){
             },
             options: { plugins:{ legend:{ position:'bottom' } }, cutout:'65%' }
         });
+        }
         $('capLokasi').textContent = inRuko + ' di ruko \u00B7 ' + outRuko + ' luar lokasi';
     }
 
