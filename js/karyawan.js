@@ -25,6 +25,7 @@ import {
   periodeBerjalan, KASBON_PLAFON_DEFAULT, pesanRamah, MODE_UJI,
   EMBER_SELFIE, EMBER_PROFIL, EMBER_KTP
 } from './supabase-config.js';
+import { infoLemburSaya, renderLemburSaya, renderAntrianLembur } from './lembur-acc.js';
 
 const $ = id => document.getElementById(id);
 const TIPE = {
@@ -124,6 +125,8 @@ let sayaSpv = false; // PR-CL98: akses halaman Pantau Tim
 // PR-CL124: mode Personal Assistant — dibayar per hari hadir, jadi cuma ada tombol
 // Mulai Kerja & Selesai Kerja. Istirahat, lembur, dan timer jam efektif disembunyikan.
 let modePA = false;
+// PR-CL127: lembur wajib ACC. { mulai, bebas_acc, bisa_acc } dari RPC lembur_info_saya.
+let lemburInfo = { bebas_acc: false, bisa_acc: false };
 function __mmdd(d){ return String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 
 async function cekUltah(){
@@ -807,6 +810,7 @@ async function mulaiHalaman(session){
   refreshLocStatus();
   try{ showLengkapiProfilNotice(); }catch(e){}
   try{ showSlipCard(); }catch(e){}
+  try{ await muatLemburAcc(); }catch(e){ console.warn('lembur acc:', e); }
   // Tombol Kasbon cuma nongol kalau owner udah buka aksesnya buat orang ini.
   try{ if (kasbonAktif && $('btnKasbon')) $('btnKasbon').classList.remove('hidden'); }catch(e){}
   try{ if (sayaSpv && $('btnPantauTim')) $('btnPantauTim').classList.remove('hidden'); }catch(e){}
@@ -1004,6 +1008,12 @@ $('btnSelfieShoot').onclick = async ()=>{
     extra.no_break = true;
     window.__noBreak = false;
   }
+  // PR-CL127: alasan lembur ikut tersimpan di event Selesai Lembur; database membuatkan
+  // baris ACC-nya (status nunggu ACC) dari sini.
+  if (currentType === 'overtime_out' && window.__alasanLembur){
+    extra.ekstra = { alasan_lembur: window.__alasanLembur };
+    window.__alasanLembur = null;
+  }
   if ((currentType === 'clock_out' || currentType === 'overtime_out') && window.__kodeVerif){
     extra.kode_verif = window.__kodeVerif; // 'ok' = terverifikasi admin, 'darurat' = tanpa kode (merah di owner)
     window.__kodeVerif = null;
@@ -1012,6 +1022,7 @@ $('btnSelfieShoot').onclick = async ()=>{
   try {
     await saveAttendance(Object.assign({ tipe: currentType, foto_selfie: selfieUrl || null }, lok, extra));
     await loadActiveSession();
+    if (currentType === 'overtime_out') { try{ await renderLemburSaya($('lemburSayaCard'), { mintaAlasan }); }catch(e){} }
     // Sanksi foto profil (PR-CL111): sudah diwarning sejak hari ke-2, masuk hari ke-3 masih belum upload
     // -> selfie absen barusan otomatis jadi foto profil. Bisa diganti kapan aja lewat menu Profil.
     // Selfie & foto profil beda ember, jadi filenya disalin ke ember profil dulu.
@@ -1728,8 +1739,17 @@ async function autoOtThenOut() {
     const otH = Math.floor(otMs / 3600000);
     const otM = Math.floor((otMs % 3600000) / 60000);
     const otStr = (otH > 0 ? (otH + ' jam ') : '') + otM + ' menit';
-    const okOt = await askConfirm('Selesai Lembur Sekarang?', 'Lembur Anda yang akan tercatat sekitar ' + otStr + '. Aksi ini juga mencatat jam keluar (pulang) Anda. Lanjutkan dan ambil selfie?', 'Ya, Selesai Lembur');
+    const perluAcc = !lemburInfo.bebas_acc;   // PR-CL127
+    const okOt = await askConfirm('Selesai Lembur Sekarang?', 'Lembur Anda yang akan tercatat sekitar ' + otStr + '. Aksi ini juga mencatat jam keluar (pulang) Anda.'
+      + (perluAcc ? ' Lembur perlu di-ACC Lead / SPV dulu baru dibayar.' : '') + ' Lanjutkan dan ambil selfie?', 'Ya, Selesai Lembur');
     if (!okOt) return;
+    // PR-CL127: alasan wajib (kecuali yang bebas ACC). Dikirim bareng event Selesai Lembur.
+    window.__alasanLembur = null;
+    if (perluAcc){
+      const alasan = await mintaAlasan();
+      if (!alasan) return;
+      window.__alasanLembur = alasan;
+    }
     // 3) Setelah dikonfirmasi: tutup otomatis istirahat/pause yang masih kebuka biar durasi akurat
     //    (kasus karyawan lupa tap Selesai Istirahat sebelum tap Selesai Lembur).
     if (isCurrentlyOnBreak()) { await doNoSelfieAction('break_out'); }
@@ -1747,6 +1767,33 @@ async function autoOtThenOut() {
     alert('Gagal mencatat lembur: ' + (e && e.message ? e.message : e));
   }
 }
+
+// ===== PR-CL127: lembur wajib ACC Lead / SPV / owner =====
+// Modal alasan lembur. Balikin teks alasan, atau null kalau dibatalkan.
+function mintaAlasan(){
+  return new Promise(resolve => {
+    const modal = $('alasanLemburModal'), inp = $('alasanLemburInput'), err = $('alasanLemburErr');
+    if (!modal || !inp){ const a = prompt('Alasan lembur (wajib):', ''); resolve(a && a.trim().length >= 3 ? a.trim() : null); return; }
+    inp.value = ''; err.style.display = 'none';
+    modal.classList.remove('hidden');
+    setTimeout(() => { try{ inp.focus(); }catch(e){} }, 50);
+    const selesai = v => { modal.classList.add('hidden'); $('btnAlasanLemburOk').onclick = null; $('btnAlasanLemburBatal').onclick = null; resolve(v); };
+    $('btnAlasanLemburBatal').onclick = () => selesai(null);
+    $('btnAlasanLemburOk').onclick = () => {
+      const v = inp.value.trim();
+      if (v.length < 3){ err.style.display = 'block'; return; }
+      selesai(v.slice(0, 200));
+    };
+  });
+}
+// Kartu "Lembur Kamu" + (buat Lead / SPV) antrian ACC lembur tim.
+async function muatLemburAcc(){
+  try{ lemburInfo = Object.assign(lemburInfo, await infoLemburSaya()); }catch(e){ console.warn('info lembur:', e); }
+  await renderLemburSaya($('lemburSayaCard'), { mintaAlasan });
+  if (lemburInfo.bisa_acc) await renderAntrianLembur($('lemburAccCard'), { tampilKosong: true });
+}
+// Refresh ringan tiap 2 menit selama halaman kebuka (antrian Lead & status sendiri).
+setInterval(() => { if (saya && !document.hidden) muatLemburAcc().catch(() => {}); }, 120000);
 
 // PR-CL124: tampilan mode PA — cuma Mulai Kerja & Selesai Kerja.
 function terapkanModePA(){
