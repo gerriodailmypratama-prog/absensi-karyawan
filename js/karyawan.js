@@ -25,7 +25,7 @@ import {
   periodeBerjalan, KASBON_PLAFON_DEFAULT, pesanRamah, MODE_UJI,
   EMBER_SELFIE, EMBER_PROFIL, EMBER_KTP
 } from './supabase-config.js';
-import { infoLemburSaya, renderLemburSaya, renderAntrianLembur } from './lembur-acc.js';
+import { infoLemburSaya, renderLemburSaya, lemburIzinSaya, mintaLembur, renderLemburKamu, renderLemburHariIni } from './lembur-acc.js';
 
 const $ = id => document.getElementById(id);
 const TIPE = {
@@ -475,6 +475,18 @@ function updateWorkCountdown(){
   const wc = $('workCountdown');
   if(!wc) return;
   if (modePA){ wc.classList.add('hidden'); return; }
+  // PR-CL128: lagi lembur -> timer lembur (mulai dari tap Mulai Lembur, istirahat di dalamnya tidak dihitung).
+  if (sedangLembur() && !lemburAlurLama()){
+    const _oi = getLastInSession('overtime_in');
+    const _mulai = _oi && _oi.ts ? _oi.ts.toMillis() : Date.now();
+    let _ms = Date.now() - _mulai - jedaSejakMs(_mulai); if (_ms < 0) _ms = 0;
+    wc.classList.remove('hidden', 'done', 'paused'); wc.classList.add('lembur');
+    const _lbl = wc.querySelector('.wc-label'); if (_lbl) _lbl.textContent = '🌙 Lembur berjalan (mulai ' + jamHM(_mulai) + ')';
+    const _s = Math.floor(_ms / 1000);
+    $('wcTime').textContent = String(Math.floor(_s / 3600)).padStart(2, '0') + ':' + String(Math.floor((_s % 3600) / 60)).padStart(2, '0') + ':' + String(_s % 60).padStart(2, '0');
+    return;
+  }
+  wc.classList.remove('lembur');
   const clockInEntry = getFirstInSession('clock_in');
   if (!clockInEntry || hasInSession('clock_out')) {
     wc.classList.add('hidden'); return;
@@ -1022,7 +1034,7 @@ $('btnSelfieShoot').onclick = async ()=>{
   try {
     await saveAttendance(Object.assign({ tipe: currentType, foto_selfie: selfieUrl || null }, lok, extra));
     await loadActiveSession();
-    if (currentType === 'overtime_out') { try{ await renderLemburSaya($('lemburSayaCard'), { mintaAlasan }); }catch(e){} }
+    if (currentType === 'overtime_out') { try{ await muatLemburAcc(); }catch(e){} }
     // Sanksi foto profil (PR-CL111): sudah diwarning sejak hari ke-2, masuk hari ke-3 masih belum upload
     // -> selfie absen barusan otomatis jadi foto profil. Bisa diganti kapan aja lewat menu Profil.
     // Selfie & foto profil beda ember, jadi filenya disalin ke ember profil dulu.
@@ -1213,14 +1225,19 @@ function validateSequence(type){
   }
   if (type === 'clock_out'){
     if (isCurrentlyOnBreak()) return 'Kamu masih Istirahat. Tap Selesai Istirahat dulu sebelum Clock Out.';
+    // PR-CL128: lagi lembur -> pulangnya lewat Selesai Lembur (biar lemburnya kecatat).
+    if (hasInSession('overtime_in') && !hasInSession('overtime_out')) return 'Kamu lagi lembur. Tap Selesai Lembur buat pulang.';
     if (!hasCi) return 'Anda belum Clock In.';
     if (hasCo) return 'Anda sudah Clock Out hari ini.';
     if (isCurrentlyPaused()) return 'Anda sedang Pause. Tap Lanjutkan Kerja dulu sebelum Clock Out.';
     return null;
   }
   if (type === 'overtime_in'){
-    if (!hasCo) return 'Lembur hanya setelah Clock Out.';
+    // PR-CL128: Mulai Lembur di dalam shift yang masih jalan (izin & jam normal dicek database).
+    if (!hasCi) return 'Clock In dulu.';
+    if (hasCo) return 'Anda sudah Clock Out.';
     if (hasInSession('overtime_in')) return 'Anda sudah Mulai Lembur.';
+    if (isCurrentlyOnBreak() || isCurrentlyPaused()) return 'Kamu lagi istirahat / pause. Tap Selesai Istirahat dulu, baru Mulai Lembur.';
     return null;
   }
   if (type === 'overtime_out'){
@@ -1476,7 +1493,7 @@ $('btnClockIn').onclick   = () => handleAction('clock_in');
 $('btnClockOut').onclick  = () => handleAction('clock_out');
 $('btnBreakToggle').onclick = ()=> handleBreakToggle();
 // (tombol Mulai Lembur dihapus) overtime_in sekarang otomatis, tidak ada wiring manual
-$('btnOtOut').onclick     = () => autoOtThenOut();
+$('btnOtOut').onclick     = () => klikTileLembur();   // PR-CL128: Minta / Mulai / Selesai Lembur (Mila: alur lama)
 
 async function handleClockOut(){
   // PR-CL124: PA tidak punya tombol istirahat -> langsung Selesai Kerja, tanpa ditanya jam istirahat.
@@ -1739,7 +1756,7 @@ async function autoOtThenOut() {
     const otH = Math.floor(otMs / 3600000);
     const otM = Math.floor((otMs % 3600000) / 60000);
     const otStr = (otH > 0 ? (otH + ' jam ') : '') + otM + ' menit';
-    const perluAcc = !lemburInfo.bebas_acc;   // PR-CL127
+    const perluAcc = false;   // PR-CL128: tombol ini cuma dipakai alur lama (Mila, bebas izin)
     const okOt = await askConfirm('Selesai Lembur Sekarang?', 'Lembur Anda yang akan tercatat sekitar ' + otStr + '. Aksi ini juga mencatat jam keluar (pulang) Anda.'
       + (perluAcc ? ' Lembur perlu di-ACC Lead / SPV dulu baru dibayar.' : '') + ' Lanjutkan dan ambil selfie?', 'Ya, Selesai Lembur');
     if (!okOt) return;
@@ -1786,14 +1803,113 @@ function mintaAlasan(){
     };
   });
 }
-// Kartu "Lembur Kamu" + (buat Lead / SPV) antrian ACC lembur tim.
+// ===== PR-CL128: izin dulu -> Mulai Lembur -> Selesai Lembur =====
+// Lembur harus disuruh Lead / SPV / owner, atau minta izin lalu di-ACC. Database menolak Mulai Lembur
+// tanpa izin atau sebelum jam kerja normal kelar; tombol di sini cuma cerminannya.
+// Mila (bebas_acc) tetap alur lama: tombol "Selesai Lembur" + overtime_in otomatis (autoOtThenOut).
+let izinLembur = null;   // hasil lembur_izin_saya()
+function lemburAlurLama(){ return !!(lemburInfo && lemburInfo.bebas_acc); }
+function sedangLembur(){ return hasInSession('overtime_in') && !hasInSession('overtime_out') && !hasInSession('clock_out'); }
+function jamHM(ms){ return new Date(ms).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }).replace('.', ':'); }
+// Istirahat + pause (yang sudah & yang masih jalan) sejak fromMs.
+function jedaSejakMs(fromMs){
+  let tot = 0, b = null, p = null; const now = Date.now();
+  for (const r of sessionCache){
+    const t = r.ts && r.ts.toMillis ? r.ts.toMillis() : null; if (t === null) continue;
+    if (r.tipe === 'break_in') b = t;
+    else if (r.tipe === 'break_out' && b !== null){ const a = Math.max(b, fromMs); if (t > a) tot += t - a; b = null; }
+    else if (r.tipe === 'pause_in') p = t;
+    else if (r.tipe === 'pause_out' && p !== null){ const a = Math.max(p, fromMs); if (t > a) tot += t - a; p = null; }
+  }
+  if (b !== null){ const a = Math.max(b, fromMs); if (now > a) tot += now - a; }
+  if (p !== null){ const a = Math.max(p, fromMs); if (now > a) tot += now - a; }
+  return tot;
+}
+// Jam paling cepat boleh Mulai Lembur = clock-in + jam kerja efektif + istirahat/pause (sama dengan database).
+function bisaMulaiLemburMs(){
+  const ci = getFirstInSession('clock_in'); if (!ci || !ci.ts) return 0;
+  return ci.ts.toMillis() + effectiveWorkHours() * 3600000 + totalNonWorkMs();
+}
+function izinSesiIni(){
+  const ci = getFirstInSession('clock_in');
+  if (!izinLembur || !izinLembur.izin || !ci) return null;
+  if (izinLembur.sesi_ci_id && ci.id && izinLembur.sesi_ci_id !== ci.id) return null;
+  return izinLembur.izin;
+}
+function setTileLembur(label, status, redup){
+  const b = $('btnOtOut'); if (!b) return;
+  const l = b.querySelector('.tile-label'); if (l && l.textContent !== label) l.textContent = label;
+  const s = $('sOtOut'); if (s && s.textContent !== status) s.textContent = status;
+  b.style.opacity = redup ? '0.45' : '1';
+}
+function updateLemburTile(){
+  if (modePA || !saya) return;
+  const btnCo = $('btnClockOut');
+  const jalan = sedangLembur() && !lemburAlurLama();
+  if (btnCo){
+    if (jalan){ btnCo.style.opacity = '0.45'; const s = $('sClockOut'); if (s) s.textContent = 'pakai Selesai Lembur'; }
+    else if (btnCo.dataset.lemburRedup === '1'){ btnCo.style.opacity = '1'; }
+    btnCo.dataset.lemburRedup = jalan ? '1' : '0';
+  }
+  if (lemburAlurLama()){ setTileLembur('Selesai Lembur', ($('sOtOut') && $('sOtOut').textContent) || '-', false); return; }
+  if (jalan){ const oi = getLastInSession('overtime_in'); setTileLembur('Selesai Lembur', 'mulai ' + (oi && oi.ts ? jamHM(oi.ts.toMillis()) : '-'), false); return; }
+  const hasCi = hasInSession('clock_in'), tutup = hasInSession('clock_out') || hasInSession('overtime_out');
+  if (!hasCi || tutup){ setTileLembur('🙋 Minta Lembur', '-', true); return; }
+  const iz = izinSesiIni();
+  if (!iz || iz.status === 'dibatalkan'){ setTileLembur('🙋 Minta Lembur', iz ? ('izin dibatalin ' + (iz.penyetuju || '')) : 'belum ada izin', false); return; }
+  if (iz.status === 'menunggu'){ setTileLembur('⏳ Nunggu ACC', 'dikirim ' + jamHM(new Date(iz.created_at).getTime()), true); return; }
+  if (iz.status === 'ditolak'){ setTileLembur('❌ Lembur ditolak', (iz.penyetuju || '') + (iz.catatan_putus ? ': "' + iz.catatan_putus + '"' : ''), true); return; }
+  const bisa = bisaMulaiLemburMs();
+  if (Date.now() < bisa){ setTileLembur('🌙 Mulai Lembur', '✅ izin ada · bisa mulai ' + jamHM(bisa), true); return; }
+  setTileLembur('🌙 Mulai Lembur', iz.jenis === 'suruh' ? ('📣 disuruh ' + (iz.dibuat_oleh || iz.penyetuju || '')) : ('✅ di-ACC ' + (iz.penyetuju || '')), false);
+}
+setInterval(updateLemburTile, 1000);
+
+async function klikTileLembur(){
+  if (lemburAlurLama()) return autoOtThenOut();
+  if (sayaNonaktif){ alert('Akun kamu sudah dinonaktifkan, jadi tidak bisa absen lagi. Kalau ini keliru, hubungi owner ya.'); return; }
+  if (sedangLembur()) return handleAction('overtime_out');
+  if (!hasInSession('clock_in') || hasInSession('clock_out') || hasInSession('overtime_out')){
+    alert('Clock In dulu. Minta lembur cuma bisa selama shift kamu lagi jalan.'); return;
+  }
+  const iz = izinSesiIni();
+  if (!iz || iz.status === 'dibatalkan') return mintaIzinLembur();
+  if (iz.status === 'menunggu'){ alert('Permintaan lembur kamu masih nunggu ACC Lead / SPV.'); muatLemburAcc().catch(() => {}); return; }
+  if (iz.status === 'ditolak'){ alert('Lembur kamu ditolak' + (iz.penyetuju ? ' ' + iz.penyetuju : '') + (iz.catatan_putus ? ': "' + iz.catatan_putus + '"' : '') + '.\nCukup Clock Out biasa ya, dibayar jam normal.'); return; }
+  const bisa = bisaMulaiLemburMs();
+  if (Date.now() < bisa){ alert('Jam kerja normal kamu belum kelar. Mulai Lembur bisa jam ' + jamHM(bisa) + '.'); return; }
+  return mulaiLembur();
+}
+async function mintaIzinLembur(){
+  const a = await mintaAlasan(); if (!a) return;
+  try{ await mintaLembur(a); }
+  catch(e){ alert('Gagal kirim permintaan: ' + pesanRamah(e)); }
+  await muatLemburAcc().catch(() => {});
+}
+async function mulaiLembur(){
+  const err = validateSequence('overtime_in'); if (err){ alert(err); return; }
+  const ok = await askConfirm('Mulai Lembur Sekarang?', 'Lembur dihitung mulai sekarang (' + jamHM(Date.now()) + ') sampai kamu tap Selesai Lembur. Dibayar 1,5× (Rp 18.750/jam).', 'Ya, Mulai Lembur');
+  if (!ok) return;
+  try{ await doNoSelfieAction('overtime_in'); }
+  catch(e){ alert('Gagal Mulai Lembur: ' + pesanRamah(e)); }
+  await muatLemburAcc().catch(() => {});
+}
+
+// Kartu "Lembur Kamu" + (buat Lead / SPV) kotak Lembur Hari Ini.
 async function muatLemburAcc(){
   try{ lemburInfo = Object.assign(lemburInfo, await infoLemburSaya()); }catch(e){ console.warn('info lembur:', e); }
-  await renderLemburSaya($('lemburSayaCard'), { mintaAlasan });
-  if (lemburInfo.bisa_acc) await renderAntrianLembur($('lemburAccCard'), { tampilKosong: true });
+  if (!lemburAlurLama() && !modePA){
+    try{ izinLembur = await lemburIzinSaya(); }catch(e){ console.warn('izin lembur:', e); }
+    renderLemburKamu($('lemburSayaCard'), izinLembur);
+    await renderLemburSaya($('lemburSayaLamaCard'));           // sisa sesi aturan PR-CL127 (29 Sep)
+  } else {
+    await renderLemburSaya($('lemburSayaCard'));               // Mila: kartu cara lama
+  }
+  if (lemburInfo.bisa_acc) await renderLemburHariIni($('lemburAccCard'));
+  updateLemburTile();
 }
-// Refresh ringan tiap 2 menit selama halaman kebuka (antrian Lead & status sendiri).
-setInterval(() => { if (saya && !document.hidden) muatLemburAcc().catch(() => {}); }, 120000);
+// Refresh ringan tiap 30 detik selama halaman kebuka (status izin sendiri & kotak Lead).
+setInterval(() => { if (saya && !document.hidden) muatLemburAcc().catch(() => {}); }, 30000);
 
 // PR-CL124: tampilan mode PA — cuma Mulai Kerja & Selesai Kerja.
 function terapkanModePA(){

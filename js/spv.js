@@ -8,7 +8,7 @@
 // yang disembunyikan di tampilan.
 // ============================================================
 import { sb, karyawanSaya, keluar, EMBER_PROFIL } from './supabase-config.js';
-import { renderAntrianLembur } from './lembur-acc.js';   // PR-CL127
+import { renderLemburHariIni } from './lembur-acc.js';   // PR-CL127 / PR-CL128
 
 const $ = id => document.getElementById(id);
 const MAX_SESI_MS = 18 * 60 * 60 * 1000;        // sesi terbuka > 18 jam = lupa clock out, bukan sedang kerja
@@ -249,10 +249,10 @@ sb.auth.onAuthStateChange(async (event, session) => {
   try{ await muat(); }catch(e){ console.error(e); alert('Gagal memuat data: ' + (e.message || e)); }
   // PR-CL127: antrian ACC lembur — selalu tampil (juga saat kosong) supaya tidak ada yang kelupaan.
   const lemburBox = $('lemburAccBox');
-  renderAntrianLembur(lemburBox, { tampilKosong: true });
+  renderLemburHariIni(lemburBox);
   setInterval(() => {
     muat().catch(e => console.warn('refresh:', e));
-    renderAntrianLembur(lemburBox, { tampilKosong: true });
+    renderLemburHariIni(lemburBox);
   }, 60000);
 });
 

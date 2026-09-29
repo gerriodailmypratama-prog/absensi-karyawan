@@ -785,3 +785,11 @@ input.kh-time.kh-save-err{background:var(--gg-danger-bg) !important;border-color
 .lembur-tag.nunggu{background:var(--gg-warning-bg);color:var(--gg-warning-t)}
 .lembur-tag.tolak{background:var(--gg-danger-bg);color:var(--gg-danger-t)}
 .lembur-tag.ok{background:var(--gg-success-bg);color:var(--gg-success-t)}
+/* PR-CL128: izin lembur */
+.lembur-live{color:var(--gg-danger-t);font-weight:700}
+.lembur-pick{display:flex;align-items:center;gap:8px;padding:7px 2px;border-bottom:1px solid var(--gg-border);font-size:13.5px;color:var(--gg-text);cursor:pointer}
+.lembur-pick small{color:var(--gg-muted);margin-left:auto;text-align:right}
+.lembur-pick input{width:16px;height:16px;accent-color:var(--gg-primary);margin:0}
+.lembur-pick.off{opacity:.5;cursor:default}
+.work-countdown.lembur .wc-label{color:var(--gg-primary)}
+.work-countdown.lembur .wc-time{color:var(--gg-primary-2)}

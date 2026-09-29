@@ -1,5 +1,7 @@
 // ============================================================================
 // PR-CL127: lembur wajib ACC Lead / SPV / owner.
+// PR-CL128: diganti alur izin dulu (minta / disuruh) -> Mulai Lembur -> Selesai Lembur. Fungsi
+// PR-CL127 di bawah tetap dipakai buat sisa sesi aturan lama (29 Sep) & kartu Mila.
 //
 // Dipakai tiga halaman:
 //   * karyawan.html — kartu "Lembur Kamu" (status nunggu / di-ACC / ditolak) + antrian ACC
@@ -13,7 +15,7 @@
 import { sb } from './supabase-config.js';
 
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const jam = iso => new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
+const jam = iso => new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }).replace('.', ':');
 const tgl = d => new Date(String(d).slice(0, 10) + 'T12:00:00+07:00').toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' });
 function durasi(menit){
   const m = Math.max(0, Math.round(Number(menit) || 0));
@@ -146,4 +148,204 @@ export async function renderAntrianLembur(box, opsi = {}){
   };
   box.querySelectorAll('.lembur-ok').forEach(b => { b.onclick = () => putus(b, true); });
   box.querySelectorAll('.lembur-no').forEach(b => { b.onclick = () => putus(b, false); });
+}
+
+// ============================================================================
+// PR-CL128: izin dulu -> Mulai Lembur -> Selesai Lembur.
+// Lembur harus DISURUH Lead / SPV / owner, atau karyawan MINTA izin lalu di-ACC. Database
+// (trigger lembur_izin_jaga) menolak Mulai Lembur tanpa izin atau sebelum jam normal kelar.
+// ============================================================================
+export const RATE_LEMBUR_BARU = 18750;   // Rp 12.500 x 1,5 (keputusan owner 29 Sep 2026)
+export const rupiah = n => 'Rp ' + Math.round(Number(n) || 0).toLocaleString('id-ID');
+export { durasi as durasiMenit, jam as jamWib };
+
+export async function lemburIzinSaya(){
+  const { data, error } = await baca('lembur_izin_saya');
+  if (error) throw error;
+  return data || {};
+}
+export async function mintaLembur(alasan){
+  const { data, error } = await sb.rpc('lembur_minta', { p_alasan: alasan });
+  if (error) throw error;
+  return data;
+}
+
+// Menit lembur bersih satu riwayat (jendela Mulai..Selesai dikurangi istirahat/pause di dalamnya).
+function menitBersih(r){
+  if (!r || !r.mulai_at) return 0;
+  const akhir = r.selesai_at ? new Date(r.selesai_at).getTime() : Date.now();
+  return Math.max(0, (akhir - new Date(r.mulai_at).getTime()) / 60000 - (Number(r.jeda_menit) || 0));
+}
+
+// Kartu "Lembur Kamu" versi izin: status izin shift ini + hasil lembur 4 hari terakhir.
+export function renderLemburKamu(box, st){
+  if (!box) return;
+  const baris = [];
+  const iz = st && st.izin;
+  if (iz && iz.status === 'menunggu'){
+    baris.push('<div class="lembur-row"><div class="lembur-st" style="color:var(--gg-warning-t)">⏳ Minta lembur, nunggu ACC</div>'
+      + '<div class="lembur-sub">dikirim ' + esc(jam(iz.created_at)) + (iz.alasan ? ' &middot; <i>&ldquo;' + esc(iz.alasan) + '&rdquo;</i>' : '') + '</div></div>');
+  } else if (iz && iz.status === 'ditolak'){
+    baris.push('<div class="lembur-row"><div class="lembur-st" style="color:var(--gg-danger-t)">❌ Lembur ditolak — dibayar jam normal</div>'
+      + '<div class="lembur-sub">oleh <b>' + esc(iz.penyetuju || '-') + '</b>' + (iz.catatan_putus ? ' &middot; &ldquo;' + esc(iz.catatan_putus) + '&rdquo;' : '') + '</div></div>');
+  } else if (iz && iz.status === 'dibatalkan'){
+    baris.push('<div class="lembur-row"><div class="lembur-st" style="color:var(--gg-danger-t)">Izin lembur dibatalin</div>'
+      + '<div class="lembur-sub">oleh <b>' + esc(iz.penyetuju || '-') + '</b>' + (iz.catatan_putus ? ' &middot; &ldquo;' + esc(iz.catatan_putus) + '&rdquo;' : '') + '</div></div>');
+  } else if (iz && iz.status === 'disetujui' && !iz.mulai_at){
+    baris.push('<div class="lembur-row"><div class="lembur-st" style="color:var(--gg-success-t)">'
+      + (iz.jenis === 'suruh' ? '\u{1F4E3} Kamu disuruh lembur' : '✅ Izin lembur di-ACC') + '</div>'
+      + '<div class="lembur-sub">oleh <b>' + esc(iz.jenis === 'suruh' ? (iz.dibuat_oleh || iz.penyetuju || '-') : (iz.penyetuju || '-')) + '</b>'
+      + ' &middot; tap <b>Mulai Lembur</b> setelah jam normal kelar. Dibayar 1,5× (' + rupiah(RATE_LEMBUR_BARU) + '/jam).'
+      + (iz.catatan_putus ? '<br>Catatan: ' + esc(iz.catatan_putus) : (iz.jenis === 'suruh' && iz.alasan ? '<br>Catatan: ' + esc(iz.alasan) : '')) + '</div></div>');
+  }
+  for (const r of ((st && st.riwayat) || [])){
+    const m = menitBersih(r);
+    const oleh = r.jenis === 'suruh' ? ('\u{1F4E3} disuruh <b>' + esc(r.penyetuju || '-') + '</b>') : ('di-ACC <b>' + esc(r.penyetuju || '-') + '</b>');
+    if (!r.selesai_at){
+      baris.push('<div class="lembur-row"><div class="lembur-st" style="color:var(--gg-primary)">\u{1F319} Lembur berjalan sejak ' + esc(jam(r.mulai_at)) + '</div>'
+        + '<div class="lembur-sub">' + oleh + (r.alasan ? ' &middot; <i>&ldquo;' + esc(r.alasan) + '&rdquo;</i>' : '') + '</div></div>');
+    } else {
+      baris.push('<div class="lembur-row"><div class="lembur-st" style="color:var(--gg-success-t)">✅ Lembur ' + esc(durasi(m) || '0 mnt')
+        + ' (' + esc(jam(r.mulai_at)) + '–' + esc(jam(r.selesai_at)) + ') &middot; ' + rupiah(m / 60 * RATE_LEMBUR_BARU) + '</div>'
+        + '<div class="lembur-sub">' + esc(tgl(r.tanggal)) + ' &middot; ' + oleh + (r.alasan ? ' &middot; <i>&ldquo;' + esc(r.alasan) + '&rdquo;</i>' : '') + '</div></div>');
+    }
+  }
+  if (!baris.length){ box.classList.add('hidden'); box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="lembur-head">\u{1F319} Lembur Kamu</div>' + baris.join('');
+  box.classList.remove('hidden');
+}
+
+// ------------------------------------------------------------- Lembur Hari Ini (Lead / SPV / owner)
+let __modalSuruh = null;
+function modalSuruh(){
+  if (__modalSuruh) return __modalSuruh;
+  const m = document.createElement('div');
+  m.className = 'modal hidden';
+  m.id = 'lemburSuruhModal';
+  m.innerHTML = '<div class="modal-box">'
+    + '<h3>\u{1F4E3} Suruh Lembur</h3>'
+    + '<p class="muted small">Pilih siapa yang lembur hari ini. Mereka langsung bisa tap Mulai Lembur setelah jam kerja normalnya kelar.</p>'
+    + '<div class="lembur-pick-list"></div>'
+    + '<textarea rows="2" maxlength="200" class="lembur-suruh-cat" style="margin-top:10px" placeholder="Catatan (opsional)"></textarea>'
+    + '<div class="row"><button class="btn btn-ghost lembur-suruh-batal">Batal</button><button class="btn btn-primary lembur-suruh-ok">Suruh Lembur</button></div>'
+    + '</div>';
+  document.body.appendChild(m);
+  __modalSuruh = m;
+  return m;
+}
+async function bukaSuruh(sesudah){
+  const m = modalSuruh();
+  const list = m.querySelector('.lembur-pick-list');
+  const ok = m.querySelector('.lembur-suruh-ok');
+  const cat = m.querySelector('.lembur-suruh-cat');
+  cat.value = '';
+  list.innerHTML = '<div class="lembur-sub">Memuat yang lagi masuk...</div>';
+  m.classList.remove('hidden');
+  const hitung = () => {
+    const n = list.querySelectorAll('input:checked').length;
+    ok.textContent = 'Suruh Lembur' + (n ? ' (' + n + ')' : '');
+    ok.disabled = !n;
+  };
+  try{
+    const { data, error } = await baca('lembur_kandidat_suruh');
+    if (error) throw error;
+    const rows = data || [];
+    const ket = { menunggu: 'minta, nunggu ACC', disetujui: 'udah ada izin', lembur: 'lagi lembur', ditolak: 'tadi ditolak', dibatalkan: 'izin dibatalin' };
+    list.innerHTML = rows.length ? rows.map(r => {
+      const sudah = r.status_izin === 'disetujui' || r.status_izin === 'lembur';
+      return '<label class="lembur-pick' + (sudah ? ' off' : '') + '"><input type="checkbox" value="' + esc(r.karyawan_id) + '"' + (sudah ? ' disabled' : '') + '> '
+        + esc(r.nama) + ' <small>masuk ' + esc(jam(r.ci_ts)) + (r.status_izin ? ' &middot; ' + esc(ket[r.status_izin] || r.status_izin) : '') + '</small></label>';
+    }).join('') : '<div class="lembur-sub">Belum ada karyawan yang lagi masuk.</div>';
+  }catch(e){ list.innerHTML = '<div class="lembur-sub" style="color:var(--gg-danger-t)">Gagal memuat: ' + esc(pesanError(e)) + '</div>'; }
+  list.onchange = hitung;
+  hitung();
+  m.querySelector('.lembur-suruh-batal').onclick = () => m.classList.add('hidden');
+  ok.onclick = async () => {
+    const ids = Array.from(list.querySelectorAll('input:checked')).map(x => x.value);
+    if (!ids.length) return;
+    ok.disabled = true;
+    try{
+      const { data, error } = await sb.rpc('lembur_suruh', { p_karyawan: ids, p_catatan: cat.value.trim() || null });
+      if (error) throw error;
+      const gagal = (data || []).filter(x => x.hasil !== 'disuruh');
+      m.classList.add('hidden');
+      if (gagal.length) alert('Sebagian dilewati:\n' + gagal.map(x => '- ' + (x.nama || '?') + ': ' + x.hasil).join('\n'));
+    }catch(e){ alert('Gagal: ' + pesanError(e)); ok.disabled = false; return; }
+    if (sesudah) sesudah();
+  };
+}
+
+export async function renderLemburHariIni(box, opsi = {}){
+  if (!box) return;
+  let rows = [], lama = [];
+  try{
+    const [a, b] = await Promise.all([baca('lembur_hari_ini'), baca('lembur_acc_antrian')]);
+    if (a.error) throw a.error;
+    rows = a.data || [];
+    lama = (b && !b.error && b.data) || [];
+  }catch(e){ console.warn('lembur hari ini:', e); box.classList.add('hidden'); return; }
+  const muatUlang = async () => { await renderLemburHariIni(box, opsi); if (opsi.sesudahPutus) try{ opsi.sesudahPutus(); }catch(_){} };
+  const nunggu = rows.filter(r => r.status === 'menunggu' && r.sesi_terbuka);
+  const now = Date.now();
+  const html = rows.map(r => {
+    const oleh = r.jenis === 'suruh' ? ('\u{1F4E3} disuruh ' + esc(r.dibuat_oleh || r.penyetuju || '-')) : null;
+    let info = '<b>' + esc(r.nama) + '</b> &middot; ', aksi = '';
+    if (r.status === 'menunggu'){
+      info += 'minta ' + esc(jam(r.created_at)) + (r.alasan ? '<br><i>&ldquo;' + esc(r.alasan) + '&rdquo;</i>' : '')
+        + '<br>' + (r.sesi_terbuka ? '<span style="color:var(--gg-warning-t)">⏳ nunggu keputusan</span>' : '<span class="muted">sudah pulang</span>');
+      if (r.sesi_terbuka) aksi = '<button class="btn btn-sm btn-success lh-ok" data-id="' + esc(r.id) + '" data-nama="' + esc(r.nama) + '">ACC</button>'
+        + '<button class="btn btn-sm btn-ghost lh-no" data-id="' + esc(r.id) + '" data-nama="' + esc(r.nama) + '">Tolak</button>';
+    } else if (r.status === 'disetujui' && r.mulai_at && !r.selesai_at){
+      const menit = Math.max(0, (now - new Date(r.mulai_at).getTime()) / 60000 - (Number(r.jeda_menit) || 0));
+      info += (oleh || ('✅ di-ACC ' + esc(r.penyetuju || '-'))) + '<br><span class="lembur-live">\u{1F534} lagi lembur sejak ' + esc(jam(r.mulai_at)) + ' (' + esc(durasi(menit) || '0 mnt') + ')</span>';
+    } else if (r.status === 'disetujui' && r.selesai_at){
+      const menit = Math.max(0, (new Date(r.selesai_at) - new Date(r.mulai_at)) / 60000 - (Number(r.jeda_menit) || 0));
+      info += (oleh || ('✅ di-ACC ' + esc(r.penyetuju || '-'))) + '<br><span style="color:var(--gg-success-t)">selesai lembur ' + esc(jam(r.mulai_at)) + '–' + esc(jam(r.selesai_at)) + ' (' + esc(durasi(menit) || '0 mnt') + ')</span>';
+    } else if (r.status === 'disetujui'){
+      info += (oleh || ('✅ di-ACC ' + esc(r.penyetuju || '-') + ' ' + esc(jam(r.diputus_at))))
+        + '<br><span class="muted">' + (r.sesi_terbuka ? 'belum mulai lembur' : 'pulang tanpa lembur') + '</span>';
+      if (r.sesi_terbuka) aksi = '<button class="btn btn-sm btn-ghost lh-batal" data-id="' + esc(r.id) + '" data-nama="' + esc(r.nama) + '">Batalin izin</button>';
+    } else if (r.status === 'ditolak'){
+      info += '<span style="color:var(--gg-danger-t)">❌ ditolak ' + esc(r.penyetuju || '') + '</span>' + (r.catatan_putus ? ' &middot; &ldquo;' + esc(r.catatan_putus) + '&rdquo;' : '');
+    } else {
+      info += '<span class="muted">izin dibatalin ' + esc(r.penyetuju || '') + '</span>';
+    }
+    return '<div class="lembur-row lembur-antri"><div class="lembur-info">' + info + '</div>' + (aksi ? '<div class="lembur-aksi">' + aksi + '</div>' : '') + '</div>';
+  }).join('');
+  box.innerHTML = '<div class="lembur-head">\u{1F319} Lembur Hari Ini</div>'
+    + '<div class="lembur-sub" style="margin-bottom:8px">Permintaan yang nunggu: <b>' + nunggu.length + '</b>. Tanpa izin, gak ada yang bisa mulai lembur.</div>'
+    + '<button class="btn btn-sm btn-primary lh-suruh" style="margin:0 0 6px;width:auto;display:inline-block">\u{1F4E3} Suruh Lembur</button>'
+    + (html || '<div class="lembur-sub">Belum ada yang minta / disuruh lembur hari ini.</div>')
+    + (lama.length ? '<div class="lembur-sub" style="margin-top:12px"><b>Aturan lama (ACC setelah lembur)</b> &mdash; sisa sesi sebelum alur izin, batas s/d akhir hari besoknya:</div><div class="lh-lama"></div>' : '');
+  box.classList.remove('hidden');
+  if (lama.length){
+    const sub = box.querySelector('.lh-lama');
+    sub.className = 'lh-lama';
+    await renderAntrianLembur(sub, { sesudahPutus: muatUlang });
+    // renderAntrianLembur menulis judulnya sendiri; buang judul & keterangan ganda.
+    const h = sub.querySelector('.lembur-head'); if (h) h.remove();
+    const s = sub.querySelector('.lembur-sub'); if (s) s.remove();
+  }
+  box.querySelector('.lh-suruh').onclick = () => bukaSuruh(muatUlang);
+  const aksi = async (b, fn, args, konfirmasi) => {
+    if (konfirmasi === null) return;
+    b.disabled = true;
+    try{ const { error } = await sb.rpc(fn, args); if (error) throw error; }
+    catch(e){ alert('Gagal: ' + pesanError(e)); }
+    await muatUlang();
+  };
+  box.querySelectorAll('.lh-ok').forEach(b => { b.onclick = () => {
+    if (!confirm('ACC lembur ' + b.dataset.nama + '? Dia bisa Mulai Lembur setelah jam normalnya kelar.')) return;
+    aksi(b, 'lembur_izin_putus', { p_id: b.dataset.id, p_setuju: true, p_catatan: null });
+  }; });
+  box.querySelectorAll('.lh-no').forEach(b => { b.onclick = () => {
+    const c = prompt('Tolak lembur ' + b.dataset.nama + '. Catatan buat dia (opsional):', '');
+    if (c === null) return;
+    aksi(b, 'lembur_izin_putus', { p_id: b.dataset.id, p_setuju: false, p_catatan: c });
+  }; });
+  box.querySelectorAll('.lh-batal').forEach(b => { b.onclick = () => {
+    const c = prompt('Batalin izin lembur ' + b.dataset.nama + '? Catatan buat dia (opsional):', '');
+    if (c === null) return;
+    aksi(b, 'lembur_izin_batal', { p_id: b.dataset.id, p_catatan: c });
+  }; });
 }
