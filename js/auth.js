@@ -37,6 +37,40 @@ if (dalamAppSosmed) {
   }, 400);
 }
 
+// Data formulir Daftar disimpan sebentar di HP selama menunggu verifikasi email. Begitu orangnya
+// balik dari link verifikasi (sudah login), pendaftaran dilanjutkan otomatis.
+const KUNCI_TERTUNDA = 'gg_daftar_tertunda';
+const simpanTertunda = d => { try { localStorage.setItem(KUNCI_TERTUNDA, JSON.stringify(Object.assign({ t: Date.now() }, d))); } catch (e) {} };
+const ambilTertunda = () => {
+  try {
+    const d = JSON.parse(localStorage.getItem(KUNCI_TERTUNDA) || 'null');
+    return d && Date.now() - d.t < 7 * 864e5 ? d : null;
+  } catch (e) { return null; }
+};
+const hapusTertunda = () => { try { localStorage.removeItem(KUNCI_TERTUNDA); } catch (e) {} };
+
+// Form Daftar untuk orang yang SUDAH login (Google, atau baru verifikasi email) tapi belum
+// terdaftar: email dikunci ke akunnya, kolom password disembunyikan (tidak dipakai).
+function tampilDaftarUntukAkun(akun, isi) {
+  const lf = $('loginForm'), rf = $('registerForm');
+  if (lf) lf.classList.add('hidden');
+  if (rf) rf.classList.remove('hidden');
+  const re = $('regEmail');
+  if (re && akun) { re.value = akun.email || ''; re.readOnly = true; }
+  const rp = $('regPassword');
+  if (rp) {
+    rp.classList.add('hidden');
+    const lbl = rp.previousElementSibling;
+    if (lbl && lbl.tagName === 'LABEL') lbl.classList.add('hidden');
+  }
+  if (isi) {
+    if ($('regNama')) $('regNama').value = isi.namaLengkap || '';
+    if ($('regPanggilan')) $('regPanggilan').value = isi.panggilan || '';
+    if ($('regPhone')) $('regPhone').value = isi.phone || '';
+    if ($('regCode')) $('regCode').value = '';
+  }
+}
+
 // Arahkan ke halaman sesuai peran. Kalau akunnya ada tapi belum didaftarkan
 // sebagai karyawan, jangan lempar ke mana-mana — kasih tahu apa adanya,
 // biar dia ngerti harus ngapain (bukan layar kosong yang bikin bingung).
@@ -49,14 +83,26 @@ async function arahkan() {
   try { saya = await karyawanSaya({ paksaSegar: true }); }
   catch (e) { msg(pesanRamah(e)); return; }
 
+  const { data: { user: akun } } = await sb.auth.getUser();
+  const tertunda = ambilTertunda();
+  if (saya) hapusTertunda();
+
+  // Balik dari link verifikasi email: lanjutkan pendaftaran yang tadi diisi, tanpa isi ulang.
+  if (!saya && tertunda && akun &&
+      String(tertunda.email || '').toLowerCase() === String(akun.email || '').toLowerCase()) {
+    const { error } = await sb.rpc('daftar_karyawan', {
+      p_kode: tertunda.kode, p_panggilan: tertunda.panggilan,
+      p_nama_lengkap: tertunda.namaLengkap, p_phone: tertunda.phone
+    });
+    if (!error) { hapusTertunda(); return arahkan(); }
+    tampilDaftarUntukAkun(akun, tertunda);
+    regMsg('Email sudah terverifikasi, tapi pendaftaran belum selesai: ' + pesanRamah(error));
+    return;
+  }
+
   if (!saya) {
-    msg('Akun kamu belum terdaftar sebagai karyawan. Klik "Daftar di sini" dan isi kode pendaftaran ya.');
-    const lf = $('loginForm'), rf = $('registerForm');
-    if (lf) lf.classList.add('hidden');
-    if (rf) rf.classList.remove('hidden');
-    const re = $('regEmail');
-    const { data: { user } } = await sb.auth.getUser();
-    if (re && user) { re.value = user.email || ''; re.readOnly = true; }
+    tampilDaftarUntukAkun(akun, null);
+    regMsg('Akun kamu belum terdaftar sebagai karyawan. Lengkapi data di bawah + kode pendaftaran dari admin ya.');
     return;
   }
 
@@ -178,10 +224,12 @@ if (btnDaftar) {
     const phone = nomorWa($('regPhone') ? $('regPhone').value : '');
     const pg = rapikanPanggilan($('regPanggilan') ? $('regPanggilan').value : '');
 
-    if (!namaLengkap || !email || !pass) return regMsg('Lengkapi nama, email, dan password dulu ya.');
+    // Sudah login (Google / baru verifikasi email)? Password tidak dipakai lagi.
+    const { data: { session: sesiAda } } = await sb.auth.getSession();
+    if (!namaLengkap || !email || (!sesiAda && !pass)) return regMsg('Lengkapi nama, email, dan password dulu ya.');
     if (!pg.ok) return regMsg(pg.error);
     if (phone.length < 8) return regMsg('No. HP (WhatsApp) wajib diisi dengan benar — buat kirim slip gaji & notifikasi.');
-    if (pass.length < 6) return regMsg('Password minimal 6 karakter.');
+    if (!sesiAda && pass.length < 6) return regMsg('Password minimal 6 karakter.');
     if (!kode) return regMsg('Kode pendaftaran wajib diisi. Minta ke admin/owner.');
 
     const teksAsli = btnDaftar.textContent;
@@ -196,18 +244,24 @@ if (btnDaftar) {
       let { data: { session } } = await sb.auth.getSession();
 
       if (!session) {
-        const { data, error } = await sb.auth.signUp({ email, password: pass });
-        if (error) throw error;
+        // Simpan isian dulu: setelah klik link verifikasi, pendaftaran dilanjutkan otomatis.
+        simpanTertunda({ email: email.toLowerCase(), namaLengkap, panggilan: pg.nilai, phone, kode });
+        const { data, error } = await sb.auth.signUp({
+          email, password: pass,
+          // Link verifikasi balik ke app absensi, bukan ke alamat utama project (WMS).
+          options: { emailRedirectTo: location.origin + location.pathname }
+        });
+        if (error) { hapusTertunda(); throw error; }
         session = data.session;
 
-        // Kalau project disetel wajib verifikasi email, session-nya kosong.
-        // Jangan bikin orang menunggu layar diam — kasih tahu langkah berikutnya.
+        // Project wajib verifikasi email (pengaman: akun baru nyambung ke data karyawan
+        // lewat email, jadi emailnya harus terbukti milik dia). Kasih tahu langkah berikutnya.
         if (!session) {
           window.__sedangDaftar = false;
           btnDaftar.disabled = false;
           btnDaftar.textContent = teksAsli || 'Daftar';
-          return regMsg('Akun dibuat. Cek email ' + email +
-            ' untuk verifikasi, lalu login ya. (Cek folder spam juga.)', true);
+          return regMsg('Hampir selesai! Buka email ' + email + ' lalu klik link verifikasinya — ' +
+            'pendaftaran lanjut otomatis. (Cek folder spam juga.) Lebih cepat: pakai Login dengan Google.', true);
         }
       }
 
