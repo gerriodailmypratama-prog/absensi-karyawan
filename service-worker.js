@@ -1,6 +1,6 @@
 // Salinan uji coba di /uji/ punya cache sendiri supaya tidak saling hapus dengan app asli.
 const PREFIX = (self.registration && self.registration.scope.includes('/uji/')) ? 'absensi-uji-' : 'absensi-';
-const CACHE = PREFIX + 'v121';
+const CACHE = PREFIX + 'v122';
 const ASSETS = [
   './', './index.html', './karyawan.html', './owner.html',
   './css/style.css', './manifest.json', './icon.svg', './js/update-banner.js'

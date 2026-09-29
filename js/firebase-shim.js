@@ -537,7 +537,18 @@ export function onAuthStateChanged(_auth, cb) {
   sb.auth.getSession().then(async ({ data }) => {
     auth.currentUser = penggunaDari(data.session && data.session.user);
     // Sambungkan akun login ke baris karyawan (owner juga punya baris, peran 'owner').
-    if (auth.currentUser) { try { await sb.rpc('klaim_akun_saya'); } catch (e) { console.warn('klaim akun:', e); } }
+    if (auth.currentUser) {
+      try { await sb.rpc('klaim_akun_saya'); } catch (e) { console.warn('klaim akun:', e); }
+      // Penjaga sungguhan: peran 'owner' di database. owner.js mencocokkan email ke OWNER_EMAILS,
+      // jadi email login owner yang tercatat sebagai email_lain (mis. akun Google kedua) ikut dimasukkan.
+      try {
+        const id = await idSaya();
+        if (id) {
+          const { data: k } = await sb.from('karyawan').select('peran').eq('id', id).maybeSingle();
+          if (k && k.peran === 'owner' && !OWNER_EMAILS.includes(auth.currentUser.email)) OWNER_EMAILS.push(auth.currentUser.email);
+        }
+      } catch (e) { console.warn('cek peran owner:', e); }
+    }
     cb(auth.currentUser);
   });
   sb.auth.onAuthStateChange((ev, session) => {
