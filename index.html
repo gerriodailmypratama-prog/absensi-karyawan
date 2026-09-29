@@ -13,24 +13,28 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/karyawan-v2.css">
 </head>
-<body>
+<body class="app-v2 login-body">
 <div class="container login-page">
+  <div class="login-hero">
+    <div class="login-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></div>
+    <h1>GOODGEMS <span>Absensi</span></h1>
+    <p>Masuk untuk mulai absen hari ini</p>
+  </div>
   <div class="card">
-    <div class="logo">
-      <h1>Absensi Karyawan</h1>
-      <p class="muted">Silakan login untuk melanjutkan</p>
-    </div>
     <div id="loginForm">
-      <label>Email</label>
-      <input type="email" id="email" placeholder="nama@perusahaan.com" autocomplete="email">
-      <label>Password</label>
-      <input type="password" id="password" placeholder="********" autocomplete="current-password">
-      <button id="btnLoginEmail" class="btn btn-primary">Login</button>
-      <button id="btnForgotPwd" type="button" style="background:none;border:none;color:#f97316;text-decoration:underline;font-size:13px;margin-top:6px;cursor:pointer;padding:4px;">Lupa Password?</button>
-      <div class="divider"><span>atau</span></div>
       <button id="btnLoginGoogle" class="btn btn-google">Login dengan Google</button>
       <p id="loginMsg" class="msg"></p>
+      <details class="login-alt">
+        <summary>Login pakai email &amp; password</summary>
+        <label>Email</label>
+        <input type="email" id="email" placeholder="nama@perusahaan.com" autocomplete="email">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="********" autocomplete="current-password">
+        <button id="btnLoginEmail" class="btn btn-primary">Login</button>
+        <button id="btnForgotPwd" type="button" style="background:none;border:none;color:#f97316;text-decoration:underline;font-size:13px;margin-top:6px;cursor:pointer;padding:4px;">Lupa Password?</button>
+      </details>
       <p class="footer" style="margin-top:14px">Belum punya akun? <a href="#" id="linkShowRegister" style="color:#f97316;text-decoration:underline">Daftar di sini</a></p>
     </div>
     <div id="registerForm" class="hidden">

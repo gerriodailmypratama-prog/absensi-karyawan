@@ -1,0 +1,202 @@
+/* ====================================================================
+   GOODGEMS ABSENSI — tampilan karyawan v2 (PR-CL118)
+   Dimuat SETELAH style.css, cuma di halaman karyawan & login (body.app-v2),
+   jadi dashboard owner tidak terpengaruh. Murni tampilan: semua ID & class
+   yang dipakai karyawan.js tetap sama.
+   ==================================================================== */
+body.app-v2{
+  --v2-bg:#070708;
+  --v2-card:#111113;
+  --v2-card-2:#17171a;
+  --v2-line:rgba(255,255,255,.07);
+  --v2-line-2:rgba(255,255,255,.12);
+  --v2-in:#22c55e;   --v2-in-soft:rgba(34,197,94,.14);
+  --v2-out:#f43f5e;  --v2-out-soft:rgba(244,63,94,.14);
+  --v2-brk:#f59e0b;  --v2-brk-soft:rgba(245,158,11,.15);
+  --v2-ot:#a78bfa;   --v2-ot-soft:rgba(167,139,250,.15);
+  background:
+    radial-gradient(620px 340px at 50% -120px, rgba(249,115,22,.16), transparent 70%),
+    var(--v2-bg);
+  background-attachment:fixed;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+
+/* ---------- top bar ---------- */
+.app-v2 .app-top{
+  position:sticky;top:0;z-index:20;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 18px;padding-top:max(12px,env(safe-area-inset-top));
+  background:rgba(7,7,8,.72);
+  -webkit-backdrop-filter:blur(16px) saturate(1.2);backdrop-filter:blur(16px) saturate(1.2);
+  border-bottom:1px solid var(--v2-line);
+}
+.app-v2 .app-brand{display:flex;align-items:center;gap:8px;user-select:none}
+.app-v2 .app-brand-word{font-weight:800;font-size:15px;letter-spacing:.2em;color:var(--gg-text)}
+.app-v2 .app-brand-tag{
+  font-weight:800;font-size:10px;letter-spacing:.18em;color:#1a0d02;
+  background:var(--gg-grad);padding:4px 8px;border-radius:7px;
+}
+.app-v2 .avatar-wrap{width:40px;height:40px;border:2px solid transparent;
+  background:linear-gradient(var(--v2-card),var(--v2-card)) padding-box,var(--gg-grad) border-box;
+  box-shadow:0 0 0 4px rgba(249,115,22,.12)}
+
+/* ---------- layout ---------- */
+.app-v2 .app-main{max-width:460px;padding:18px 16px 32px;display:flex;flex-direction:column;gap:14px}
+.app-v2 .card{margin:0;border-radius:20px;background:var(--v2-card);border:1px solid var(--v2-line);box-shadow:none;padding:16px 18px}
+
+/* ---------- hero ---------- */
+.app-v2 .hero{
+  position:relative;overflow:hidden;border-radius:26px;padding:22px 20px 20px;
+  background:
+    radial-gradient(420px 200px at 100% 0%, rgba(249,115,22,.22), transparent 65%),
+    linear-gradient(180deg,#16110d,#101012);
+  border:1px solid rgba(249,115,22,.22);
+  box-shadow:0 20px 50px -20px rgba(249,115,22,.35);
+}
+.app-v2 .hero-greet strong{display:block;font-size:22px;font-weight:800;color:#fff;letter-spacing:-.02em;line-height:1.2}
+.app-v2 .hero-greet small{display:block;color:var(--gg-muted);font-size:13px;margin-top:2px}
+.app-v2 .hero-date{
+  display:inline-flex;margin-top:12px;padding:6px 12px;border-radius:999px;
+  font-size:12px;font-weight:600;color:#fed7aa;background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.25);
+}
+.app-v2 .hero .work-countdown{
+  margin-top:18px;padding:16px 0 0;text-align:left;border:none;border-radius:0;box-shadow:none;
+  background:none;border-top:1px dashed rgba(255,255,255,.1);
+}
+.app-v2 .hero .work-countdown .wc-label{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#fdba74;margin-bottom:2px}
+.app-v2 .hero .work-countdown .wc-time{
+  font-size:48px;font-weight:800;letter-spacing:-.02em;line-height:1.05;font-variant-numeric:tabular-nums;
+  background:linear-gradient(180deg,#fff,#fed7aa);-webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.app-v2 .hero .work-countdown .wc-sub{color:var(--gg-muted);font-size:12px}
+.app-v2 .hero .work-countdown.done .wc-label{color:#86efac}
+.app-v2 .hero .work-countdown.done .wc-time{background:linear-gradient(180deg,#fff,#86efac);-webkit-background-clip:text;background-clip:text}
+.app-v2 .hero .work-countdown.paused .wc-label{color:var(--gg-muted)}
+.app-v2 .hero .work-countdown.paused .wc-time{background:linear-gradient(180deg,#d4d4d8,#71717a);-webkit-background-clip:text;background-clip:text}
+/* Kotak "Total istirahat" yang dibuat JS ikut di dalam hero, versi ringkas */
+.app-v2 .hero #breakCountdown{
+  margin-top:12px;padding:10px 14px;border-radius:14px;border:1px solid rgba(245,158,11,.28);border-top-style:solid;
+  background:rgba(245,158,11,.08);display:grid;grid-template-columns:1fr auto;align-items:center;row-gap:0;
+}
+.app-v2 .hero #breakCountdown.hidden{display:none}
+.app-v2 .hero #breakCountdown .wc-label{grid-column:1;color:#fcd34d;font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;margin:0}
+.app-v2 .hero #breakCountdown .wc-sub{grid-column:1;margin:0}
+.app-v2 .hero #breakCountdown .wc-time{grid-column:2;grid-row:1 / span 2;font-size:24px;color:#fcd34d;background:none;-webkit-text-fill-color:currentColor}
+.app-v2 .hero #breakCountdown.paused{border-color:rgba(245,158,11,.6);box-shadow:0 0 0 3px rgba(245,158,11,.12)}
+
+/* ---------- tombol absen ---------- */
+.app-v2 .action-grid{gap:12px;margin:0}
+.app-v2 .action-tile{
+  position:relative;min-height:148px;padding:18px 14px 16px;border-radius:22px;
+  align-items:flex-start;justify-content:space-between;text-align:left;gap:10px;
+  background:var(--v2-card);border:1px solid var(--v2-line);box-shadow:none;
+}
+.app-v2 .action-tile:hover{transform:translateY(-2px);box-shadow:0 14px 30px -14px rgba(0,0,0,.8)}
+.app-v2 .action-tile:active{transform:scale(.98)}
+.app-v2 .action-tile .tile-icon{width:48px;height:48px;border-radius:15px;padding:9px;border:none}
+.app-v2 .action-tile .tile-label{font-size:16px;font-weight:700;color:#fff;letter-spacing:-.01em}
+.app-v2 .action-tile .tile-status{
+  font-size:11px;font-weight:600;color:var(--gg-muted);font-variant-numeric:tabular-nums;
+  padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.05);
+}
+.app-v2 .action-tile::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:.9}
+
+.app-v2 .action-tile.tile-in{color:var(--v2-in)}
+.app-v2 .action-tile.tile-in .tile-icon{background:var(--v2-in-soft)}
+.app-v2 .action-tile.tile-in::after{background:radial-gradient(160px 90px at 100% 0%,rgba(34,197,94,.14),transparent 70%)}
+.app-v2 .action-tile.tile-in:hover{border-color:rgba(34,197,94,.5)}
+.app-v2 .action-tile.tile-out{color:var(--v2-out)}
+.app-v2 .action-tile.tile-out .tile-icon{background:var(--v2-out-soft)}
+.app-v2 .action-tile.tile-out::after{background:radial-gradient(160px 90px at 100% 0%,rgba(244,63,94,.14),transparent 70%)}
+.app-v2 .action-tile.tile-out:hover{border-color:rgba(244,63,94,.5)}
+.app-v2 .action-tile.tile-ot,.app-v2 .action-tile.tile-ot-out{color:var(--v2-ot)}
+.app-v2 .action-tile.tile-ot .tile-icon,.app-v2 .action-tile.tile-ot-out .tile-icon{background:var(--v2-ot-soft)}
+.app-v2 .action-tile.tile-ot::after,.app-v2 .action-tile.tile-ot-out::after{background:radial-gradient(160px 90px at 100% 0%,rgba(167,139,250,.15),transparent 70%)}
+.app-v2 .action-tile.tile-ot:hover,.app-v2 .action-tile.tile-ot-out:hover{border-color:rgba(167,139,250,.5)}
+
+/* Tombol Istirahat: JS memasang tile-break (siap istirahat) / tile-afterbreak (lagi istirahat).
+   style.css memberi warna solid !important — ditimpa di sini dengan selector lebih spesifik. */
+body.app-v2 .action-tile.tile-break{background:var(--v2-card) !important;border-color:var(--v2-line) !important;color:var(--v2-brk) !important}
+body.app-v2 .action-tile.tile-break .tile-label{color:#fff !important}
+body.app-v2 .action-tile.tile-break .tile-icon{background:var(--v2-brk-soft)}
+body.app-v2 .action-tile.tile-break::after{background:radial-gradient(160px 90px at 100% 0%,rgba(245,158,11,.14),transparent 70%)}
+body.app-v2 .action-tile.tile-break:hover{border-color:rgba(245,158,11,.5) !important}
+body.app-v2 .action-tile.tile-afterbreak{
+  background:linear-gradient(160deg,#3a2506,#1c1305) !important;border-color:rgba(245,158,11,.7) !important;color:#fbbf24 !important;
+  box-shadow:0 0 0 4px rgba(245,158,11,.12),0 16px 34px -16px rgba(245,158,11,.55);
+  animation:v2-pulse 2.4s ease-in-out infinite;
+}
+body.app-v2 .action-tile.tile-afterbreak .tile-label{color:#fde68a !important}
+body.app-v2 .action-tile.tile-afterbreak .tile-icon{background:rgba(245,158,11,.22)}
+body.app-v2 .action-tile.tile-afterbreak .tile-status{background:rgba(245,158,11,.18);color:#fde68a}
+@keyframes v2-pulse{0%,100%{box-shadow:0 0 0 4px rgba(245,158,11,.10),0 16px 34px -16px rgba(245,158,11,.5)}50%{box-shadow:0 0 0 7px rgba(245,158,11,.06),0 16px 34px -16px rgba(245,158,11,.7)}}
+@media (prefers-reduced-motion:reduce){body.app-v2 .action-tile.tile-afterbreak{animation:none}}
+
+/* ---------- kartu info ---------- */
+.app-v2 #slipCard{border:1px solid rgba(52,211,153,.35) !important;background:linear-gradient(135deg,rgba(16,185,129,.14),rgba(16,185,129,.03)) !important}
+.app-v2 #ultahTemanCard{border:1px solid rgba(249,115,22,.35) !important;background:linear-gradient(135deg,rgba(249,115,22,.14),rgba(249,115,22,.03)) !important}
+.app-v2 #adminKodeCard{background:linear-gradient(180deg,#141416,#0f0f11)}
+.app-v2 #btnLihatSlip{border-radius:999px;padding:8px 16px}
+
+/* ---------- menu ---------- */
+.app-v2 .qm-title{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--gg-muted-2);margin:6px 4px 10px}
+.app-v2 .qm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.app-v2 .qm-item{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  min-height:88px;padding:12px 6px;border-radius:18px;cursor:pointer;text-decoration:none;
+  background:var(--v2-card);border:1px solid var(--v2-line);color:var(--gg-text-2);font-family:inherit;
+  transition:border-color var(--gg-ease),background var(--gg-ease),transform var(--gg-ease);
+}
+.app-v2 .qm-item:hover{border-color:var(--v2-line-2);background:var(--v2-card-2)}
+.app-v2 .qm-item:active{transform:scale(.97)}
+.app-v2 .qm-ico{width:36px;height:36px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(249,115,22,.12);color:var(--gg-primary-2)}
+.app-v2 .qm-ico svg{width:20px;height:20px}
+.app-v2 .qm-lbl{font-size:12px;font-weight:600}
+.app-v2 .qm-danger .qm-ico{background:rgba(244,63,94,.12);color:#fb7185}
+
+/* ---------- modal jadi "sheet" dari bawah di HP ---------- */
+.app-v2 .modal-box,.app-v2 .modal-content{border-radius:24px;background:#121214;border:1px solid var(--v2-line-2)}
+.app-v2 .modal-box h3{font-size:18px;font-weight:800}
+.app-v2 .modal-box .btn{border-radius:12px;padding:11px 16px}
+@media (max-width:560px){
+  .app-v2 .modal{align-items:flex-end;padding:0}
+  .app-v2 .modal-box,.app-v2 .modal-content{
+    max-width:none;border-radius:24px 24px 0 0;max-height:92vh;
+    padding:22px 18px calc(18px + env(safe-area-inset-bottom));animation:v2-sheet .24s cubic-bezier(.2,.8,.2,1);
+  }
+  .app-v2 .modal-box::before,.app-v2 .modal-content::before{
+    content:"";display:block;width:40px;height:4px;border-radius:4px;background:rgba(255,255,255,.18);margin:-8px auto 14px;
+  }
+  .app-v2 .modal-box .row{flex-wrap:nowrap}
+  .app-v2 .modal-box .row > .btn{flex:1}
+}
+@keyframes v2-sheet{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+
+/* ---------- login ---------- */
+.app-v2.login-body .login-page{max-width:420px;padding:24px 20px}
+.app-v2 .login-hero{text-align:center;margin-bottom:22px}
+.app-v2 .login-mark{
+  width:64px;height:64px;margin:0 auto 14px;border-radius:20px;display:flex;align-items:center;justify-content:center;
+  background:var(--gg-grad);box-shadow:0 18px 40px -12px rgba(249,115,22,.6);
+}
+.app-v2 .login-mark svg{width:34px;height:34px;color:#1a0d02}
+.app-v2 .login-hero h1{font-size:26px;font-weight:800;color:#fff;letter-spacing:-.02em}
+.app-v2 .login-hero h1 span{background:var(--gg-grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.app-v2 .login-hero p{color:var(--gg-muted);font-size:14px;margin-top:6px}
+.app-v2.login-body .card{background:var(--v2-card);border:1px solid var(--v2-line);border-radius:24px;padding:22px 20px}
+.app-v2 .btn-google{
+  display:flex;align-items:center;justify-content:center;gap:10px;width:100%;
+  background:#fff;color:#111;border:none;font-weight:700;padding:14px;border-radius:14px;margin-top:0;
+}
+.app-v2 .btn-google:hover{filter:none;background:#f4f4f5}
+.app-v2 .btn-google svg{width:18px;height:18px}
+.app-v2.login-body input{background:#0b0b0d;border-color:var(--v2-line-2);border-radius:12px}
+.app-v2.login-body .btn.btn-primary{border-radius:14px}
+.app-v2 .login-alt{margin-top:18px}
+.app-v2 .login-alt summary{cursor:pointer;color:var(--gg-muted);font-size:13px;text-align:center;list-style:none;padding:6px}
+.app-v2 .login-alt summary::-webkit-details-marker{display:none}
+.app-v2 .login-alt[open] summary{margin-bottom:6px}
+/* Logo Google lewat CSS (teks tombol diganti JS saat loading, jadi ikon jangan di dalam HTML-nya) */
+.app-v2 .btn-google::before{
+  content:"";width:18px;height:18px;flex-shrink:0;background:no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath fill='%23FFC107' d='M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.9z'/%3E%3Cpath fill='%23FF3D00' d='M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z'/%3E%3Cpath fill='%234CAF50' d='M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z'/%3E%3Cpath fill='%231976D2' d='M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z'/%3E%3C/svg%3E");
+}
