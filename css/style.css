@@ -793,3 +793,6 @@ input.kh-time.kh-save-err{background:var(--gg-danger-bg) !important;border-color
 .lembur-pick.off{opacity:.5;cursor:default}
 .work-countdown.lembur .wc-label{color:var(--gg-primary)}
 .work-countdown.lembur .wc-time{color:var(--gg-primary-2)}
+/* PR-CL129: ACC lembur per divisi */
+.lembur-grup{margin:12px 0 2px;font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--gg-primary)}
+.lembur-warn{margin:0 0 8px;padding:7px 10px;border-radius:10px;font-size:12.5px;line-height:1.5;background:var(--gg-warning-bg);color:var(--gg-warning-t)}
