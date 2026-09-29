@@ -254,6 +254,17 @@ if (btnDaftar) {
         if (error) { hapusTertunda(); throw error; }
         session = data.session;
 
+        // Email sudah punya akun (mis. akun Google yang dipakai di WMS): Supabase pura-pura
+        // sukses tanpa kirim email apa pun, ciri-cirinya daftar identitasnya kosong.
+        // Isian tetap disimpan, jadi begitu dia login pakai akun itu pendaftaran lanjut sendiri.
+        if (!session && data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+          window.__sedangDaftar = false;
+          btnDaftar.disabled = false;
+          btnDaftar.textContent = teksAsli || 'Daftar';
+          return regMsg('Email ' + email + ' sudah punya akun (biasanya akun Google), jadi tidak ada email verifikasi. ' +
+            'Klik "Login di sini" lalu "Login dengan Google" pakai email ini — pendaftaranmu lanjut otomatis.');
+        }
+
         // Project wajib verifikasi email (pengaman: akun baru nyambung ke data karyawan
         // lewat email, jadi emailnya harus terbukti milik dia). Kasih tahu langkah berikutnya.
         if (!session) {
