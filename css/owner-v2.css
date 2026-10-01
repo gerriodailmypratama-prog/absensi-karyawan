@@ -289,4 +289,10 @@ body.owner-v2{
   .owner-v2 #tblPayroll td:nth-child(14) .btn{flex:1;justify-content:center}
   .owner-v2 #tblPayroll tr.pr-nonaktif-sep td{display:block;text-align:left}
   .owner-v2 #tblPayroll tr.pr-nonaktif-sep td::before{content:none}
+  /* PR-CL131: Personal Assistant dibayar per hari hadir - kartu tanpa baris lembur */
+  .owner-v2 #tblPayroll tr.pr-pa-row td:nth-child(7){display:none}
+  .owner-v2 #tblPayroll tr.pr-pa-row td:nth-child(6)::before{content:'Upah Harian'}
 }
+
+/* PR-CL131: detail payroll PA - kolom Jam/Upah Lembur disembunyikan */
+#tblPayrollDetail.pr-detail-pa th:nth-child(n+7),#tblPayrollDetail.pr-detail-pa td:nth-child(n+7){display:none}
