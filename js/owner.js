@@ -3129,8 +3129,10 @@ function kirimSlipWA(uid){
   if (phone.charAt(0) === '0') phone = '62' + phone.slice(1);
   else if (phone.slice(0,2) !== '62') phone = '62' + phone;
   const tb = r.totalBayar != null ? r.totalBayar : r.total;
-  const L = ['Halo ' + (r.namaPanggilan || r.nama) + ',', '', 'Rincian gaji ' + __payrollData.label + ':',
-    '- Upah Pokok: ' + prFormatRp(r.upahPokok), '- Upah Lembur: ' + prFormatRp(r.upahLembur)];
+  const L = ['Halo ' + (r.namaPanggilan || r.nama) + ',', '', 'Rincian gaji ' + __payrollData.label + ':'].concat(r.modePA
+    // PR-CL131: PA dibayar per hari hadir, tanpa baris lembur.
+    ? ['- Upah Harian (' + (r.hariHadir || 0) + ' hari x ' + prFormatRp(r.tarifPA) + '): ' + prFormatRp(r.upahPokok)]
+    : ['- Upah Pokok: ' + prFormatRp(r.upahPokok), '- Upah Lembur: ' + prFormatRp(r.upahLembur)]);
   if (r.tunjangan > 0) L.push('- Tunjangan Jabatan: ' + prFormatRp(r.tunjangan)); // PR-CL78
   if (r.bonus > 0) L.push('- Bonus: +' + prFormatRp(r.bonus)); // PR-CL90
   if (r.potongan > 0) L.push('- Potongan: -' + prFormatRp(r.potongan));
@@ -3229,6 +3231,7 @@ if (r.nonaktif===true && !_prSepDone){
 }
 const tr = document.createElement('tr');
 if (r.nonaktif){ tr.className = 'pr-nonaktif-row'; tr.style.opacity = '.6'; tr.style.display = 'none'; }
+if (r.modePA) tr.classList.add('pr-pa-row'); // PR-CL131: kartu HP PA tanpa baris lembur
 // PR-CL89: foto profil + badge jabatan (kosakata role WMS) di kolom nama
 tr.innerHTML = '<td><div class="pr-name-cell">' + __prAvatar(r) + '<div class="pr-name-txt"><div class="pr-name-top"><b>' + r.nama + '</b>' + __prRoleBadge(r) + (r.nonaktif ? ' <span class="tag" title="Sudah resign / dinonaktifkan. Muncul karena masih ada absen bulan ini.">Nonaktif</span>' : '') + '</div><small class="muted">' + r.idKaryawan + '</small>' + ((r.hariLupaCO||0) > 0 ? '<br><small style="color:#fcd34d">⚠ ' + r.hariLupaCO + ' hr lupa clock-out</small>' : '') + '</div></div></td>' +
 (r.modePA
@@ -3242,7 +3245,8 @@ tr.innerHTML = '<td><div class="pr-name-cell">' + __prAvatar(r) + '<div class="p
   + (r.totalJamLemburTertahan > 0 ? '<br><small class="lembur-tag ' + (r.hariLemburNunggu ? 'nunggu' : 'tolak') + '" title="Lembur sesi sejak ' + LEMBUR_ACC_MULAI + ' yang belum / tidak di-ACC. Tidak dibayar kecuali di-ACC sebelum batas.">'
     + fmtLemburHM(r.totalJamLemburTertahan) + ' tdk dibayar' + (r.hariLemburNunggu ? ' (' + r.hariLemburNunggu + ' nunggu ACC)' : '') + '</small>' : '')) + '</td>' +
 '<td class="num">' + prFormatRp(r.upahPokok) + '</td>' +
-'<td class="num">' + prFormatRp(r.upahLembur) + (r.jamLemburBaru > 0 ? '<br><small class="lembur-tag ok" title="Lembur mulai ' + LEMBUR_ACC_MULAI + ' dibayar 1,5× = ' + prFormatRp((r.rateLemburPerJam||0) * LEMBUR_MULT_BARU) + '/jam">' + fmtLemburHM(r.jamLemburBaru) + ' × 1,5</small>' : '') + '</td>' +
+(r.modePA ? '<td class="num"><span class="muted">&mdash;</span></td>' : // PR-CL131: PA tidak kenal lembur
+'<td class="num">' + prFormatRp(r.upahLembur) + (r.jamLemburBaru > 0 ? '<br><small class="lembur-tag ok" title="Lembur mulai ' + LEMBUR_ACC_MULAI + ' dibayar 1,5× = ' + prFormatRp((r.rateLemburPerJam||0) * LEMBUR_MULT_BARU) + '/jam">' + fmtLemburHM(r.jamLemburBaru) + ' × 1,5</small>' : '') + '</td>') +
 '<td class="num pr-tun-cell" data-uid="' + r.uid + '"><span class="pr-tun-val">' + (r.tunjangan ? prFormatRp(r.tunjangan) : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-tun-edit" data-uid="' + r.uid + '" style="color:#f97316">Edit</button></td>' +
 '<td class="num">' + prFormatRp(r.total) + '</td>' +
 '<td class="num pr-bon-cell" data-uid="' + r.uid + '"><span class="pr-bon-val">' + (r.bonus ? '<span style="color:#86efac">+' + prFormatRp(r.bonus) + '</span>' : '<span class="muted">-</span>') + '</span> <button class="btn-link pr-bon-edit" data-uid="' + r.uid + '" style="color:#f97316">Edit</button></td>' +
@@ -3477,6 +3481,11 @@ if (r.modePA) $('prDetailSub').textContent = 'Periode: ' + __payrollData.label +
 else $('prDetailSub').textContent = 'Periode: ' + __payrollData.label + ' \u2014 Total Jam: ' + r.totalJamKerja.toFixed(1) + ' jam \u2014 Rate pokok: ' + prFormatRp(r.ratePerJam||0) + '/jam \u2014 Rate lembur: ' + prFormatRp(r.rateLemburPerJam||r.ratePerJam||0) + '/jam' + (r.jamLemburBaru > 0 ? ' (1,5× = ' + prFormatRp((r.rateLemburPerJam||0) * LEMBUR_MULT_BARU) + '/jam mulai ' + LEMBUR_ACC_MULAI + ')' : '') + ' \u2014 Total: ' + prFormatRp(r.total);
 const tb = document.querySelector('#tblPayrollDetail tbody');
 tb.innerHTML = '';
+// PR-CL131: PA -> kolom Jam/Upah Lembur disembunyikan, Upah Pokok jadi Upah Harian.
+const _tblDet = $('tblPayrollDetail');
+_tblDet.classList.toggle('pr-detail-pa', !!r.modePA);
+const _th6 = _tblDet.querySelector('thead th:nth-child(6)');
+if (_th6) _th6.textContent = r.modePA ? 'Upah Harian' : 'Upah Pokok';
 if (!r.dailyDetails.length){
 tb.innerHTML = '<tr><td colspan="8" class="muted center">Tidak ada catatan kehadiran bulan ini.</td></tr>';
 } else {
@@ -3508,6 +3517,18 @@ tb.appendChild(tr);
 // Baris TOTAL (subtotal per kolom) + TOTAL AKHIR (pokok + lembur)
 const trT = document.createElement('tr');
 trT.style.cssText = 'border-top:2px solid #a16207;font-weight:700';
+if (r.modePA){
+  trT.innerHTML = '<td colspan="5" style="text-align:right">TOTAL (' + r.hariHadir + ' hari \u00d7 ' + prFormatRp(r.tarifPA) + ')</td>'
+  + '<td class="num">' + prFormatRp(r.upahPokok) + '</td>';
+  tb.appendChild(trT);
+  const trP = document.createElement('tr');
+  trP.style.cssText = 'font-weight:800';
+  trP.innerHTML = '<td colspan="5" style="text-align:right">TOTAL AKHIR (Upah Harian' + (r.tunjangan > 0 ? ' + Tunjangan Jabatan ' + prFormatRp(r.tunjangan) : '') + ')</td>'
+  + '<td class="num" style="color:#34d399;font-size:14px">' + prFormatRp(r.total) + '</td>';
+  tb.appendChild(trP);
+  $('payrollDetailModal').classList.remove('hidden');
+  return;
+}
 trT.innerHTML = '<td colspan="5" style="text-align:right">TOTAL</td>'
 + '<td class="num">' + prFormatRp(r.upahPokok) + '</td>'
 + '<td class="num">' + fmtLemburHM(r.totalJamLembur||0) + '</td>'
