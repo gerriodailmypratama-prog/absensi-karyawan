@@ -2573,39 +2573,45 @@ const PR_ROLE_STYLE = {
   'host live':    ['#331a2b', '#f9a8d4'],
   'packer':       ['#2a2118', '#fdba74'],
   'sourcing':     ['#1f2937', '#cbd5e1'],
-  'trial':        ['#3a2f12', '#fbbf24']
+  'trial':        ['#3a2f12', '#fbbf24'],
+  'pa':           ['var(--gg-info-bg)', 'var(--gg-info-t)']   // PR-CL130: sama dengan badge PA
 };
-// Cadangan: diambil dari role WMS per 30 Jul 2026, dipakai HANYA kalau field
-// "Jabatan" di menu Karyawan masih kosong. Kalau ada yang pindah peran, isi
-// field Jabatan-nya — itu selalu menang atas daftar ini.
+// PR-CL130: field Jabatan sekarang disalin otomatis dari jabatan WMS tiap jam
+// (absensi.sinkron_jabatan_wms), jadi badge menampilkan teks jabatan WMS apa adanya.
+// Daftar cadangan ini cuma dipakai kalau jabatan masih kosong (karyawan belum ada di WMS).
 const PR_ROLE_SEED = {
   mila: 'superadmin', desti: 'admin', ila: 'admin',
   bunga: 'operational', rafi: 'operational', restu: 'operational',
   bahren: 'packer', dinda: 'packer', itang: 'packer', rafihm: 'packer',
   resta: 'packer', rifki: 'packer', yani: 'packer', naufal: 'sourcing'
 };
+// Warna badge ditentukan dari kata kunci jabatan; teksnya tetap jabatan asli.
+function __prRoleWarna(raw){
+  if (raw.includes('personal assistant')) return 'pa';
+  if (raw.includes('owner')) return 'owner';
+  if (raw.includes('kepala') || raw.includes('gudang') || raw.includes('supervisor') || raw.includes('head')) return 'kepala gudang';
+  if (raw.includes('superadmin') || raw.includes('super admin') || raw.includes('lead')) return 'superadmin';
+  if (raw.includes('admin')) return 'admin';
+  if (raw.includes('host') || raw.includes('live')) return 'host live';
+  if (raw.includes('operational') || raw.includes('operasional') || raw.includes('ops')) return 'operational';
+  if (raw.includes('packer') || raw.includes('picker') || raw.includes('fulfillment') || raw.includes('receiving')) return 'packer';
+  if (raw.includes('sourcing')) return 'sourcing';
+  if (raw.includes('trial')) return 'trial';
+  return '';
+}
 function __prRole(r){
-  const raw = String(r.jabatan || '').trim().toLowerCase();
-  if (raw){
-    if (raw.includes('kepala') || raw.includes('gudang')) return 'kepala gudang';
-    if (raw.includes('superadmin') || raw.includes('super admin')) return 'superadmin';
-    if (raw.includes('owner')) return 'owner';
-    if (raw.includes('host')) return 'host live';
-    if (raw.includes('admin')) return 'admin';
-    if (raw.includes('operational') || raw.includes('operasional') || raw.includes('ops')) return 'operational';
-    if (raw.includes('packer') || raw.includes('picker')) return 'packer';
-    if (raw.includes('sourcing')) return 'sourcing';
-    if (raw.includes('trial')) return 'trial';
-    return raw;
-  }
+  const raw = String(r.jabatan || '').trim();
+  if (raw) return { teks: raw, warna: __prRoleWarna(raw.toLowerCase()) };
   const key = String(r.namaPanggilan || r.nama || '').trim().toLowerCase();
-  return PR_ROLE_SEED[key] || '';
+  const seed = PR_ROLE_SEED[key];
+  return seed ? { teks: seed, warna: seed } : null;
 }
 function __prRoleBadge(r){
   const role = __prRole(r);
   if (!role) return '';
-  const st = PR_ROLE_STYLE[role] || ['#262626', '#a3a3a3'];
-  return '<span class="pr-role-badge" style="background:' + st[0] + ';color:' + st[1] + '">' + role.toUpperCase() + '</span>';
+  const st = PR_ROLE_STYLE[role.warna] || ['#262626', '#a3a3a3'];
+  const teks = String(role.teks).toUpperCase().replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  return '<span class="pr-role-badge" style="background:' + st[0] + ';color:' + st[1] + '">' + teks + '</span>';
 }
 // Foto profil: absensi nyimpen di koleksi `profil/{uid}.foto`; karyawan.photoURL jadi cadangan.
 let __prFoto = {};
