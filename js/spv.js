@@ -231,6 +231,9 @@ setInterval(() => {
 // absensi.libur_pada di database — yang juga dibaca briefing WMS). Semua tulis lewat RPC.
 const BATAS_MUNDUR = 7, BATAS_MAJU = 60;   // sama dengan validasi atur_tukar_libur
 let liburTim = [], liburTukar = [];
+// PR-CL134: SPV cuma atur divisinya (server yang nyaring liburTim); libur dirinya sendiri lewat owner.
+let liburSaya = { id: null, owner: false };
+const bisaAturLibur = id => liburSaya.owner || id !== liburSaya.id;
 
 const tglWib = d => d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
 const keDate = s => new Date(s + 'T12:00:00+07:00');
@@ -282,7 +285,7 @@ function renderLibur(){
         '<div class="p-row"><span class="p-name">' + esc(t.nama) + '</span>'
         + '<span class="p-time"><span class="p-dim">' + esc(fmtTgl(t.tanggal_asal)) + '</span><small class="p-sep">&rarr;</small>'
         + '<span class="p-main" style="color:var(--gg-info-t)">' + esc(fmtTgl(t.tanggal_libur)) + '</span>'
-        + '<button class="btn-link libur-batal" data-id="' + esc(t.id) + '" title="' + esc((t.catatan ? t.catatan + ' · ' : '') + 'oleh ' + (t.dibuat_oleh_nama || 'owner')) + '">Batal</button></span></div>'
+        + (bisaAturLibur(t.karyawan_id) ? '<button class="btn-link libur-batal" data-id="' + esc(t.id) + '" title="' + esc((t.catatan ? t.catatan + ' · ' : '') + 'oleh ' + (t.dibuat_oleh_nama || 'owner')) + '">Batal</button>' : '') + '</span></div>'
       ).join('')
     : '';
   document.querySelectorAll('.libur-batal').forEach(b => {
@@ -301,7 +304,7 @@ function tutupModal(id){ $(id).classList.add('hidden'); }
 document.querySelectorAll('[data-tutup]').forEach(b => { b.onclick = () => tutupModal(b.dataset.tutup); });
 function tampilErr(id, pesan){ const el = $(id); el.textContent = pesan || ''; el.classList.toggle('hidden', !pesan); }
 function opsiKaryawan(sel){
-  sel.innerHTML = '<option value="">&mdash; pilih &mdash;</option>' + liburTim.map(k =>
+  sel.innerHTML = '<option value="">&mdash; pilih &mdash;</option>' + liburTim.filter(k => bisaAturLibur(k.karyawan_id)).map(k =>
     '<option value="' + esc(k.karyawan_id) + '">' + esc(k.nama) + (k.libur_hari != null ? ' (libur ' + LIBUR_HARI[k.libur_hari] + ')' : ' (belum ada libur tetap)') + '</option>').join('');
 }
 
@@ -395,6 +398,8 @@ sb.auth.onAuthStateChange(async (event, session) => {
   if (!boleh){ alert('Halaman ini khusus supervisor.'); location.replace('karyawan.html'); return; }
 
   lihatPA = saya.peran === 'owner';
+  liburSaya = { id: saya.id, owner: saya.peran === 'owner' };   // PR-CL134
+  if (!liburSaya.owner && $('liburCatatan')) $('liburCatatan').textContent = 'Kamu atur libur tim divisi kamu. Libur kamu sendiri, tim Live & PA diatur owner.';
   $('spvNama').textContent = saya.nama || session.user.email || '';
   $('spvDate').textContent = new Date().toLocaleDateString('id-ID', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
 

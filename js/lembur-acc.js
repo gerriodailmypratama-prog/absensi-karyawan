@@ -67,12 +67,11 @@ export async function renderLemburSaya(box, opsi = {}){
     if (r.status_efektif === 'disetujui') ket = 'oleh <b>' + esc(r.penyetuju || '-') + '</b>';
     else if (r.status_efektif === 'ditolak') ket = 'oleh <b>' + esc(r.penyetuju || '-') + '</b>';
     else if (r.status_efektif === 'menunggu') ket = 'Lead / SPV bisa ACC s/d ' + esc(batasLabel(r.batas_acc)) + '. Kalau gak di-ACC, dibayar jam normal.';
-    const dur = durasi(r.menit_perkiraan);
     const alasanBtn = (r.status_efektif === 'menunggu' && !r.alasan)
       ? ' <button class="btn btn-sm btn-ghost lembur-alasan-btn" data-id="' + esc(r.id) + '">Isi alasan</button>' : '';
     return '<div class="lembur-row">'
       + '<div class="lembur-st" style="color:' + st.warna + '">' + st.ikon + ' ' + esc(st.teks) + '</div>'
-      + '<div class="lembur-sub">' + esc(tgl(r.tanggal)) + ' &middot; selesai ' + esc(jam(r.ts_selesai)) + (dur ? ' &middot; ±' + esc(dur) : '')
+      + '<div class="lembur-sub">' + esc(tgl(r.tanggal)) + ' &middot; selesai ' + esc(jam(r.ts_selesai))   // PR-CL134: tanpa durasi (keputusan owner)
       + (ket ? '<br>' + ket : '')
       + (r.alasan ? '<br><i>&ldquo;' + esc(r.alasan) + '&rdquo;</i>' : (r.status_efektif === 'menunggu' ? '<br><span style="color:var(--gg-warning-t)">Alasan belum diisi</span>' : ''))
       + (r.catatan_putus ? '<br>Catatan: ' + esc(r.catatan_putus) : '')
@@ -155,8 +154,6 @@ export async function renderAntrianLembur(box, opsi = {}){
 // Lembur harus DISURUH Lead / SPV / owner, atau karyawan MINTA izin lalu di-ACC. Database
 // (trigger lembur_izin_jaga) menolak Mulai Lembur tanpa izin atau sebelum jam normal kelar.
 // ============================================================================
-export const RATE_LEMBUR_BARU = 18750;   // Rp 12.500 x 1,5 (keputusan owner 29 Sep 2026)
-export const rupiah = n => 'Rp ' + Math.round(Number(n) || 0).toLocaleString('id-ID');
 export { durasi as durasiMenit, jam as jamWib };
 
 export async function lemburIzinSaya(){
@@ -168,13 +165,6 @@ export async function mintaLembur(alasan){
   const { data, error } = await sb.rpc('lembur_minta', { p_alasan: alasan });
   if (error) throw error;
   return data;
-}
-
-// Menit lembur bersih satu riwayat (jendela Mulai..Selesai dikurangi istirahat/pause di dalamnya).
-function menitBersih(r){
-  if (!r || !r.mulai_at) return 0;
-  const akhir = r.selesai_at ? new Date(r.selesai_at).getTime() : Date.now();
-  return Math.max(0, (akhir - new Date(r.mulai_at).getTime()) / 60000 - (Number(r.jeda_menit) || 0));
 }
 
 // Kartu "Lembur Kamu" versi izin: status izin shift ini + hasil lembur 4 hari terakhir.
@@ -195,18 +185,16 @@ export function renderLemburKamu(box, st){
     baris.push('<div class="lembur-row"><div class="lembur-st" style="color:var(--gg-success-t)">'
       + (iz.jenis === 'suruh' ? '\u{1F4E3} Kamu disuruh lembur' : '✅ Izin lembur di-ACC') + '</div>'
       + '<div class="lembur-sub">oleh <b>' + esc(iz.jenis === 'suruh' ? (iz.dibuat_oleh || iz.penyetuju || '-') : (iz.penyetuju || '-')) + '</b>'
-      + ' &middot; tap <b>Mulai Lembur</b> setelah jam normal kelar. Dibayar 1,5× (' + rupiah(RATE_LEMBUR_BARU) + '/jam).'
+      + ' &middot; tap <b>Mulai Lembur</b> setelah jam normal kelar.'
       + (iz.catatan_putus ? '<br>Catatan: ' + esc(iz.catatan_putus) : (iz.jenis === 'suruh' && iz.alasan ? '<br>Catatan: ' + esc(iz.alasan) : '')) + '</div></div>');
   }
   for (const r of ((st && st.riwayat) || [])){
-    const m = menitBersih(r);
     const oleh = r.jenis === 'suruh' ? ('\u{1F4E3} disuruh <b>' + esc(r.penyetuju || '-') + '</b>') : ('di-ACC <b>' + esc(r.penyetuju || '-') + '</b>');
     if (!r.selesai_at){
       baris.push('<div class="lembur-row"><div class="lembur-st" style="color:var(--gg-primary)">\u{1F319} Lembur berjalan sejak ' + esc(jam(r.mulai_at)) + '</div>'
         + '<div class="lembur-sub">' + oleh + (r.alasan ? ' &middot; <i>&ldquo;' + esc(r.alasan) + '&rdquo;</i>' : '') + '</div></div>');
     } else {
-      baris.push('<div class="lembur-row"><div class="lembur-st" style="color:var(--gg-success-t)">✅ Lembur ' + esc(durasi(m) || '0 mnt')
-        + ' (' + esc(jam(r.mulai_at)) + '–' + esc(jam(r.selesai_at)) + ') &middot; ' + rupiah(m / 60 * RATE_LEMBUR_BARU) + '</div>'
+      baris.push('<div class="lembur-row"><div class="lembur-st" style="color:var(--gg-success-t)">✅ Lembur selesai ' + esc(jam(r.selesai_at)) + '</div>'   // PR-CL134: karyawan tidak lihat total jam / rupiah lembur
         + '<div class="lembur-sub">' + esc(tgl(r.tanggal)) + ' &middot; ' + oleh + (r.alasan ? ' &middot; <i>&ldquo;' + esc(r.alasan) + '&rdquo;</i>' : '') + '</div></div>');
     }
   }
