@@ -694,7 +694,8 @@ async function loadKaryawanList(){
           const byDay=[[],[],[],[],[],[],[]];
           rows.forEach(r => { if (r.nonaktif===true) return; if (r.liburHari!=null){ const h=Number(r.liburHari); if(h>=0&&h<=6) byDay[h].push(r.namaPanggilan||r.nama||'?'); } });
           window.__liburByDay = byDay;
-          let html='<h3 style="margin:0 0 8px">🌴 Jadwal Libur Mingguan <small class="muted" style="font-weight:400;font-size:12px">— maks '+LIBUR_MAX+'/hari, ga dianggap mangkir</small></h3><div style="display:flex;flex-wrap:wrap;gap:8px">';
+          // PR-CL133: tombol langsung ke Pantau Tim (tempat tukar / ganti libur), biar ga nyari-nyari link.
+          let html='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 8px"><h3 style="margin:0">🌴 Jadwal Libur Mingguan <small class="muted" style="font-weight:400;font-size:12px">— maks '+LIBUR_MAX+'/hari, ga dianggap mangkir</small></h3><a class="btn btn-sm btn-secondary" href="spv.html#liburBox" title="Tukar libur sekali atau ganti hari libur tetap (Pantau Tim)">✏️ Atur Libur</a></div><div style="display:flex;flex-wrap:wrap;gap:8px">';
           for (let h=0;h<7;h++){ const full=byDay[h].length>=LIBUR_MAX; const col=byDay[h].length===0?'#6b7280':full?'#f97316':'#9ca3af'; html+='<div style="flex:1 1 120px;min-width:110px;padding:8px 10px;border:1px solid #2a2a2a;border-radius:10px;background:#141414"><div style="font-size:12px;font-weight:700;color:'+col+'">'+LIBUR_HARI[h]+' ('+byDay[h].length+'/'+LIBUR_MAX+')</div><div style="font-size:12px;color:#d1d5db;margin-top:2px">'+(byDay[h].length?byDay[h].join(', '):'<span class="muted">—</span>')+'</div></div>'; }
           html+='</div>';
           // PR-CL94: hari libur yang sudah ditetapkan sifatnya permanen — usulan dari orang

@@ -399,7 +399,9 @@ sb.auth.onAuthStateChange(async (event, session) => {
   $('spvDate').textContent = new Date().toLocaleDateString('id-ID', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
 
   try{ await muat(); }catch(e){ console.error(e); alert('Gagal memuat data: ' + (e.message || e)); }
-  muatLibur().catch(e => { console.warn('libur:', e); $('liburWeek').innerHTML = '<div class="p-empty">Gagal memuat jadwal libur</div>'; });   // PR-CL132
+  muatLibur().catch(e => { console.warn('libur:', e); $('liburWeek').innerHTML = '<div class="p-empty">Gagal memuat jadwal libur</div>'; })   // PR-CL132
+    // PR-CL133: datang dari tombol "Atur Libur" owner -> langsung gulung ke kartu libur setelah isinya kebuka.
+    .then(() => { if (location.hash === '#liburBox' && $('liburBox')) $('liburBox').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   // PR-CL127: antrian ACC lembur — selalu tampil (juga saat kosong) supaya tidak ada yang kelupaan.
   const lemburBox = $('lemburAccBox');
   renderLemburHariIni(lemburBox);
