@@ -141,7 +141,7 @@ async function saveSingleKehadiranCell(uid, inp){
 
 // PR-CL114: Firebase diganti Supabase lewat penerjemah js/firebase-shim.js — nama & bentuk
 // fungsinya sama, jadi logika dashboard (termasuk rumus gaji) tidak diubah.
-import { auth, db, storage, OWNER_EMAILS, firebaseConfig, kodeClockout, KODE_SLOT_MS, normalizePanggilan, suggestPanggilan, LIBUR_HARI, LIBUR_MAX,
+import { auth, db, storage, OWNER_EMAILS, firebaseConfig, kodeClockout, KODE_SLOT_MS, normalizePanggilan, suggestPanggilan, LIBUR_HARI, LIBUR_MAX, liburTukarDaftar,
   ref as storageRef, uploadBytes, getDownloadURL, deleteObject,
   onAuthStateChanged, signOut,
   collection, query, where, orderBy, limit, getDocs, onSnapshot, Timestamp, setDoc, updateDoc, deleteDoc, getDoc, addDoc, doc, serverTimestamp,
@@ -704,6 +704,18 @@ async function loadKaryawanList(){
             html += '<div style="margin-top:10px;padding:9px 12px;border:1px solid #a16207;border-radius:10px;background:#3a2f12;font-size:12.5px;color:#fcd34d">📩 <b>'+_pend.length+' usulan libur nunggu di-assign:</b> ' + _pend.map(r=>{ const rq=Array.isArray(r.liburRequest)?r.liburRequest:[]; return (r.namaPanggilan||r.nama||'?')+' ('+rq.map(x=>LIBUR_HARI[Number(x)]).join('›')+')'; }).join(' · ') + ' — buka <b>Edit</b> karyawannya buat nentuin harinya.</div>';
           }
           _box.innerHTML=html;
+          // PR-CL132: tukar libur 30 hari ke depan — dicatat SPV / owner di halaman Pantau Tim.
+          const _hariIniL = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+          const _sampaiL = new Date(Date.now() + 30 * 86400000).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+          const _fmtL = s => new Date(s + 'T12:00:00+07:00').toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' });
+          const _escL = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+          liburTukarDaftar(_hariIniL, _sampaiL).then(list => {
+            const el = document.createElement('div');
+            el.style.cssText = 'margin-top:10px;font-size:12.5px;color:var(--gg-muted);line-height:1.6';
+            el.innerHTML = (list.length ? '🔄 <b style="color:var(--gg-info-t)">Tukar libur:</b> ' + list.map(t => _escL(t.nama) + ' (' + _fmtL(t.tanggal_asal) + ' → ' + _fmtL(t.tanggal_libur) + ')').join(' · ') + '<br>' : '')
+              + 'Tukar libur &amp; ganti libur tetap bisa diatur SPV / owner di <a href="spv.html">Pantau Tim</a> — langsung sinkron ke briefing WMS.';
+            _box.appendChild(el);
+          }).catch(e => console.warn('tukar libur:', e));
         })();
         // === Auto-isi default buat yang belum punya: ID (GG-####), jam kerja 9, base 100rb, tanggal join ===
         let _maxKid = 0;
@@ -1629,6 +1641,11 @@ async function loadKehadiranMatrix(){
       orderBy('ts','asc'));
     // 1) Load semua karyawan terdaftar sebagai master list (semua harus muncul, hadir/belum)
     const byUid = {};
+    // PR-CL132: tukar libur di tanggal ini menang atas hari libur tetap (sama dengan absensi.libur_pada).
+    const _tglKh = dateToInputStr(d);
+    const _tukarKh = new Map();
+    try { (await liburTukarDaftar(_tglKh, _tglKh)).forEach(t => { if (t.tanggal_libur === _tglKh) _tukarKh.set(t.karyawan_id, true); else if (t.tanggal_asal === _tglKh) _tukarKh.set(t.karyawan_id, false); }); }
+    catch(e){ console.warn('tukar libur:', e); }
     try {
       const kSnap = await getDocs(collection(db,'karyawan'));
       kSnap.forEach(docSnap => {
@@ -1644,7 +1661,7 @@ async function loadKehadiranMatrix(){
           jamKerja: (k.jamKerja!=null ? Number(k.jamKerja) : 9),
           nonaktif: (k.nonaktif===true),
           liburHari: (k.liburHari!=null ? Number(k.liburHari) : null),
-          libur: (k.liburHari!=null && Number(k.liburHari) === d.getDay()),
+          libur: _tukarKh.has(uid) ? _tukarKh.get(uid) : (k.liburHari!=null && Number(k.liburHari) === d.getDay()),
           events: [],
           byTipe: {}
         };

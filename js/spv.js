@@ -7,7 +7,7 @@
 // di database juga menolak SPV membacanya. Jadi batasan ini nyata, bukan sekadar menu
 // yang disembunyikan di tampilan.
 // ============================================================
-import { sb, karyawanSaya, keluar, EMBER_PROFIL } from './supabase-config.js';
+import { sb, karyawanSaya, keluar, EMBER_PROFIL, LIBUR_HARI, LIBUR_MAX } from './supabase-config.js';
 import { renderLemburHariIni } from './lembur-acc.js';   // PR-CL127 / PR-CL128
 
 const $ = id => document.getElementById(id);
@@ -226,6 +226,158 @@ setInterval(() => {
   });
 }, 1000);
 
+// ===== PR-CL132: Jadwal Libur =====
+// Satu sumber: tukar aktif menang, kalau nggak ada pakai hari libur tetap (sama dengan
+// absensi.libur_pada di database — yang juga dibaca briefing WMS). Semua tulis lewat RPC.
+const BATAS_MUNDUR = 7, BATAS_MAJU = 60;   // sama dengan validasi atur_tukar_libur
+let liburTim = [], liburTukar = [];
+
+const tglWib = d => d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+const keDate = s => new Date(s + 'T12:00:00+07:00');
+const tambahHari = (s, n) => tglWib(new Date(keDate(s).getTime() + n * 86400000));
+const dowDari = s => keDate(s).getUTCDay();
+const fmtTgl = s => keDate(s).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' });
+
+function liburPada(k, s){
+  for (const t of liburTukar){
+    if (t.karyawan_id !== k.karyawan_id) continue;
+    if (t.tanggal_libur === s) return true;
+    if (t.tanggal_asal === s) return false;
+  }
+  return k.libur_hari != null && Number(k.libur_hari) === dowDari(s);
+}
+function tukarKe(k, s){ return liburTukar.some(t => t.karyawan_id === k.karyawan_id && t.tanggal_libur === s); }
+
+async function muatLibur(){
+  const hariIni = tglWib(new Date());
+  const [a, b] = await Promise.all([
+    sb.rpc('libur_tim'),
+    sb.rpc('libur_tukar_daftar', { p_dari: tambahHari(hariIni, -BATAS_MUNDUR), p_sampai: tambahHari(hariIni, BATAS_MAJU) })
+  ]);
+  if (a.error) throw a.error;
+  if (b.error) throw b.error;
+  liburTim = a.data || [];
+  liburTukar = b.data || [];
+  renderLibur();
+}
+
+function renderLibur(){
+  const hariIni = tglWib(new Date());
+  let html = '';
+  for (let i = 0; i < 7; i++){
+    const s = tambahHari(hariIni, i);
+    const libur = liburTim.filter(k => liburPada(k, s));
+    const penuh = libur.length >= LIBUR_MAX;
+    html += '<div class="libur-day' + (i === 0 ? ' today' : '') + (penuh ? ' penuh' : '') + '">'
+      + '<div class="libur-tgl"><b>' + (i === 0 ? 'Hari ini' : esc(fmtTgl(s))) + '</b><span>' + libur.length + '/' + LIBUR_MAX + '</span></div>'
+      + '<div class="libur-nama">' + (libur.length
+          ? libur.map(k => tukarKe(k, s) ? '<span class="tukar" title="Hasil tukar libur">&#x1F504; ' + esc(k.nama) + '</span>' : esc(k.nama)).join(', ')
+          : '<span class="muted">&mdash;</span>') + '</div></div>';
+  }
+  $('liburWeek').innerHTML = html;
+
+  const nanti = liburTukar.filter(t => t.tanggal_asal >= hariIni || t.tanggal_libur >= hariIni);
+  $('liburTukarList').innerHTML = nanti.length
+    ? '<div class="pres-sub muted small">Tukar libur yang akan datang</div>' + nanti.map(t =>
+        '<div class="p-row"><span class="p-name">' + esc(t.nama) + '</span>'
+        + '<span class="p-time"><span class="p-dim">' + esc(fmtTgl(t.tanggal_asal)) + '</span><small class="p-sep">&rarr;</small>'
+        + '<span class="p-main" style="color:var(--gg-info-t)">' + esc(fmtTgl(t.tanggal_libur)) + '</span>'
+        + '<button class="btn-link libur-batal" data-id="' + esc(t.id) + '" title="' + esc((t.catatan ? t.catatan + ' · ' : '') + 'oleh ' + (t.dibuat_oleh_nama || 'owner')) + '">Batal</button></span></div>'
+      ).join('')
+    : '';
+  document.querySelectorAll('.libur-batal').forEach(b => {
+    b.onclick = async () => {
+      const t = liburTukar.find(x => x.id === b.dataset.id); if (!t) return;
+      if (!confirm('Batalkan tukar libur ' + t.nama + '? Jadwal balik: libur ' + fmtTgl(t.tanggal_asal) + ', masuk ' + fmtTgl(t.tanggal_libur) + '.')) return;
+      const { error } = await sb.rpc('batal_tukar_libur', { p_id: t.id });
+      if (error){ alert('Gagal: ' + (error.message || error)); return; }
+      muatLibur().catch(e => console.warn('libur:', e));
+    };
+  });
+}
+
+function bukaModal(id){ $(id).classList.remove('hidden'); }
+function tutupModal(id){ $(id).classList.add('hidden'); }
+document.querySelectorAll('[data-tutup]').forEach(b => { b.onclick = () => tutupModal(b.dataset.tutup); });
+function tampilErr(id, pesan){ const el = $(id); el.textContent = pesan || ''; el.classList.toggle('hidden', !pesan); }
+function opsiKaryawan(sel){
+  sel.innerHTML = '<option value="">&mdash; pilih &mdash;</option>' + liburTim.map(k =>
+    '<option value="' + esc(k.karyawan_id) + '">' + esc(k.nama) + (k.libur_hari != null ? ' (libur ' + LIBUR_HARI[k.libur_hari] + ')' : ' (belum ada libur tetap)') + '</option>').join('');
+}
+
+// --- Tukar libur
+function isiTanggalAsal(){
+  const k = liburTim.find(x => x.karyawan_id === $('tkKaryawan').value);
+  const sel = $('tkAsal'), hariIni = tglWib(new Date());
+  if (!k){ sel.innerHTML = ''; return; }
+  const opsi = [];
+  for (let i = -BATAS_MUNDUR; i <= BATAS_MAJU && opsi.length < 10; i++){
+    const s = tambahHari(hariIni, i);
+    if (liburPada(k, s)) opsi.push(s);
+  }
+  sel.innerHTML = opsi.length
+    ? opsi.map(s => '<option value="' + s + '"' + (s === opsi.find(x => x >= hariIni) ? ' selected' : '') + '>' + esc(fmtTgl(s)) + (s < hariIni ? ' (sudah lewat)' : '') + '</option>').join('')
+    : '<option value="">Belum ada jadwal libur</option>';
+  infoTanggalLibur();
+}
+function infoTanggalLibur(){
+  const s = $('tkLibur').value, k = liburTim.find(x => x.karyawan_id === $('tkKaryawan').value);
+  if (!s || !k){ $('tkInfo').textContent = ''; return; }
+  const lain = liburTim.filter(x => x.karyawan_id !== k.karyawan_id && liburPada(x, s)).map(x => x.nama);
+  $('tkInfo').textContent = liburPada(k, s) ? k.nama + ' memang sudah libur di tanggal itu.'
+    : (lain.length ? 'Yang libur ' + fmtTgl(s) + ': ' + lain.join(', ') + (lain.length >= LIBUR_MAX ? ' — sudah ' + lain.length + ' orang!' : '') : 'Belum ada yang libur ' + fmtTgl(s) + '.');
+}
+$('btnTukarLibur').onclick = () => {
+  const hariIni = tglWib(new Date());
+  opsiKaryawan($('tkKaryawan'));
+  $('tkAsal').innerHTML = ''; $('tkLibur').value = ''; $('tkCatatan').value = ''; $('tkInfo').textContent = '';
+  $('tkLibur').min = tambahHari(hariIni, -BATAS_MUNDUR); $('tkLibur').max = tambahHari(hariIni, BATAS_MAJU);
+  tampilErr('tkErr', '');
+  bukaModal('tukarModal');
+};
+$('tkKaryawan').onchange = isiTanggalAsal;
+$('tkLibur').onchange = infoTanggalLibur;
+$('btnTkSimpan').onclick = async () => {
+  const p_karyawan = $('tkKaryawan').value, p_tanggal_asal = $('tkAsal').value, p_tanggal_libur = $('tkLibur').value;
+  if (!p_karyawan || !p_tanggal_asal || !p_tanggal_libur){ tampilErr('tkErr', 'Pilih karyawan, tanggal libur, dan tanggal penggantinya dulu.'); return; }
+  const btn = $('btnTkSimpan'); btn.disabled = true;
+  const { error } = await sb.rpc('atur_tukar_libur', { p_karyawan, p_tanggal_asal, p_tanggal_libur, p_catatan: $('tkCatatan').value || null });
+  btn.disabled = false;
+  if (error){ tampilErr('tkErr', error.message || String(error)); return; }
+  tutupModal('tukarModal');
+  muatLibur().catch(e => console.warn('libur:', e));
+};
+
+// --- Ganti libur tetap
+function isiHariTetap(){
+  const k = liburTim.find(x => x.karyawan_id === $('ttKaryawan').value);
+  const sel = $('ttHari');
+  if (!k){ sel.innerHTML = ''; $('ttInfo').textContent = ''; return; }
+  sel.innerHTML = LIBUR_HARI.map((h, i) => {
+    const n = liburTim.filter(x => x.karyawan_id !== k.karyawan_id && Number(x.libur_hari) === i && x.libur_hari != null).length;
+    return '<option value="' + i + '"' + (Number(k.libur_hari) === i && k.libur_hari != null ? ' selected' : '') + '>' + h + ' (' + n + ' orang lain)' + (n >= LIBUR_MAX ? ' — penuh' : '') + '</option>';
+  }).join('');
+  $('ttInfo').textContent = 'Sekarang: ' + (k.libur_hari != null ? LIBUR_HARI[k.libur_hari] : 'belum ada libur tetap');
+}
+$('btnLiburTetap').onclick = () => {
+  opsiKaryawan($('ttKaryawan'));
+  $('ttHari').innerHTML = ''; $('ttInfo').textContent = '';
+  tampilErr('ttErr', '');
+  bukaModal('tetapModal');
+};
+$('ttKaryawan').onchange = isiHariTetap;
+$('btnTtSimpan').onclick = async () => {
+  const p_karyawan = $('ttKaryawan').value, v = $('ttHari').value;
+  if (!p_karyawan || v === ''){ tampilErr('ttErr', 'Pilih karyawan dan harinya dulu.'); return; }
+  const btn = $('btnTtSimpan'); btn.disabled = true;
+  const { data, error } = await sb.rpc('ubah_libur_tetap', { p_karyawan, p_hari: Number(v) });
+  btn.disabled = false;
+  if (error){ tampilErr('ttErr', error.message || String(error)); return; }
+  tutupModal('tetapModal');
+  if (data && data.tukar_dibatalkan > 0) alert(data.tukar_dibatalkan + ' tukar libur yang belum lewat ikut dibatalkan karena jadwal tetapnya ganti.');
+  muatLibur().catch(e => console.warn('libur:', e));
+};
+
 // Penjaga halaman: cuma owner & supervisor yang boleh masuk. Perannya dibaca dari
 // kolom `peran` di database, bukan dari daftar email di dalam kode seperti versi
 // lama — jadi owner bisa mengangkat/mencopot SPV tanpa perlu ganti kode.
@@ -247,12 +399,14 @@ sb.auth.onAuthStateChange(async (event, session) => {
   $('spvDate').textContent = new Date().toLocaleDateString('id-ID', { weekday:'long', day:'2-digit', month:'long', year:'numeric' });
 
   try{ await muat(); }catch(e){ console.error(e); alert('Gagal memuat data: ' + (e.message || e)); }
+  muatLibur().catch(e => { console.warn('libur:', e); $('liburWeek').innerHTML = '<div class="p-empty">Gagal memuat jadwal libur</div>'; });   // PR-CL132
   // PR-CL127: antrian ACC lembur — selalu tampil (juga saat kosong) supaya tidak ada yang kelupaan.
   const lemburBox = $('lemburAccBox');
   renderLemburHariIni(lemburBox);
   setInterval(() => {
     muat().catch(e => console.warn('refresh:', e));
     renderLemburHariIni(lemburBox);
+    if ($('tukarModal').classList.contains('hidden') && $('tetapModal').classList.contains('hidden')) muatLibur().catch(e => console.warn('libur:', e));
   }, 60000);
 });
 
