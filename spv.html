@@ -51,6 +51,19 @@
     </div>
   </div>
 
+  <!-- PR-CL132: jadwal libur — SPV & owner tukar / ganti libur di sini, langsung sinkron ke briefing WMS -->
+  <div id="liburBox" class="pres-card libur-card">
+    <div class="pres-head"><b>&#x1F334; Jadwal Libur</b>
+      <span class="libur-aksi">
+        <button id="btnTukarLibur" class="btn btn-sm btn-secondary">&#x1F504; Tukar Libur</button>
+        <button id="btnLiburTetap" class="btn btn-sm btn-secondary">&#x1F4C5; Ganti Libur Tetap</button>
+      </span>
+    </div>
+    <div class="pres-sub muted small">Ubah di sini = langsung berlaku di absensi &amp; briefing WMS, owner dapat notif Telegram.</div>
+    <div id="liburWeek" class="libur-week"></div>
+    <div id="liburTukarList" class="pres-list"></div>
+  </div>
+
   <!-- PR-CL124: Personal Assistant — cuma tampil untuk owner, tidak untuk SPV -->
   <div id="paCard" class="pres-card hidden" style="margin-top:12px">
     <div class="pres-head"><span class="pres-dot"></span><b>Personal Assistant</b><span class="pres-count" id="cPA">0</span></div>
@@ -60,6 +73,46 @@
 
   <p class="muted small center" style="margin-top:14px">Halaman pantau kehadiran &mdash; data gaji, KTP, dan rekening tidak dapat diakses dari sini.<br>Otomatis menyegarkan tiap 60 detik.</p>
 </main>
+
+<!-- PR-CL132: tukar libur sekali jalan -->
+<div id="tukarModal" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-head"><h3>&#x1F504; Tukar Libur</h3><button class="modal-close" data-tutup="tukarModal">&times;</button></div>
+    <p class="muted small">Cuma sekali. Minggu berikutnya otomatis balik ke libur tetapnya.</p>
+    <label class="small">Karyawan</label>
+    <select id="tkKaryawan"></select>
+    <label class="small">Libur tanggal (yang dipindah, hari itu jadi masuk)</label>
+    <select id="tkAsal"></select>
+    <label class="small">Pindah libur ke tanggal</label>
+    <input type="date" id="tkLibur">
+    <small id="tkInfo" class="muted small libur-info"></small>
+    <label class="small">Catatan (opsional)</label>
+    <input type="text" id="tkCatatan" maxlength="200" placeholder="cth: ada acara keluarga">
+    <small id="tkErr" class="libur-err hidden"></small>
+    <div class="libur-tombol">
+      <button class="btn btn-ghost" data-tutup="tukarModal">Batal</button>
+      <button id="btnTkSimpan" class="btn btn-primary">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- PR-CL132: ganti hari libur tetap -->
+<div id="tetapModal" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-head"><h3>&#x1F4C5; Ganti Libur Tetap</h3><button class="modal-close" data-tutup="tetapModal">&times;</button></div>
+    <p class="muted small">Berlaku seterusnya mulai minggu ini. Tukar libur dia yang belum lewat ikut dibatalkan.</p>
+    <label class="small">Karyawan</label>
+    <select id="ttKaryawan"></select>
+    <label class="small">Hari libur baru</label>
+    <select id="ttHari"></select>
+    <small id="ttInfo" class="muted small libur-info"></small>
+    <small id="ttErr" class="libur-err hidden"></small>
+    <div class="libur-tombol">
+      <button class="btn btn-ghost" data-tutup="tetapModal">Batal</button>
+      <button id="btnTtSimpan" class="btn btn-primary">Simpan</button>
+    </div>
+  </div>
+</div>
 
 <script type="module" src="js/spv.js"></script>
 </body>

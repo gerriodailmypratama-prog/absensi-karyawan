@@ -117,10 +117,12 @@ async function bacaData(sql: any, start: Date, end: Date) {
 
 async function laporanHarian(sql: any, now: Date) {
   const win = wibShiftWindow(now, CUTOFF_H);
-  const p = wibParts(win.tanggal);
   const pKirim = wibParts(now);
   const endMs = win.end.getTime();
   const { kary, byKar } = await bacaData(sql, win.start, win.end);
+  // PR-CL132: libur ikut tukar libur dari SPV/owner (absensi.libur_pada), bukan cuma hari libur tetap.
+  const liburIds = new Set<string>();
+  for (const r of await sql`select k.id from absensi.karyawan k where absensi.libur_pada(k.id, ${wibDayKey(win.tanggal)}::date)`) liburIds.add(r.id);
 
   const hadirRows: { ciMs: number; line: string }[] = [];
   const lupaOut: string[] = [];
@@ -145,7 +147,7 @@ async function laporanHarian(sql: any, now: Date) {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(info.tanggalLahir || "");
     if (m && Number(m[2]) === pKirim.mo + 1 && Number(m[3]) === pKirim.d) ultah.push(info.nama + " (" + (pKirim.y - Number(m[1])) + " th)");
     if (presentIds.has(id)) continue;
-    if (info.liburHari === p.wd) liburHariItu.push(info.nama);
+    if (liburIds.has(id)) liburHariItu.push(info.nama);
     else gaMasuk.push(info.nama);
   }
   for (const a of [gaMasuk, liburHariItu, ultah]) a.sort((x, y) => x.localeCompare(y, "id"));

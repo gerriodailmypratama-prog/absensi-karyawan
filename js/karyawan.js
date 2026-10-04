@@ -1333,6 +1333,22 @@ function _liburOptionsHtml(sel){
   }
   return h;
 }
+// PR-CL132: tukar libur yang dicatat SPV / owner buat diri sendiri (2 bulan ke depan).
+async function tampilTukarLiburSaya(){
+  const box = $('liburTukarSaya'); if (!box) return;
+  const tgl = d => d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+  const fmt = s => new Date(s + 'T12:00:00+07:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' });
+  const hariIni = tgl(new Date());
+  try{
+    const { data, error } = await sb.rpc('libur_tukar_daftar', { p_dari: hariIni, p_sampai: tgl(new Date(Date.now() + 60 * 86400000)) });
+    if (error) throw error;
+    if (!data || !data.length){ box.innerHTML = ''; return; }
+    box.innerHTML = '<div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--gg-info-bg);color:var(--gg-info-t);font-size:13px;line-height:1.6">'
+      + '\u{1F504} <b>Tukar libur kamu</b><br>' + data.map(t => 'Libur <s>' + fmt(t.tanggal_asal) + '</s> &rarr; <b>' + fmt(t.tanggal_libur) + '</b>').join('<br>')
+      + '<br><small style="opacity:.8">Di tanggal yang dicoret kamu masuk kerja ya.</small></div>';
+  }catch(e){ console.warn('tukar libur:', e); }
+}
+
 async function openLiburModal(){
   const modal = $('liburModal'); if (!modal) return;
   const cur = userProfile.liburHari;
@@ -1345,15 +1361,17 @@ async function openLiburModal(){
   if (save) save.classList.toggle('hidden', terkunci);
   if (cancel) cancel.textContent = terkunci ? 'Tutup' : 'Batal';
   if (intro) intro.innerHTML = terkunci
-    ? 'Hari libur mingguan kamu sudah ditetapkan dan sifatnya <b>tetap</b>. Kalau ada keperluan khusus, ngomong langsung ke owner ya.'
+    ? 'Hari libur mingguan kamu sudah ditetapkan dan sifatnya <b>tetap</b>. Mau tukar libur atau ganti hari? Ngomong ke SPV (Rafi) atau owner &mdash; nanti mereka yang ubah di sistem.'
     : 'Usul 3 hari sesuai prioritas kamu. Ini <b>usulan</b> &mdash; <b>owner yang nentuin</b> hari libur finalnya, jadi ga langsung jadi ya. Nanti kekabarin.';
   if (terkunci){
     const cc0 = $('liburCurrent');
     if (cc0) cc0.innerHTML = '<div style="background:rgba(255,255,255,.05);border-radius:10px;padding:12px;text-align:center">'
       + '<div style="font-size:13px;color:#9ca3af">Hari libur mingguan kamu</div>'
       + '<div style="font-size:24px;font-weight:800;color:#6ee7b7;margin-top:2px">' + LIBUR_HARI[cur] + '</div>'
-      + '<div style="font-size:12px;color:#9ca3af;margin-top:4px">\u{1F512} Sudah tetap &mdash; ditentukan owner</div></div>';
+      + '<div style="font-size:12px;color:#9ca3af;margin-top:4px">\u{1F512} Sudah tetap &mdash; diatur SPV / owner</div></div>'
+      + '<div id="liburTukarSaya"></div>';
     modal.classList.remove('hidden');
+    tampilTukarLiburSaya();
     return;
   }
   // Hitung hari yang slot-nya udah penuh (>= LIBUR_MAX), biar di-exclude dari pilihan.

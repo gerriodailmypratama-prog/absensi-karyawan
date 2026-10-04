@@ -35,6 +35,13 @@ export { kodeClockout, KODE_SLOT_MS, LIBUR_HARI, LIBUR_MAX };
 let sb = sbBawaan;
 export function pasangKlien(klien) { sb = klien; _idSaya = undefined; }
 
+// PR-CL132: tukar libur aktif yang menyentuh rentang tanggal (YYYY-MM-DD WIB), lewat RPC.
+export async function liburTukarDaftar(dari, sampai) {
+  const { data, error } = await sb.rpc('libur_tukar_daftar', { p_dari: dari, p_sampai: sampai });
+  if (error) throw error;
+  return data || [];
+}
+
 // Sama dengan js/firebase-config.js versi lama. Penjaga sungguhan: peran 'owner' di database.
 export const OWNER_EMAILS = ['gerriomail@gmail.com', 'steffieerzamia@gmail.com'];
 export const firebaseConfig = {};

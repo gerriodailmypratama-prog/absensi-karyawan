@@ -796,3 +796,25 @@ input.kh-time.kh-save-err{background:var(--gg-danger-bg) !important;border-color
 /* PR-CL129: ACC lembur per divisi */
 .lembur-grup{margin:12px 0 2px;font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--gg-primary)}
 .lembur-warn{margin:0 0 8px;padding:7px 10px;border-radius:10px;font-size:12.5px;line-height:1.5;background:var(--gg-warning-bg);color:var(--gg-warning-t)}
+
+/* ---------- PR-CL132: Jadwal libur (Pantau Tim) ---------- */
+.libur-card{margin-top:12px;border-top-color:var(--gg-success)}
+.libur-aksi{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.libur-aksi .btn{width:auto;margin:0}
+.libur-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-top:10px}
+@media (max-width:760px){.libur-week{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.libur-day{background:rgba(255,255,255,.025);border:1px solid var(--gg-border);border-radius:11px;padding:8px 10px;min-width:0}
+.libur-day.today{border-color:var(--gg-primary)}
+.libur-day.penuh .libur-tgl b{color:var(--gg-warning-t)}
+.libur-tgl{display:flex;justify-content:space-between;gap:6px;font-size:12px;color:var(--gg-muted)}
+.libur-tgl b{color:var(--gg-text-2)}
+.libur-nama{font-size:12.5px;color:var(--gg-text);margin-top:4px;line-height:1.5;overflow-wrap:anywhere}
+.libur-nama .tukar{color:var(--gg-info-t)}
+.libur-info{display:block;margin-top:6px}
+.libur-err{display:block;margin-top:8px;color:var(--gg-danger-t)}
+.libur-err.hidden{display:none}
+.libur-tombol{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.libur-tombol .btn{margin-top:0}
+.modal-box select,.modal-box input[type=date],.modal-box input[type=text]{width:100%}
+.libur-card .pres-head{flex-wrap:wrap}
+.libur-card .pres-head b{white-space:nowrap}
