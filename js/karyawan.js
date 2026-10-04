@@ -288,7 +288,11 @@ function showSlipCard(){
 function openSlipModal(){
   if (!slipData) return;
   const b = $('slipBody'); if (!b) return;
-  const jamL = (function(h){ const m = Math.round((h || 0) * 60); return m <= 0 ? '-' : Math.floor(m/60) + ' jam ' + (m%60) + ' mnt'; })(slipData.totalJamLembur);
+  const fmtJamL = function(h){ const m = Math.round((h || 0) * 60); return m <= 0 ? '-' : Math.floor(m/60) + ' jam ' + (m%60) + ' mnt'; };
+  let jamL = fmtJamL(slipData.totalJamLembur);
+  // PR-CL135: periode yang kena dua tarif lembur -> rinci bagian tarif lama vs 1,5x.
+  const _jamBaru = Number(slipData.jamLemburBaru) || 0, _jamLama = Math.max(0, (Number(slipData.totalJamLembur) || 0) - _jamBaru);
+  if (_jamBaru > 0 && _jamLama > 0) jamL += '<br><small class="muted">' + fmtJamL(_jamLama) + ' tarif biasa + ' + fmtJamL(_jamBaru) + ' tarif 1,5&times;</small>';
   // PR-CL92: "parsial" bikin salah paham (dikira ga dihitung hari kerja) — jembrengin
   // jadi dua baris bahasa manusia: hari penuh vs hari singkat (tetap dihitung masuk, dibayar per jam).
   const rows = [

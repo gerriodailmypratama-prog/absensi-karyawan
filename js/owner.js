@@ -3087,6 +3087,7 @@ function __slipUntukKaryawan(row, yyyymm){
     modePA: row.modePA === true, tarifPA: row.modePA ? Math.round(row.tarifPA || 0) : 0, // PR-CL124
     totalJamKerja: Math.round((row.totalJamKerja || 0) * 10) / 10,
     totalJamLembur: Math.round((row.totalJamLembur || 0) * 100) / 100,
+    jamLemburBaru: Math.round((row.jamLemburBaru || 0) * 100) / 100,   // PR-CL135: bagian yang dibayar 1,5x
     upahPokok: Math.round(row.upahPokok || 0), upahLembur: Math.round(row.upahLembur || 0),
     tunjangan: Math.round(row.tunjangan || 0), bonus: Math.round(row.bonus || 0),
     potongan: Math.round(row.potongan || 0),
@@ -3699,6 +3700,16 @@ function downloadSlipGaji(uid) {
   const rateJam = r.ratePerJam || 0;
   const rateLembur = r.rateLemburPerJam || rateJam; // PR-CL84
   const jamLembur = r.totalJamLembur || 0;
+  // PR-CL135: periode yang kena dua tarif lembur (sebelum / sejak LEMBUR_ACC_MULAI) ditulis terpisah,
+  // biar "jam x tarif" di slip sama dengan rupiah yang dibayar.
+  const jamLemburBaru = r.jamLemburBaru || 0;
+  const jamLemburLama = Math.max(0, jamLembur - jamLemburBaru);
+  const rateLemburLama = rateLembur * (r.multiplierLembur || 1);
+  const rateLemburBaru = rateLembur * LEMBUR_MULT_BARU;
+  const duaTarif = jamLemburBaru > 0 && jamLemburLama > 0;
+  const tglTarifBaru = new Date(LEMBUR_ACC_MULAI + 'T12:00:00+07:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' });
+  const ketLama = 'sebelum ' + tglTarifBaru, ketBaru = 'mulai ' + tglTarifBaru + ', 1,5&times;';
+  const rateLemburSlip = jamLemburBaru > 0 && !duaTarif ? rateLemburBaru : rateLemburLama;
 
   const html = '<!doctype html><html lang="id"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
@@ -3737,7 +3748,10 @@ function downloadSlipGaji(uid) {
       ? '<tr><td>Upah per Hari Hadir <span class="muted">(Personal Assistant)</span></td><td class="r">' + __slipFmtRp(r.tarifPA) + '</td></tr>'
       : '<tr><td>Upah Harian</td><td class="r">' + __slipFmtRp(r.baseHarian) + ' / ' + (r.jamKerja || '-') + ' jam</td></tr>' +
         '<tr><td>Tarif per Jam <span class="muted">(upah pokok)</span></td><td class="r">' + __slipFmtRp(rateJam) + '</td></tr>' +
-        '<tr><td>Tarif Lembur per Jam</td><td class="r">' + __slipFmtRp(rateLembur) + '</td></tr>') +
+        (duaTarif
+          ? '<tr><td>Tarif Lembur per Jam <span class="muted">(' + ketLama + ')</span></td><td class="r">' + __slipFmtRp(rateLemburLama) + '</td></tr>' +
+            '<tr><td>Tarif Lembur per Jam <span class="muted">(' + ketBaru + ')</span></td><td class="r">' + __slipFmtRp(rateLemburBaru) + '</td></tr>'
+          : '<tr><td>Tarif Lembur per Jam</td><td class="r">' + __slipFmtRp(rateLemburSlip) + '</td></tr>')) +
     '<tr><td>Status Pembayaran</td><td class="r">' + ((typeof __payStatus!=='undefined' && __payStatus[uid]==='paid') ? '<strong style=\"color:#16a34a\">LUNAS / PAID</strong>' : 'Belum Dibayar') + '</td></tr>' +
     bankHtml +
     '</table>' +
@@ -3749,7 +3763,11 @@ function downloadSlipGaji(uid) {
       : '<tr><td>Hari Hadir Penuh</td><td class="r">' + (r.hariHadir != null ? r.hariHadir : '-') + ' hari</td></tr>' +
         '<tr><td>Hari Kerja Singkat <span style="font-size:10px;color:#888">(tetap dihitung masuk &mdash; dibayar sesuai jam)</span></td><td class="r">' + (r.hariParsial != null ? r.hariParsial : 0) + ' hari</td></tr>' +
         '<tr><td>Total Jam Kerja Efektif</td><td class="r">' + __slipJam(r.totalJamKerja) + '</td></tr>' +
-        '<tr><td>Total Jam Lembur</td><td class="r">' + __slipJam(jamLembur) + '</td></tr>') +
+        '<tr><td>Total Jam Lembur</td><td class="r">' + __slipJam(jamLembur) + '</td></tr>' +
+        (duaTarif
+          ? '<tr><td>&nbsp;&nbsp;Lembur <span class="muted">(' + ketLama + ')</span></td><td class="r">' + __slipJam(jamLemburLama) + '</td></tr>' +
+            '<tr><td>&nbsp;&nbsp;Lembur <span class="muted">(' + ketBaru + ')</span></td><td class="r">' + __slipJam(jamLemburBaru) + '</td></tr>'
+          : '')) +
     '</table>' +
 
     '<h2>Perhitungan Gaji</h2>' +
@@ -3757,7 +3775,10 @@ function downloadSlipGaji(uid) {
     (r.modePA
       ? '<tr><td>Upah Harian <span class="muted">(' + (r.hariHadir || 0) + ' hari &times; ' + __slipFmtRp(r.tarifPA) + ')</span></td><td class="r">' + __slipFmtRp(r.upahPokok) + '</td></tr>'
       : '<tr><td>Upah Pokok <span class="muted">(akumulasi kontribusi harian)</span></td><td class="r">' + __slipFmtRp(r.upahPokok) + '</td></tr>' +
-        '<tr><td>Upah Lembur <span class="muted">(' + __slipJam(jamLembur) + ' &times; ' + __slipFmtRp(rateLembur) + ')</span></td><td class="r">' + __slipFmtRp(r.upahLembur) + '</td></tr>') +
+        (duaTarif
+          ? '<tr><td>Upah Lembur <span class="muted">(' + ketLama + ': ' + __slipJam(jamLemburLama) + ' &times; ' + __slipFmtRp(rateLemburLama) + ')</span></td><td class="r">' + __slipFmtRp(jamLemburLama * rateLemburLama) + '</td></tr>' +
+            '<tr><td>Upah Lembur <span class="muted">(' + ketBaru + ': ' + __slipJam(jamLemburBaru) + ' &times; ' + __slipFmtRp(rateLemburBaru) + ')</span></td><td class="r">' + __slipFmtRp(jamLemburBaru * rateLemburBaru) + '</td></tr>'
+          : '<tr><td>Upah Lembur <span class="muted">(' + __slipJam(jamLembur) + ' &times; ' + __slipFmtRp(rateLemburSlip) + ')</span></td><td class="r">' + __slipFmtRp(r.upahLembur) + '</td></tr>')) +
     ((r.tunjangan && r.tunjangan > 0) ? '<tr><td>Tunjangan Jabatan <span class="muted">(tetap per bulan)</span></td><td class="r">' + __slipFmtRp(r.tunjangan) + '</td></tr>' : '') +
     ((r.bonus && r.bonus > 0) ? '<tr><td>Bonus</td><td class="r">+ ' + __slipFmtRp(r.bonus) + '</td></tr>' : '') +
     ((r.potongan && r.potongan > 0) ? '<tr><td>Potongan / Kasbon</td><td class="r">- ' + __slipFmtRp(r.potongan) + '</td></tr>' : '') +
