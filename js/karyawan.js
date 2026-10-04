@@ -475,15 +475,14 @@ function updateWorkCountdown(){
   const wc = $('workCountdown');
   if(!wc) return;
   if (modePA){ wc.classList.add('hidden'); return; }
-  // PR-CL128: lagi lembur -> timer lembur (mulai dari tap Mulai Lembur, istirahat di dalamnya tidak dihitung).
+  // PR-CL128: lagi lembur -> kotak lembur. PR-CL134: cuma jam mulai, tanpa timer durasi
+  // (keputusan owner: karyawan tidak melihat total jam lembur).
   if (sedangLembur() && !lemburAlurLama()){
     const _oi = getLastInSession('overtime_in');
     const _mulai = _oi && _oi.ts ? _oi.ts.toMillis() : Date.now();
-    let _ms = Date.now() - _mulai - jedaSejakMs(_mulai); if (_ms < 0) _ms = 0;
     wc.classList.remove('hidden', 'done', 'paused'); wc.classList.add('lembur');
-    const _lbl = wc.querySelector('.wc-label'); if (_lbl) _lbl.textContent = '🌙 Lembur berjalan (mulai ' + jamHM(_mulai) + ')';
-    const _s = Math.floor(_ms / 1000);
-    $('wcTime').textContent = String(Math.floor(_s / 3600)).padStart(2, '0') + ':' + String(Math.floor((_s % 3600) / 60)).padStart(2, '0') + ':' + String(_s % 60).padStart(2, '0');
+    const _lbl = wc.querySelector('.wc-label'); if (_lbl) _lbl.textContent = '🌙 Lembur berjalan sejak';
+    $('wcTime').textContent = jamHM(_mulai);
     return;
   }
   wc.classList.remove('lembur');
@@ -1769,13 +1768,9 @@ async function autoOtThenOut() {
       alert('Jam kerja efektif Anda belum mencapai ' + targetH + ' jam, jadi belum ada lembur hari ini. Silakan gunakan tombol Clock Out untuk mengakhiri shift.');
       return;
     }
-    // 2) Konfirmasi dulu sebelum lanjut (cegah salah pencet). Tampilkan estimasi durasi lembur.
-    const otMs = workedNetMs - targetMs;
-    const otH = Math.floor(otMs / 3600000);
-    const otM = Math.floor((otMs % 3600000) / 60000);
-    const otStr = (otH > 0 ? (otH + ' jam ') : '') + otM + ' menit';
+    // 2) Konfirmasi dulu sebelum lanjut (cegah salah pencet). PR-CL134: tanpa estimasi durasi lembur (keputusan owner).
     const perluAcc = false;   // PR-CL128: tombol ini cuma dipakai alur lama (Mila, bebas izin)
-    const okOt = await askConfirm('Selesai Lembur Sekarang?', 'Lembur Anda yang akan tercatat sekitar ' + otStr + '. Aksi ini juga mencatat jam keluar (pulang) Anda.'
+    const okOt = await askConfirm('Selesai Lembur Sekarang?', 'Aksi ini mencatat Selesai Lembur sekaligus jam keluar (pulang) Anda.'
       + (perluAcc ? ' Lembur perlu di-ACC Lead / SPV dulu baru dibayar.' : '') + ' Lanjutkan dan ambil selfie?', 'Ya, Selesai Lembur');
     if (!okOt) return;
     // PR-CL127: alasan wajib (kecuali yang bebas ACC). Dikirim bareng event Selesai Lembur.
@@ -1829,20 +1824,6 @@ let izinLembur = null;   // hasil lembur_izin_saya()
 function lemburAlurLama(){ return !!(lemburInfo && lemburInfo.bebas_acc); }
 function sedangLembur(){ return hasInSession('overtime_in') && !hasInSession('overtime_out') && !hasInSession('clock_out'); }
 function jamHM(ms){ return new Date(ms).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }).replace('.', ':'); }
-// Istirahat + pause (yang sudah & yang masih jalan) sejak fromMs.
-function jedaSejakMs(fromMs){
-  let tot = 0, b = null, p = null; const now = Date.now();
-  for (const r of sessionCache){
-    const t = r.ts && r.ts.toMillis ? r.ts.toMillis() : null; if (t === null) continue;
-    if (r.tipe === 'break_in') b = t;
-    else if (r.tipe === 'break_out' && b !== null){ const a = Math.max(b, fromMs); if (t > a) tot += t - a; b = null; }
-    else if (r.tipe === 'pause_in') p = t;
-    else if (r.tipe === 'pause_out' && p !== null){ const a = Math.max(p, fromMs); if (t > a) tot += t - a; p = null; }
-  }
-  if (b !== null){ const a = Math.max(b, fromMs); if (now > a) tot += now - a; }
-  if (p !== null){ const a = Math.max(p, fromMs); if (now > a) tot += now - a; }
-  return tot;
-}
 // Jam paling cepat boleh Mulai Lembur = clock-in + jam kerja efektif + istirahat/pause (sama dengan database).
 function bisaMulaiLemburMs(){
   const ci = getFirstInSession('clock_in'); if (!ci || !ci.ts) return 0;
@@ -1906,7 +1887,7 @@ async function mintaIzinLembur(){
 }
 async function mulaiLembur(){
   const err = validateSequence('overtime_in'); if (err){ alert(err); return; }
-  const ok = await askConfirm('Mulai Lembur Sekarang?', 'Lembur dihitung mulai sekarang (' + jamHM(Date.now()) + ') sampai kamu tap Selesai Lembur. Dibayar 1,5× (Rp 18.750/jam).', 'Ya, Mulai Lembur');
+  const ok = await askConfirm('Mulai Lembur Sekarang?', 'Lembur dihitung mulai sekarang (' + jamHM(Date.now()) + ') sampai kamu tap Selesai Lembur.', 'Ya, Mulai Lembur');
   if (!ok) return;
   try{ await doNoSelfieAction('overtime_in'); }
   catch(e){ alert('Gagal Mulai Lembur: ' + pesanRamah(e)); }
