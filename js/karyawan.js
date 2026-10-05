@@ -415,32 +415,55 @@ function totalPausedMs(){
   return total;
 }
 function totalNonWorkMs(){
+  const r = rincianNonKerjaMs();
+  return r.istirahat + r.jeda;
+}
+// PR-CL136: pisahin istirahat (break) vs jeda (pause) — DB motong istirahat MINIMAL 60 menit, jeda apa adanya.
+function rincianNonKerjaMs(){
   // Total waktu non-kerja: pause + istirahat (break), termasuk yang masih aktif sampai sekarang.
   // Dipakai biar perhitungan jam efektif konsisten dgn payroll & lembur.
   // PENTING: hanya hitung jeda yang benar-benar terjadi DALAM sesi ini [clock-in .. sekarang].
   // Interval dgn timestamp di luar rentang itu (sisa sesi lama yang nyangkut / timestamp rusak)
   // diabaikan, biar tidak "makan" jam kerja efektif (bug: istirahat > waktu sejak clock-in).
-  let total = 0;
+  const total = { istirahat: 0, jeda: 0 };
   let pauseStart = null, breakStart = null;
   const _ciEntry = getFirstInSession('clock_in');
   const _ciMs = (_ciEntry && _ciEntry.ts && _ciEntry.ts.toDate) ? _ciEntry.ts.toDate().getTime() : 0;
   const _now = Date.now();
-  function _add(start, end){
+  function _add(start, end, jenis){
     if (start < _ciMs) return;         // jeda mulai sebelum clock-in = sisa lama, abaikan
     if (end > _now + 1000) return;      // jeda berakhir di masa depan = timestamp rusak, abaikan
-    if (end > start) total += (end - start);
+    if (end > start) total[jenis] += (end - start);
   }
   for (const r of sessionCache){
     const tm = r.ts && r.ts.toDate ? r.ts.toDate().getTime() : (r.ts && r.ts.toMillis ? r.ts.toMillis() : null);
     if (tm === null) continue;
     if (r.tipe === 'pause_in') pauseStart = tm;
-    else if (r.tipe === 'pause_out' && pauseStart !== null){ _add(pauseStart, tm); pauseStart = null; }
+    else if (r.tipe === 'pause_out' && pauseStart !== null){ _add(pauseStart, tm, 'jeda'); pauseStart = null; }
     else if (r.tipe === 'break_in') breakStart = tm;
-    else if (r.tipe === 'break_out' && breakStart !== null){ _add(breakStart, tm); breakStart = null; }
+    else if (r.tipe === 'break_out' && breakStart !== null){ _add(breakStart, tm, 'istirahat'); breakStart = null; }
   }
-  if (pauseStart !== null) _add(pauseStart, _now);
-  if (breakStart !== null) _add(breakStart, _now);
+  if (pauseStart !== null) _add(pauseStart, _now, 'jeda');
+  if (breakStart !== null) _add(breakStart, _now, 'istirahat');
   return total;
+}
+
+// PR-CL136 (owner 5 Okt 2026): istirahat dihitung MINIMAL 60 menit buat shift >= 5 jam —
+// tap 20 menit tetap dipotong 60, tap 75 dipotong 75. Dulu yang dipotong cuma yang di-tap,
+// jadi telat datang ketutup dengan mendekin istirahat. Berlaku mulai hari kerja 5 Okt 2026
+// (sama persis dengan absensi.f_sesi_kerja + rekap_konfig.istirahat_min_mulai).
+const ISTIRAHAT_MIN_MS = 60 * 60 * 1000;
+const ISTIRAHAT_MIN_MULAI_MS = Date.parse('2026-10-05T04:00:00+07:00'); // hari kerja mulai 04.00 WIB
+function istirahatMinBerlaku(spanMs){
+  const ci = getFirstInSession('clock_in');
+  const ciMs = (ci && ci.ts && ci.ts.toMillis) ? ci.ts.toMillis() : 0;
+  return ciMs >= ISTIRAHAT_MIN_MULAI_MS && spanMs >= SHIFT_WAJIB_ISTIRAHAT_MS;
+}
+// waktu yang dipotong dari jam kerja. spanMs = lama sejak clock-in (Infinity = "nanti pas shift penuh").
+function potonganNonKerjaMs(spanMs){
+  const r = rincianNonKerjaMs();
+  const ist = istirahatMinBerlaku(spanMs) ? Math.max(r.istirahat, ISTIRAHAT_MIN_MS) : r.istirahat;
+  return ist + r.jeda;
 }
 
 
@@ -498,13 +521,16 @@ function updateWorkCountdown(){
   const jamKerja = effectiveWorkHours();
   const targetMs = jamKerja * 3600 * 1000;
   const now = new Date();
-  let workedMs = (now.getTime() - clockInTime.getTime()) - totalNonWorkMs();
+  const _spanMs = now.getTime() - clockInTime.getTime();
+  let workedMs = _spanMs - potonganNonKerjaMs(_spanMs);
   if (workedMs < 0) workedMs = 0;
+  const _istKurang = istirahatMinBerlaku(_spanMs) && rincianNonKerjaMs().istirahat < ISTIRAHAT_MIN_MS;
   const paused_now = isCurrentlyPaused() || isCurrentlyOnBreak();
   wc.classList.remove('hidden');
   if (paused_now) wc.classList.add('paused'); else wc.classList.remove('paused');
   const labelEl = wc.querySelector('.wc-label');
-  if (labelEl) labelEl.textContent = paused_now ? 'Jam kerja efektif (DIBEKUKAN)' : 'Jam kerja efektif berjalan';
+  if (labelEl) labelEl.textContent = paused_now ? 'Jam kerja efektif (DIBEKUKAN)'
+    : (_istKurang ? 'Jam kerja efektif · istirahat dihitung 60 menit' : 'Jam kerja efektif berjalan');
   const targetH = Math.floor(targetMs/3600000), targetM = Math.floor((targetMs%3600000)/60000);
 
   if (workedMs >= targetMs) { wc.classList.add('done'); } else { wc.classList.remove('done'); }
@@ -1767,7 +1793,8 @@ async function autoOtThenOut() {
     //    jadi estimasi akurat walau karyawan belum tap Selesai Istirahat.
     const targetH = effectiveWorkHours();
     const targetMs = targetH * 3600000;
-    const workedNetMs = (Date.now() - clockIn.ts.toMillis()) - totalNonWorkMs();
+    const _spanOt = Date.now() - clockIn.ts.toMillis();
+    const workedNetMs = _spanOt - potonganNonKerjaMs(_spanOt);
     if (workedNetMs < targetMs) {
       alert('Jam kerja efektif Anda belum mencapai ' + targetH + ' jam, jadi belum ada lembur hari ini. Silakan gunakan tombol Clock Out untuk mengakhiri shift.');
       return;
@@ -1790,7 +1817,7 @@ async function autoOtThenOut() {
     if (isCurrentlyPaused()) { await doNoSelfieAction('pause_out'); }
     // 4) Catat overtime_in otomatis (backdate ke titik kuota terpenuhi).
     if (!hasInSession('overtime_in')) {
-      const otInMs = clockIn.ts.toMillis() + targetMs + totalNonWorkMs();
+      const otInMs = clockIn.ts.toMillis() + targetMs + potonganNonKerjaMs(Infinity);
       await writeOvertimeInAt(otInMs);
     }
     // 5) Catat overtime_out (lewat selfie). Ini sekaligus penanda JAM KELUAR;
@@ -1829,9 +1856,10 @@ function lemburAlurLama(){ return !!(lemburInfo && lemburInfo.bebas_acc); }
 function sedangLembur(){ return hasInSession('overtime_in') && !hasInSession('overtime_out') && !hasInSession('clock_out'); }
 function jamHM(ms){ return new Date(ms).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }).replace('.', ':'); }
 // Jam paling cepat boleh Mulai Lembur = clock-in + jam kerja efektif + istirahat/pause (sama dengan database).
+// PR-CL136: istirahat minimal 60 menit ikut dihitung.
 function bisaMulaiLemburMs(){
   const ci = getFirstInSession('clock_in'); if (!ci || !ci.ts) return 0;
-  return ci.ts.toMillis() + effectiveWorkHours() * 3600000 + totalNonWorkMs();
+  return ci.ts.toMillis() + effectiveWorkHours() * 3600000 + potonganNonKerjaMs(Infinity);
 }
 function izinSesiIni(){
   const ci = getFirstInSession('clock_in');
