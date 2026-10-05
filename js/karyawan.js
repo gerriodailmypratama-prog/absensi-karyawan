@@ -518,31 +518,32 @@ function updateWorkCountdown(){
   if (!clockInEntry || hasInSession('clock_out')) {
     wc.classList.add('hidden'); return;
   }
-  const clockInTime = clockInEntry.ts.toDate();
+  // PR-CL138 (owner 5 Okt 2026): timer maju "jam efektif" bikin bingung sejak istirahat
+  // dihitung minimal 60 menit (PR-CL136) — lewat 5 jam angkanya lompat mundur, dan pas
+  // istirahat di dalam jatah timer malah tetap jalan. Sekarang yang ditampilin JAM PULANG:
+  // masuk + jam kerja efektif + istirahat (minimal 60) + jeda. Istirahat di dalam jatah gak
+  // ngegeser jam pulang; lewat jatah -> jam pulang mundur sebanyak kelebihannya.
+  const ciMs = clockInEntry.ts.toMillis();
   const jamKerja = effectiveWorkHours();
   const targetMs = jamKerja * 3600 * 1000;
-  const now = new Date();
-  const _spanMs = now.getTime() - clockInTime.getTime();
-  let workedMs = _spanMs - potonganNonKerjaMs(_spanMs);
-  if (workedMs < 0) workedMs = 0;
-  const _istKurang = istirahatMinBerlaku(_spanMs) && rincianNonKerjaMs().istirahat < ISTIRAHAT_MIN_MS;
-  const paused_now = isCurrentlyPaused() || isCurrentlyOnBreak();
-  wc.classList.remove('hidden');
-  if (paused_now) wc.classList.add('paused'); else wc.classList.remove('paused');
+  const pulangMs = ciMs + targetMs + potonganNonKerjaMs(Infinity);
+  const sisaMs = pulangMs - Date.now();
+  const lagiIstirahat = isCurrentlyPaused() || isCurrentlyOnBreak();
+  wc.classList.remove('hidden', 'paused');
+  wc.classList.toggle('done', sisaMs <= 0);
   const labelEl = wc.querySelector('.wc-label');
-  if (labelEl) labelEl.textContent = paused_now ? 'Jam kerja efektif (DIBEKUKAN)'
-    : (_istKurang ? 'Jam kerja efektif · istirahat dihitung 60 menit' : 'Jam kerja efektif berjalan');
-  const targetH = Math.floor(targetMs/3600000), targetM = Math.floor((targetMs%3600000)/60000);
-
-  if (workedMs >= targetMs) { wc.classList.add('done'); } else { wc.classList.remove('done'); }
-  const totalSec = Math.floor(workedMs/1000);
-  const h = Math.floor(totalSec/3600);
-  const m = Math.floor((totalSec%3600)/60);
-  const sc = totalSec%60;
-  $('wcTime').textContent =
-    String(h).padStart(2,'0') + ':' +
-    String(m).padStart(2,'0') + ':' +
-    String(sc).padStart(2,'0');
+  if (labelEl) labelEl.textContent = sisaMs <= 0 ? 'Udah boleh pulang · dari jam' : 'Boleh pulang jam';
+  $('wcTime').textContent = jamHM(pulangMs);
+  const subEl = $('wcSub');
+  if (subEl) subEl.textContent = sisaMs > 0
+    ? 'Sisa waktu kerja ' + durasiJM(sisaMs) + (lagiIstirahat ? ' · lagi istirahat' : '')
+    : 'Jam kerja ' + jamKerja + ' jam udah terpenuhi';
+}
+// "3j 59m" / "12m"
+function durasiJM(ms){
+  const t = Math.max(0, Math.ceil(ms / 60000));
+  const j = Math.floor(t / 60), m = t % 60;
+  return j ? j + 'j ' + m + 'm' : m + 'm';
 }
 setInterval(updateWorkCountdown, 1000);
 
@@ -554,24 +555,38 @@ function updateBreakCountdown(){
     if (modePA){ if (wc) wc.classList.add('hidden'); return; }
     var clockedIn = hasInSession('clock_in') && !hasInSession('clock_out');
     var active = isCurrentlyOnBreak() || isCurrentlyPaused();
-    var totalMs = clockedIn ? totalNonWorkMs() : 0;
-    if (!clockedIn || totalMs <= 0){ if (wc) wc.classList.add('hidden'); window.__breakOverPrompted=false; return; }
-    if (!wc){
+    var r = clockedIn ? rincianNonKerjaMs() : { istirahat: 0, jeda: 0 };
+    // PR-CL138: meteran jatah istirahat 60 menit — muncul sejak masuk (walau belum tap),
+    // biar keliatan jatahnya tetap dipotong walau gak dipakai.
+    var pakaiJatah = clockedIn && istirahatMinBerlaku(Infinity);
+    if (!clockedIn || (!pakaiJatah && r.istirahat + r.jeda <= 0)){ if (wc) wc.classList.add('hidden'); window.__breakOverPrompted=false; return; }
+    if (!wc || !document.getElementById('bcBar')){
+        if (wc) wc.remove();
         var c=document.createElement('div');
         c.id='breakCountdown'; c.className='work-countdown';
-        c.innerHTML='<div class="wc-label">Total istirahat / pause</div><div class="wc-time" id="bcTime">00:00</div><div class="wc-sub" id="bcSub">Akumulatif hari ini</div>';
+        c.innerHTML='<div class="wc-label">☕ Istirahat</div><div class="wc-time" id="bcTime">0/60m</div><div class="wc-sub" id="bcSub"></div><div class="wc-bar"><i id="bcBar"></i></div>';
         var pn=document.getElementById('workCountdown'); pn=pn&&pn.parentNode;
         if (pn) pn.appendChild(c); else document.querySelector('main').appendChild(c);
         wc=c;
     }
     wc.classList.remove('hidden');
-    var totalSec = Math.floor(totalMs/1000);
-    var hh=Math.floor(totalSec/3600), mm=Math.floor((totalSec%3600)/60), ss=totalSec%60;
-    var disp=(hh>0?(String(hh).padStart(2,'0')+':'):'')+String(mm).padStart(2,'0')+':'+String(ss).padStart(2,'0');
-    var bcTime=document.getElementById('bcTime'); if (bcTime) bcTime.textContent=disp;
-    var bcSub=document.getElementById('bcSub');
-    if (bcSub) bcSub.textContent = active ? 'Sedang istirahat / pause (berjalan)' : 'Akumulatif hari ini (jeda)';
+    var jatahM = Math.round(ISTIRAHAT_MIN_MS / 60000);
+    var istM = Math.floor(r.istirahat / 60000), jedaM = Math.floor(r.jeda / 60000);
+    var bcTime=document.getElementById('bcTime');
+    if (bcTime) bcTime.textContent = pakaiJatah ? (istM + '/' + jatahM + 'm') : (istM + 'm');
+    var bcBar=document.getElementById('bcBar');
+    if (bcBar) bcBar.style.width = (pakaiJatah ? Math.min(100, istM / jatahM * 100) : 0) + '%';
+    var lewat = pakaiJatah && istM > jatahM;
+    var sub;
+    if (!pakaiJatah) sub = active ? 'Lagi istirahat / pause' : 'Total istirahat hari ini';
+    else if (lewat) sub = 'Lewat ' + (istM - jatahM) + ' menit · jam pulang mundur ' + (istM - jatahM) + ' menit';
+    else if (istM >= jatahM) sub = active ? 'Lagi istirahat · jatah udah habis, lebihnya bikin jam pulang mundur' : 'Jatah istirahat udah kepakai penuh';
+    else if (active) sub = 'Lagi istirahat · sisa jatah ' + (jatahM - istM) + ' menit';
+    else sub = 'Sisa jatah ' + (jatahM - istM) + ' menit · tetap dipotong walau gak dipakai';
+    if (jedaM > 0) sub += ' · jeda ' + jedaM + 'm';
+    var bcSub=document.getElementById('bcSub'); if (bcSub) bcSub.textContent = sub;
     wc.classList.toggle('paused', active);
+    wc.classList.toggle('lewat', lewat);
 }
 setInterval(updateBreakCountdown, 1000);
 
