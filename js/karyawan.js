@@ -455,6 +455,7 @@ function rincianNonKerjaMs(){
 const ISTIRAHAT_MIN_MS = 60 * 60 * 1000;
 const ISTIRAHAT_MIN_MULAI_MS = Date.parse('2026-10-05T04:00:00+07:00'); // hari kerja mulai 04.00 WIB
 function istirahatMinBerlaku(spanMs){
+  if (modePA) return false; // PR-CL137: PA gak punya tombol istirahat (PR-CL124) — gak kena minimal 60 menit
   const ci = getFirstInSession('clock_in');
   const ciMs = (ci && ci.ts && ci.ts.toMillis) ? ci.ts.toMillis() : 0;
   return ciMs >= ISTIRAHAT_MIN_MULAI_MS && spanMs >= SHIFT_WAJIB_ISTIRAHAT_MS;
