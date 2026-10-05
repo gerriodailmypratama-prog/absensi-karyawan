@@ -83,6 +83,13 @@ body.app-v2{
 .app-v2 .hero #breakCountdown .wc-sub{grid-column:1;margin:0}
 .app-v2 .hero #breakCountdown .wc-time{grid-column:2;grid-row:1 / span 2;font-size:24px;color:#fcd34d;background:none;-webkit-text-fill-color:currentColor}
 .app-v2 .hero #breakCountdown.paused{border-color:rgba(245,158,11,.6);box-shadow:0 0 0 3px rgba(245,158,11,.12)}
+/* PR-CL138: meteran jatah istirahat 60 menit */
+.app-v2 .hero #breakCountdown .wc-bar{grid-column:1 / span 2;height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:8px}
+.app-v2 .hero #breakCountdown .wc-bar i{display:block;height:100%;width:0;background:#fcd34d;border-radius:3px;transition:width .4s}
+.app-v2 .hero #breakCountdown.lewat{border-color:rgba(239,68,68,.45);background:rgba(239,68,68,.08)}
+.app-v2 .hero #breakCountdown.lewat .wc-label,.app-v2 .hero #breakCountdown.lewat .wc-time{color:#fca5a5}
+.app-v2 .hero #breakCountdown.lewat .wc-bar i{background:#f87171}
+.app-v2 .hero .work-countdown #wcSub{margin-top:4px}
 
 /* ---------- tombol absen ---------- */
 .app-v2 .action-grid{gap:12px;margin:0}
