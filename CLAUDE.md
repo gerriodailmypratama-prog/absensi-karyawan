@@ -6,7 +6,8 @@
 ## Lokasi HQ
 - Komputer Gerrio: `C:\Users\gerri\Documents\goodgems-hq`
 - Cloud / mesin lain: `../goodgems-hq`. Kalau belum ada: `git clone https://github.com/gerriodailmypratama-prog/goodgems-hq ../goodgems-hq`
-- Kalau dua-duanya nggak bisa diakses, bilang ke Gerrio di awal session, lalu lanjut kerja.
+- Session cloud: kalau clone ditolak proxy ("not in this session's authorized repository set"), tempelkan dulu repo-nya dengan tool `add_repo` (owner `gerriodailmypratama-prog`, repo `goodgems-hq`, access `push`), baru clone ke `../goodgems-hq`.
+- Kalau tetap nggak bisa diakses, bilang ke Gerrio di awal session, lalu lanjut kerja.
 
 ## Awal session (wajib)
 1. `git pull` di folder HQ.
