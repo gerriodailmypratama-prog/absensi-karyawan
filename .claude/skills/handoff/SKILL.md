@@ -20,9 +20,10 @@ Lakukan berurutan, jangan tanya-tanya:
    - PR yang live: catat nomor + tanggal.
 3. Kalau kolom "Status 1 baris" di $HQ/CLAUDE.md buat proyek ini berubah, update.
 4. Tambah entri di $HQ/log/YYYY-MM-DD.md (buat kalau belum ada), format di $HQ/log/README.md. Sebut repo ini dan device (lokal/cloud).
-5. Pastikan perubahan di repo ini sendiri udah di-commit/di-push sesuai AGENTS.md.
-6. `git -C $HQ add -A && git -C $HQ commit -m "handoff: $(date +%F) absensi-karyawan (Absensi GoodGems): <ringkasan 1 baris>" && git -C $HQ push`
+5. **Jaga ukuran file HQ.** File proyek maksimal ±120 baris: Next step yang selesai dihapus (jejaknya di log), Keputusan penting lebih dari 60 hari dipindah ke $HQ/projects/archive/<proyek>.md (tambahkan di bawah, jangan timpa). Status sekarang ditulis ulang, bukan ditumpuk.
+6. Pastikan perubahan di repo ini sendiri udah di-commit/di-push sesuai AGENTS.md.
+7. `git -C $HQ add -A && git -C $HQ commit -m "handoff: $(date +%F) absensi-karyawan (Absensi GoodGems): <ringkasan 1 baris>" && git -C $HQ push`
    Gagal karena network: coba lagi sampai 4 kali (2s, 4s, 8s, 16s). Tetap gagal: bilang jelas ke Gerrio bahwa HQ BELUM ter-push.
-7. Tutup dengan 3 baris ke Gerrio: apa yang dicatat, apa yang belum, 1 kalimat yang bisa dia paste ke session berikutnya.
+8. Tutup dengan 3 baris ke Gerrio: apa yang dicatat, apa yang belum, 1 kalimat yang bisa dia paste ke session berikutnya.
 
 Jangan tulis rahasia ke HQ.
