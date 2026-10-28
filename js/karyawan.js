@@ -125,6 +125,9 @@ let sayaSpv = false; // PR-CL98: akses halaman Pantau Tim
 // PR-CL124: mode Personal Assistant — dibayar per hari hadir, jadi cuma ada tombol
 // Mulai Kerja & Selesai Kerja. Istirahat, lembur, dan timer jam efektif disembunyikan.
 let modePA = false;
+// PR-CL139 (owner 28 Okt 2026): istirahat cuma 1x per shift (1 tap mulai + 1 tap selesai).
+// true = boleh berkali-kali (Mila, Restu, Ila) — dari kolom karyawan.istirahat_bebas. DB ikut jaga.
+let istirahatBebas = false;
 // PR-CL127: lembur wajib ACC. { mulai, bebas_acc, bisa_acc } dari RPC lembur_info_saya.
 let lemburInfo = { bebas_acc: false, bisa_acc: false };
 function __mmdd(d){ return String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
@@ -492,10 +495,12 @@ function updateBreakToggleUI(){
   var btn = $('btnBreakToggle'); if (!btn) return;
   var lbl = $('lblBreakToggle');
   var active = isCurrentlyOnBreak() || isCurrentlyPaused();
-  if (lbl) lbl.textContent = active ? 'Selesai Istirahat / Pause' : 'Istirahat / Pause';
+  // PR-CL139: udah pernah istirahat di shift ini & bukan yang dibebasin -> tombol mati, jelas alasannya.
+  var habis = !active && hasInSession('break_in') && !istirahatBebas;
+  if (lbl) lbl.textContent = active ? 'Selesai Istirahat / Pause' : (habis ? 'Istirahat udah dipakai' : 'Istirahat / Pause');
   btn.classList.toggle('tile-afterbreak', active);
   btn.classList.toggle('tile-break', !active);
-  btn.disabled = isSubmitting || !hasInSession('clock_in') || hasInSession('clock_out');
+  btn.disabled = isSubmitting || !hasInSession('clock_in') || hasInSession('clock_out') || habis;
   btn.style.opacity = btn.disabled ? '0.45' : '1';
 }
 
@@ -676,6 +681,7 @@ async function loadUserProfile(){
         wajibKode = (u.wajib_kode_clockout === true);  // wajib kode admin saat Clock Out (pilot per orang)
         kodeAdmin = (u.kode_admin === true);           // admin bertugas: kodenya tampil di halaman dia
         noShiftBarrier = (u.no_shift_barrier === true);// exempt barrier shift 18 jam (khusus admin nginap, mis. Mila)
+        istirahatBebas = (u.istirahat_bebas === true);  // PR-CL139: boleh istirahat > 1x per shift
         liburHari = (u.libur_hari != null ? Number(u.libur_hari) : null);
         // PR-CL93: akses kasbon — dibuka owner per orang (patokan masa kerja 1 tahun+).
         kasbonAktif = (u.kasbon_aktif === true);
@@ -1138,6 +1144,9 @@ isSubmitting = true;
     try {
     await saveAttendance(Object.assign({ tipe:type }, lok, extra));
     await loadActiveSession();
+  } catch(e) {
+    // PR-CL139: penolakan dari DB (mis. istirahat kedua) harus kebaca orangnya, bukan diem.
+    console.error('aksi', type, e); alert(pesanRamah(e));
   } finally {
     isSubmitting = false;
   }
@@ -1247,6 +1256,7 @@ function validateSequence(type){
   if (type === 'break_in'){
     if (!hasCi) return 'Anda harus Clock In dulu.';
     if (isCurrentlyOnBreak()) return 'Anda sudah tap Istirahat.';
+    if (hasInSession('break_in') && !istirahatBebas) return 'Istirahat shift ini udah dipakai. Istirahat cuma 1x: tap Istirahat sekali, tap Selesai Istirahat sekali.'; // PR-CL139
     if (isCurrentlyPaused()) return 'Anda sedang Pause Kerja. Tap Lanjutkan Kerja dulu.';
     if (hasCo) return 'Anda sudah Clock Out.';
     return null;
