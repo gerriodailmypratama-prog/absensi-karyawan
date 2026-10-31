@@ -3170,6 +3170,7 @@ function openBayarModal(uid){
   let h = '';
   h += '<div style="text-align:center;margin:4px 0 14px"><div class="muted small">Total Bayar (' + __payrollData.label + ')</div>'
      + '<div style="font-size:28px;font-weight:800;color:#34d399">' + prFormatRp(tb) + '</div>'
+     + '<button class="btn btn-sm btn-secondary" id="btnCopyJumlah" style="margin-top:6px">Salin Jumlah</button>'
      + ((r.potongan > 0 || r.bonus > 0) ? '<div class="muted small">Gaji ' + prFormatRp(r.total) + (r.bonus > 0 ? ' + bonus ' + prFormatRp(r.bonus) : '') + (r.potongan > 0 ? ' &minus; potongan ' + prFormatRp(r.potongan) : '') + '</div>' : '')
      + '</div>';
   h += '<div style="background:#191919;border:1px solid #2a2a2a;border-radius:10px;padding:12px;margin-bottom:14px">';
@@ -3196,6 +3197,7 @@ function openBayarModal(uid){
   const modal = document.getElementById('bayarModal');
   if (modal){ modal.classList.remove('hidden'); modal.onclick = function(e){ if (e.target === modal) modal.classList.add('hidden'); }; }
   const cl = document.getElementById('btnBayarClose'); if (cl) cl.onclick = function(){ if (modal) modal.classList.add('hidden'); };
+  const cj = document.getElementById('btnCopyJumlah'); if (cj) cj.onclick = function(){ try { navigator.clipboard.writeText(String(Math.round(Number(tb) || 0))); cj.textContent = 'Tersalin ✓'; setTimeout(function(){ cj.textContent = 'Salin Jumlah'; }, 1500); } catch(e){} };
   const cp = document.getElementById('btnCopyRek'); if (cp) cp.onclick = function(){ try { navigator.clipboard.writeText(r.nomorRekening || ''); cp.textContent = 'Tersalin ✓'; setTimeout(function(){ cp.textContent = 'Salin No. Rekening'; }, 1500); } catch(e){} };
   const st = document.getElementById('btnSudahTransfer'); if (st) st.onclick = async function(){ if (!confirm('Tandai LUNAS untuk ' + r.nama + '? Pastikan transfer sudah beneran masuk.')) return; st.disabled = true; st.textContent = 'Menyimpan...'; try { await setPaidStatus(uid, true); openBayarModal(uid); } catch(e){ alert('Gagal: ' + (e.message || e)); st.disabled = false; st.textContent = '✓ Saya Sudah Transfer — Tandai Lunas'; } };
   const sp = document.getElementById('btnBayarSlip'); if (sp) sp.onclick = function(){ downloadSlipGaji(uid); };
