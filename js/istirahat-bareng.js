@@ -63,7 +63,10 @@ export async function renderIstirahatBareng(box, opsi = {}){
     : '';
   let isi = '';
   const jalan = d.berjalan;
-  if (!d.divisi){
+  if (d.belum_masuk){
+    // PR-CL142: Istirahat Bareng ikut sesi TL — TL wajib lagi masuk.
+    isi = '<div class="lembur-sub">Clock In dulu ya. Istirahat Bareng ikut <b>sesi kamu</b>: yang diajak tim yang masuk di shift yang sama denganmu.</div>';
+  } else if (!d.divisi){
     isi = '<div class="lembur-warn">⚠ Divisi kamu belum diisi di WMS, jadi belum bisa mulai Istirahat Bareng. Minta owner isi dulu.</div>';
   } else if (jalan){
     const peserta = jalan.peserta || [];
@@ -77,15 +80,17 @@ export async function renderIstirahatBareng(box, opsi = {}){
     const kand = d.kandidat || [];
     const siap = kand.filter(k => !k.alasan);
     isi = kand.length
-      ? '<div class="lembur-sub" style="margin-bottom:4px">Centang yang ikut. Lepas centang yang lagi gak bisa ditinggal (mis. lagi live).</div>'
+      ? '<div class="lembur-sub" style="margin-bottom:4px">' + (d.owner ? '' : 'Tim yang masuk di sesi kamu' + (d.sesi_ci ? ' (kamu masuk ' + esc(jamBareng(d.sesi_ci)) + ')' : '') + '. Kamu otomatis ikut. ') + 'Lepas centang yang lagi gak bisa ditinggal (mis. lagi live).</div>'
         + '<div class="lembur-pick-list bareng-list">' + kand.map(k => {
             const bisa = !k.alasan;
-            const cek = bisa && !dilepas.has(k.karyawan_id);
-            return '<label class="lembur-pick' + (bisa ? '' : ' off') + '"><input type="checkbox" value="' + esc(k.karyawan_id) + '"' + (cek ? ' checked' : '') + (bisa ? '' : ' disabled') + '> '
-              + esc(k.nama) + (k.saya ? ' (kamu)' : '') + ' <small>masuk ' + esc(jamBareng(k.ci_ts)) + (k.alasan ? ' &middot; ' + esc(k.alasan) : '') + '</small></label>';
+            // PR-CL142: TL (kamu) selalu ikut -> kecentang & dikunci.
+            const kunci = k.saya && bisa;
+            const cek = bisa && (kunci || !dilepas.has(k.karyawan_id));
+            return '<label class="lembur-pick' + (bisa ? '' : ' off') + '"><input type="checkbox" value="' + esc(k.karyawan_id) + '"' + (cek ? ' checked' : '') + (bisa && !kunci ? '' : ' disabled') + '> '
+              + esc(k.nama) + (k.saya ? (bisa ? ' (kamu, ikut)' : ' (kamu)') : '') + ' <small>masuk ' + esc(jamBareng(k.ci_ts)) + (k.alasan ? ' &middot; ' + esc(k.alasan) : '') + '</small></label>';
           }).join('') + '</div>'
         + '<button class="btn btn-primary bareng-go" style="margin-top:10px"' + (siap.length ? '' : ' disabled') + '>Mulai Istirahat Bareng (60 menit)</button>'
-      : '<div class="lembur-sub">Belum ada tim ' + esc(d.divisi) + ' yang lagi masuk.</div>';
+      : '<div class="lembur-sub">Belum ada tim ' + esc(d.divisi) + ' yang lagi masuk' + (d.owner ? '' : ' di sesi kamu') + '.</div>';
   }
   const riw = (d.riwayat || []).filter(r => !jalan || r.id !== jalan.id);
   const riwHtml = riw.length
@@ -142,6 +147,28 @@ export async function renderIstirahatBareng(box, opsi = {}){
     sibuk = false;
     await muatUlang();
   };
+}
+
+// PR-CL142: TL tap Istirahat sendiri & sesinya belum Istirahat Bareng -> tawarin sekalian bareng.
+// Balikin { divisi, lain: [kandidat siap selain TL] } atau null kalau gak relevan (owner, udah ada, TL gak bisa ikut).
+export async function tawaranBarengTL(){
+  try{
+    const { data, error } = await baca('istirahat_bareng_kandidat', {});
+    if (error) throw error;
+    const d = data || {};
+    if (d.owner || d.belum_masuk || d.berjalan || !d.divisi) return null;
+    const kand = d.kandidat || [];
+    const aku = kand.find(k => k.saya);
+    if (!aku || aku.alasan) return null;
+    const lain = kand.filter(k => !k.saya && !k.alasan && !dilepas.has(k.karyawan_id));
+    return lain.length ? { divisi: d.divisi, lain } : null;
+  }catch(e){ console.warn('tawaran bareng:', e); return null; }
+}
+export async function mulaiBarengSesiSaya(ids){
+  const { data, error } = await sb.rpc('istirahat_bareng_mulai', { p_karyawan: ids, p_menit: 60, p_divisi: null });
+  if (error) throw error;
+  dilepas.clear();
+  return data;
 }
 
 // ------------------------------------------------------------- pantau owner / SPV
