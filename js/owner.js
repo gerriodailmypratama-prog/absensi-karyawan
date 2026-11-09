@@ -148,6 +148,7 @@ import { auth, db, storage, OWNER_EMAILS, firebaseConfig, kodeClockout, KODE_SLO
   initializeApp, deleteApp, getAuth, createUserWithEmailAndPassword, signOut as authSignOut } from './firebase-shim.js';
 import { sb as sbAbsen } from './supabase-config.js';
 import { renderLemburHariIni } from './lembur-acc.js';   // PR-CL127 / PR-CL128
+import { renderIstirahatBareng, renderBarengPantau } from './istirahat-bareng.js';   // PR-CL141
 
 const $ = id => document.getElementById(id);
 const TIPE = { clock_in:'Clock In', clock_out:'Clock Out', break_in:'Istirahat', break_out:'Selesai Istirahat', pause_in:'Pause Kerja', pause_out:'Lanjut Kerja', overtime_in:'Mulai Lembur', overtime_out:'Selesai Lembur' };
@@ -395,6 +396,14 @@ async function renderBeranda(rows){
         await renderLemburHariIni($('lemburAccBox'), { sesudahPutus: () => { window.__lemburAccAt = 0; } });
       }
     }catch(e){ console.warn('lembur acc err', e); }
+    // PR-CL141: Istirahat Bareng — owner bisa mulai per divisi + rekap & yang istirahat susulan.
+    try{
+      if (!window.__barengAt || Date.now() - window.__barengAt > 60000){
+        window.__barengAt = Date.now();
+        await renderIstirahatBareng($('barengBox'), { sesudah: () => { window.__barengAt = 0; return renderBarengPantau($('barengPantauBox')); } });
+        await renderBarengPantau($('barengPantauBox'));
+      }
+    }catch(e){ console.warn('istirahat bareng err', e); }
     const total = await getTotalKaryawan();
     const clockInSet = new Set();
     const stat = { clock_in:0, clock_out:0, break_in:0, break_out:0, overtime_in:0, overtime_out:0 };
@@ -1996,7 +2005,12 @@ function renderKehadiranMatrix(){
           const _brkOvr = !!row._istirahatOverridden;
           const _brkShow = _fmtMs(_brkMs);
           const _brkVal = _lemHHMM(Math.round(_brkMs/60000));
-          cells += '<td class="kh-dur kh-istirahat-cell'+(_brkOvr?' kh-istirahat-ovr':'')+'" title="Dur. Istirahat'+(_brkOvr?' (di-set MANUAL oleh owner)':'')+' \u2014 klik untuk edit"><span class="kh_ist_disp" title="Klik untuk edit istirahat">'+_brkShow+'</span><input type="text" inputmode="numeric" maxlength="5" placeholder="0:00" class="kh_istirahat" data-tipe="istirahat_override" value="'+_brkVal+'" data-orig="'+_brkVal+'" style="display:none"></td>';
+          // PR-CL141: tanda Istirahat Bareng / susulan (istirahat sendiri sesudah divisinya bareng).
+          const _brIns = (row.events||[]).filter(function(e){ return e.tipe === 'break_in'; });
+          const _tagBareng = _brIns.some(function(e){ return e.flag === 'istirahat_bareng'; }) ? '<span class="bareng-tag" title="Ikut Istirahat Bareng">bareng</span>' : '';
+          const _susEv = _brIns.filter(function(e){ return e.flag === 'susulan'; });
+          const _tagSus = _susEv.length ? ('<span class="bareng-tag ' + (_susEv.some(function(e){ return e.kodeVerif === 'darurat'; }) ? 'darurat' : 'susulan') + '" title="Istirahat SUSULAN: sendiri sesudah divisinya Istirahat Bareng' + (_susEv.some(function(e){ return e.kodeVerif === 'darurat'; }) ? ' — TANPA kode admin' : ' — pakai kode admin') + '">susulan</span>') : '';
+          cells += '<td class="kh-dur kh-istirahat-cell'+(_brkOvr?' kh-istirahat-ovr':'')+'" title="Dur. Istirahat'+(_brkOvr?' (di-set MANUAL oleh owner)':'')+' \u2014 klik untuk edit"><span class="kh_ist_disp" title="Klik untuk edit istirahat">'+_brkShow+'</span>'+_tagBareng+_tagSus+'<input type="text" inputmode="numeric" maxlength="5" placeholder="0:00" class="kh_istirahat" data-tipe="istirahat_override" value="'+_brkVal+'" data-orig="'+_brkVal+'" style="display:none"></td>';
         } else {
           cells += '<td class="kh-dur'+_anomMark+'" title="'+pair.label+_anomTitle+'">'+(_anomMark?'\u26a0 ':'')+durTxt+'</td>';
         }
