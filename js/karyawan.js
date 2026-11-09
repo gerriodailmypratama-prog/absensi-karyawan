@@ -26,7 +26,7 @@ import {
   EMBER_SELFIE, EMBER_PROFIL, EMBER_KTP
 } from './supabase-config.js';
 import { infoLemburSaya, renderLemburSaya, lemburIzinSaya, mintaLembur, renderLemburKamu, renderLemburHariIni } from './lembur-acc.js';
-import { renderIstirahatBareng, barengSaya, jamBareng } from './istirahat-bareng.js';   // PR-CL141
+import { renderIstirahatBareng, barengSaya, jamBareng, tawaranBarengTL, mulaiBarengSesiSaya } from './istirahat-bareng.js';   // PR-CL141 / PR-CL142
 
 const $ = id => document.getElementById(id);
 const TIPE = {
@@ -1550,6 +1550,27 @@ async function handleAction(type){
       if (!k) return;
       extraBreak = { flag: 'susulan', kode_verif: k, ekstra: { susulan_bareng_id: bs.bareng_id || null } };
     } else {
+      // PR-CL142: TL (Lead/SPV) tap Istirahat & sesinya belum Istirahat Bareng -> tawarin bareng tim sesinya.
+      const tw = (bs && bs.bisa_mulai) ? await tawaranBarengTL() : null;
+      if (tw){
+        const nama = tw.lain.map(k => k.nama).join(', ');
+        const bareng = await askConfirm('Mulai Istirahat Bareng buat sesi kamu?',
+          'Belum ada Istirahat Bareng di sesi kamu. Sekalian ajak ' + tw.lain.length + ' orang tim ' + tw.divisi + ' (' + nama + ') istirahat bareng kamu 60 menit? Selesai otomatis. Tap Batal kalau mau istirahat sendiri aja.',
+          'Ya, Bareng');
+        if (bareng){
+          isSubmitting = true;
+          try{
+            const res = await mulaiBarengSesiSaya(tw.lain.map(k => k.karyawan_id));
+            const lewat = ((res && res.hasil) || []).filter(x => x.hasil !== 'ok');
+            if (!res || !res.id) alert('Istirahat Bareng gak jadi:\n' + lewat.map(x => '- ' + (x.nama || '?') + ': ' + x.hasil).join('\n'));
+            else if (lewat.length) alert('Istirahat Bareng jalan. Sebagian dilewati:\n' + lewat.map(x => '- ' + (x.nama || '?') + ': ' + x.hasil).join('\n'));
+          }catch(e){ alert('Gagal mulai Istirahat Bareng: ' + pesanRamah(e)); }
+          finally{ isSubmitting = false; }
+          await refreshAbsenState();
+          muatLemburAcc().catch(() => {});
+          return;
+        }
+      }
       const ok = await askConfirm('Mulai Istirahat?', 'Apakah Anda yakin ingin mulai Istirahat sekarang? Tap Selesai Istirahat saat kembali bekerja.', 'Ya, Mulai Istirahat');
       if (!ok) return;
     }
