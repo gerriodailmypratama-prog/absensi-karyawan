@@ -9,6 +9,7 @@
 // ============================================================
 import { sb, karyawanSaya, keluar, EMBER_PROFIL, LIBUR_HARI, LIBUR_MAX } from './supabase-config.js';
 import { renderLemburHariIni } from './lembur-acc.js';   // PR-CL127 / PR-CL128
+import { renderIstirahatBareng, renderBarengPantau } from './istirahat-bareng.js';   // PR-CL141
 
 const $ = id => document.getElementById(id);
 const MAX_SESI_MS = 18 * 60 * 60 * 1000;        // sesi terbuka > 18 jam = lupa clock out, bukan sedang kerja
@@ -103,7 +104,7 @@ async function muat(){
 
   const { data: rows, error } = await sb
     .from('absensi')
-    .select('karyawan_id, tipe, ts')
+    .select('karyawan_id, tipe, ts, flag, kode_verif')   // PR-CL141: flag = Istirahat Bareng / susulan
     .gte('ts', dari.toISOString())
     .order('ts', { ascending: true });
   if (error) throw error;
@@ -114,7 +115,7 @@ async function muat(){
     const t = r.ts ? new Date(r.ts) : null;
     if (!uid || !t) continue;
     if (!byUid.has(uid)) byUid.set(uid, []);
-    byUid.get(uid).push({ tipe: r.tipe, ms: t.getTime() });
+    byUid.get(uid).push({ tipe: r.tipe, ms: t.getTime(), flag: r.flag || null, kode: r.kode_verif || null });
   }
   for (const arr of byUid.values()) arr.sort((a, b) => a.ms - b.ms);
 
@@ -146,11 +147,11 @@ async function muat(){
       if (lihatPA){ const s = statusPA(uid, nama, arr, now); if (s) pa.push(s); }
       continue;
     }
-    let masukTerakhir = 0, keluarTerakhir = 0, bIn = 0, bOut = 0;
+    let masukTerakhir = 0, keluarTerakhir = 0, bIn = 0, bOut = 0, bFlag = null, bKode = null;
     for (const e of arr){
       if (e.tipe === 'clock_in' || e.tipe === 'overtime_in') masukTerakhir = Math.max(masukTerakhir, e.ms);
       if (e.tipe === 'clock_out' || e.tipe === 'overtime_out') keluarTerakhir = Math.max(keluarTerakhir, e.ms);
-      if (e.tipe === 'break_in' || e.tipe === 'pause_in') bIn = Math.max(bIn, e.ms);
+      if (e.tipe === 'break_in' || e.tipe === 'pause_in'){ if (e.ms >= bIn){ bFlag = e.tipe === 'break_in' ? e.flag : null; bKode = e.kode; } bIn = Math.max(bIn, e.ms); }
       if (e.tipe === 'break_out' || e.tipe === 'pause_out') bOut = Math.max(bOut, e.ms);
     }
     const mulai = mulaiSesi(arr);
@@ -162,7 +163,7 @@ async function muat(){
         pulang.push({ uid, nama, kotor, efektif: Math.max(0, kotor - istirahatSelesai(arr, mulai, keluarTerakhir)) });
       }
     } else if (sesiJalan && bIn > bOut){
-      istirahat.push({ uid, nama, mulaiBreak: bIn, sudah: istirahatSelesai(arr, mulai, now) });
+      istirahat.push({ uid, nama, mulaiBreak: bIn, sudah: istirahatSelesai(arr, mulai, now), flag: bFlag, kode: bKode });
       if ((now - bIn) > ISTIRAHAT_WAJAR_MS) peringatan.push({ nama, jalan: now - bIn });
     } else if (sesiJalan){
       kerja.push({ uid, nama, mulai, rest: istirahatSelesai(arr, mulai, now) });
@@ -185,7 +186,10 @@ async function muat(){
   ).join('') : '<div class="p-empty">Belum ada yang kerja</div>';
 
   $('listBreak').innerHTML = istirahat.length ? istirahat.map(x =>
-    '<div class="p-row">' + avaHtml(x.uid, x.nama) + '<span class="p-name">' + esc(x.nama) + '</span>'
+    '<div class="p-row">' + avaHtml(x.uid, x.nama) + '<span class="p-name">' + esc(x.nama)
+    + (x.flag === 'istirahat_bareng' ? '<span class="bareng-tag" title="Istirahat Bareng">bareng</span>' : '')
+    + (x.flag === 'susulan' ? '<span class="bareng-tag ' + (x.kode === 'darurat' ? 'darurat' : 'susulan') + '" title="Istirahat susulan (sendiri, sesudah divisinya Istirahat Bareng)' + (x.kode === 'darurat' ? ' — tanpa kode admin' : '') + '">susulan</span>' : '')
+    + '</span>'
     + '<span class="p-time"><span class="spv-t p-main" data-start="' + x.mulaiBreak + '">--:--</span>'
     + '<small class="p-sep">total</small>'
     + '<span class="spv-tot p-dim" data-start="' + x.mulaiBreak + '" data-base="' + x.sudah + '">--:--</span></span></div>'
@@ -410,9 +414,18 @@ sb.auth.onAuthStateChange(async (event, session) => {
   // PR-CL127: antrian ACC lembur — selalu tampil (juga saat kosong) supaya tidak ada yang kelupaan.
   const lemburBox = $('lemburAccBox');
   renderLemburHariIni(lemburBox);
+  // PR-CL141: Istirahat Bareng (SPV mulai buat divisinya) + rekap & susulan. Tanpa Realtime: polling 60 detik.
+  const barengBox = $('barengBox'), barengPantauBox = $('barengPantauBox');
+  const muatBareng = () => Promise.all([
+    renderIstirahatBareng(barengBox, { sesudah: () => { muat().catch(() => {}); return renderBarengPantau(barengPantauBox); } }),
+    renderBarengPantau(barengPantauBox)
+  ]).catch(e => console.warn('istirahat bareng:', e));
+  muatBareng();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) muatBareng(); });
   setInterval(() => {
     muat().catch(e => console.warn('refresh:', e));
     renderLemburHariIni(lemburBox);
+    muatBareng();
     if ($('tukarModal').classList.contains('hidden') && $('tetapModal').classList.contains('hidden')) muatLibur().catch(e => console.warn('libur:', e));
   }, 60000);
 });

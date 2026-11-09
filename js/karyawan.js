@@ -26,6 +26,7 @@ import {
   EMBER_SELFIE, EMBER_PROFIL, EMBER_KTP
 } from './supabase-config.js';
 import { infoLemburSaya, renderLemburSaya, lemburIzinSaya, mintaLembur, renderLemburKamu, renderLemburHariIni } from './lembur-acc.js';
+import { renderIstirahatBareng, barengSaya, jamBareng } from './istirahat-bareng.js';   // PR-CL141
 
 const $ = id => document.getElementById(id);
 const TIPE = {
@@ -77,7 +78,7 @@ function bungkusEvent(r){
 
 // Kolom event absen yang dipakai halaman ini. Ditulis eksplisit biar ga
 // kebawa kolom baru yang belum tentu perlu.
-const KOLOM_ABSEN = 'id, tipe, ts, lat, lng, akurasi_m, jarak_m, in_radius, gps_exempt, foto_selfie, kode_verif, no_break, auto_cap, otomatis, flag';
+const KOLOM_ABSEN = 'id, tipe, ts, lat, lng, akurasi_m, jarak_m, in_radius, gps_exempt, foto_selfie, kode_verif, no_break, auto_cap, otomatis, flag, ekstra';   // PR-CL141: ekstra = info Istirahat Bareng
 
 let currentUser=null;          // akun login (auth) — dipakai buat email & token
 let saya=null;                 // BARIS TABEL KARYAWAN — ini yang punya .id
@@ -398,6 +399,15 @@ function isCurrentlyOnBreak(){
   }
   return onBreak;
 }
+// PR-CL141: break_in yang lagi jalan, kalau itu Istirahat Bareng (dimulai Lead) -> event-nya. Selain itu null.
+function breakBarengAktif(){
+  let b = null;
+  for (const r of sessionCache){
+    if (r.tipe === 'break_in') b = r;
+    else if (r.tipe === 'break_out') b = null;
+  }
+  return (b && b.flag === 'istirahat_bareng') ? b : null;
+}
 // Hitung total paused ms (semua pasangan + pause aktif sampai now).
 function totalPausedMs(){
   let total = 0;
@@ -584,6 +594,12 @@ function updateBreakCountdown(){
     else if (active) sub = 'Lagi istirahat · sisa jatah ' + (jatahM - istM) + ' menit';
     else sub = 'Sisa jatah ' + (jatahM - istM) + ' menit · tetap dipotong walau gak dipakai';
     if (jedaM > 0) sub += ' · jeda ' + jedaM + 'm';
+    // PR-CL141: lagi Istirahat Bareng -> kasih tau siapa yang mulai & kapan selesai otomatis.
+    var bb = breakBarengAktif();
+    if (bb){
+      var ek = bb.ekstra || {};
+      sub = '🍽️ Istirahat Bareng' + (ek.bareng_oleh ? ' (dari ' + ek.bareng_oleh + ')' : '') + (ek.bareng_sampai ? ' · selesai otomatis ' + jamBareng(ek.bareng_sampai) : '') + ' · ' + sub;
+    }
     var bcSub=document.getElementById('bcSub'); if (bcSub) bcSub.textContent = sub;
     wc.classList.toggle('paused', active);
     wc.classList.toggle('lewat', lewat);
@@ -624,6 +640,9 @@ function checkBreakReminder(){
   if (!active){ window.__breakOverPrompted = false; hideBreakReminderBanner(); return; }
   var startMs = currentBreakStartMs();
   if (!startMs) return;
+  // PR-CL141: Istirahat Bareng ditutup otomatis sama server — jangan diingetin selama masih di jendelanya (+5 mnt).
+  var bb = breakBarengAktif();
+  if (bb && bb.ekstra && bb.ekstra.bareng_sampai && Date.now() < new Date(bb.ekstra.bareng_sampai).getTime() + 5 * 60000) return;
   var elapsed = Date.now() - startMs;
   if (elapsed >= BREAK_REMINDER_MS && !window.__breakOverPrompted){
     window.__breakOverPrompted = true;
@@ -1336,10 +1355,23 @@ function initAdminKodeCard(){
 
 // Modal minta kode saat mau pulang. Resolve: 'ok' (kode benar), 'darurat' (tanpa kode,
 // ditandai merah di dashboard owner), atau null (batal).
-function askKodeClockout(){
+// PR-CL141: opsi = teks pengganti buat dipakai ulang di Istirahat Susulan (judul, info, darurat, ...).
+function escHtml(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function askKodeClockout(opsi){
+  opsi = opsi || {};
   return new Promise(resolve => {
     const modal = $('kodeModal'), inp = $('kodeInput'), err = $('kodeErr');
     if (!modal || !inp){ resolve('ok'); return; } // fallback aman kalau elemen belum ada
+    const h3 = modal.querySelector('h3'), pInfo = modal.querySelector('p'), bDar = $('btnKodeDarurat');
+    if (!modal.dataset.asliSimpan){
+      modal.dataset.asliSimpan = '1';
+      modal.dataset.asliJudul = h3 ? h3.innerHTML : '';
+      modal.dataset.asliInfo = pInfo ? pInfo.innerHTML : '';
+      modal.dataset.asliDarurat = bDar ? bDar.innerHTML : '';
+    }
+    if (h3) h3.innerHTML = opsi.judul ? opsi.judul : modal.dataset.asliJudul;
+    if (pInfo) pInfo.innerHTML = opsi.info ? opsi.info : modal.dataset.asliInfo;
+    if (bDar) bDar.innerHTML = opsi.darurat ? opsi.darurat : modal.dataset.asliDarurat;
     inp.value = ''; if (err) err.style.display = 'none';
     modal.classList.remove('hidden');
     setTimeout(()=>{ try{ inp.focus(); }catch(e){} }, 60);
@@ -1360,9 +1392,9 @@ function askKodeClockout(){
     $('btnKodeCancel').onclick = ()=> cleanup(null);
     $('btnKodeDarurat').onclick = async ()=>{
       modal.classList.add('hidden');
-      const ok = await askConfirm('Clock Out Darurat?',
-        'Tanpa kode admin, Clock Out ini akan DITANDAI MERAH di dashboard owner dan akan dicek. Lanjutkan hanya kalau admin benar-benar tidak ada.',
-        'Ya, Darurat');
+      const ok = await askConfirm(opsi.daruratJudul || 'Clock Out Darurat?',
+        opsi.daruratPesan || 'Tanpa kode admin, Clock Out ini akan DITANDAI MERAH di dashboard owner dan akan dicek. Lanjutkan hanya kalau admin benar-benar tidak ada.',
+        opsi.daruratOk || 'Ya, Darurat');
       if (ok){ cleanup('darurat'); } else { modal.classList.remove('hidden'); }
     };
   });
@@ -1501,12 +1533,32 @@ async function handleAction(type){
   if (err){ alert(err); return; }
   if (!coords) try{ await refreshLocStatus(); }catch(e){}
 
+  let extraBreak = null;   // PR-CL141: penanda istirahat susulan
   if (type === 'break_in'){
-    const ok = await askConfirm('Mulai Istirahat?', 'Apakah Anda yakin ingin mulai Istirahat sekarang? Tap Selesai Istirahat saat kembali bekerja.', 'Ya, Mulai Istirahat');
-    if (!ok) return;
+    // PR-CL141: divisi kamu udah / lagi Istirahat Bareng di shift ini -> istirahat sendiri = susulan,
+    // wajib kode admin (atau darurat). DB gak ngunci, cuma ditandai. Cek gagal (sinyal) = jangan ngeblok.
+    const bs = modePA ? null : await barengSaya();
+    if (bs && bs.susulan){
+      const k = await askKodeClockout({
+        judul: 'Istirahat Susulan',
+        info: 'Divisi kamu udah Istirahat Bareng' + (bs.bareng_mulai_at ? ' jam ' + jamBareng(bs.bareng_mulai_at) : '') + (bs.bareng_oleh ? ' (dimulai ' + escHtml(bs.bareng_oleh) + ')' : '') + '. Mau istirahat sendiri? Minta <b>kode 4 angka</b> ke admin bertugas dulu.',
+        darurat: 'Admin tidak ada / darurat? Istirahat tanpa kode',
+        daruratJudul: 'Istirahat Darurat?',
+        daruratPesan: 'Tanpa kode admin, istirahat susulan ini DITANDAI di dashboard owner dan akan dicek. Lanjutkan cuma kalau admin beneran gak ada.',
+        daruratOk: 'Ya, Darurat'
+      });
+      if (!k) return;
+      extraBreak = { flag: 'susulan', kode_verif: k, ekstra: { susulan_bareng_id: bs.bareng_id || null } };
+    } else {
+      const ok = await askConfirm('Mulai Istirahat?', 'Apakah Anda yakin ingin mulai Istirahat sekarang? Tap Selesai Istirahat saat kembali bekerja.', 'Ya, Mulai Istirahat');
+      if (!ok) return;
+    }
   }
   if (type === 'break_out'){
-    const ok = await askConfirm('Selesai Istirahat?', 'Apakah Anda yakin sudah selesai Istirahat dan siap kembali bekerja?', 'Ya, Selesai Istirahat');
+    const bb = breakBarengAktif();
+    const ok = bb
+      ? await askConfirm('Balik Kerja Duluan?', 'Istirahat Bareng selesai otomatis' + (bb.ekstra && bb.ekstra.bareng_sampai ? ' jam ' + jamBareng(bb.ekstra.bareng_sampai) : '') + '. Mau balik kerja sekarang? Buat gaji, istirahat tetap dihitung minimal 60 menit.', 'Ya, Balik Kerja')
+      : await askConfirm('Selesai Istirahat?', 'Apakah Anda yakin sudah selesai Istirahat dan siap kembali bekerja?', 'Ya, Selesai Istirahat');
     if (!ok) return;
   }
   if (type === 'pause_in'){
@@ -1544,7 +1596,8 @@ async function handleAction(type){
   }
 
   if (NO_SELFIE_TYPES.has(type)){
-    return doNoSelfieAction(type);
+    // PR-CL141: penolakan DB / jaringan harus kebaca orangnya (dulu diem di sini).
+    return doNoSelfieAction(type, extraBreak || {}).catch(e => { console.error('aksi', type, e); alert(pesanRamah(e)); });
   }
   if (type === 'clock_out'){
     return handleClockOut();
@@ -1953,6 +2006,8 @@ async function muatLemburAcc(){
     await renderLemburSaya($('lemburSayaCard'));               // Mila: kartu cara lama
   }
   if (lemburInfo.bisa_acc) await renderLemburHariIni($('lemburAccCard'));
+  // PR-CL141: kartu Istirahat Bareng buat Lead / SPV / owner (bisa_acc = lembur_boleh_acc).
+  if (lemburInfo.bisa_acc && !modePA) await renderIstirahatBareng($('barengCard'), { sesudah: refreshAbsenState });
   updateLemburTile();
 }
 // Refresh ringan tiap 30 detik selama halaman kebuka (status izin sendiri & kotak Lead).
