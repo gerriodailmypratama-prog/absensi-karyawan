@@ -908,13 +908,17 @@ if ($('btnLpIsi')) $('btnLpIsi').onclick = () => {
   try{ if (window.openProfil) window.openProfil(); else $('btnOpenProfil').click(); }catch(e){}
 };
 
+// PR-CL143: kode error lokasi terakhir (1 = izin ditolak, 2 = posisi gak tersedia / GPS mati,
+// 3 = timeout, 0 = API gak ada). Dulu error ditelan jadi null -> pesannya cuma "Lokasi belum
+// tersedia." dan orang (Lead) nebak-nebak padahal izin udah dikasih (laporan Rafi 13 Nov, akun Risma).
+let lastLocErr = null;
 async function refreshLocStatus(){
-  if (!navigator.geolocation){ coords = null; return; }
+  if (!navigator.geolocation){ coords = null; lastLocErr = 0; return; }
 
   const getPos = (opts) => new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
       p => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }),
-      _ => resolve(null),
+      e => { lastLocErr = (e && typeof e.code === 'number') ? e.code : 2; resolve(null); },
       opts
     );
   });
@@ -928,6 +932,28 @@ async function refreshLocStatus(){
   }
 
   coords = result;
+  if (result) lastLocErr = null;
+}
+
+// PR-CL143: pesan yang nyebut SEBABNYA + apa yang harus dilakuin, bukan "Lokasi belum tersedia." doang.
+function pesanLokasi(){
+  const ua = navigator.userAgent || '';
+  const inApp = /\bwv\b|WhatsApp|FBAN|FBAV|Instagram|Line\//i.test(ua);
+  const tip = inApp ? '\n\nKamu buka dari dalam aplikasi chat (WhatsApp/IG). Buka link absensi di Chrome / Safari langsung, jangan dari dalam chat.' : '';
+  if (lastLocErr === 1) return 'Izin lokasi DITOLAK oleh browser untuk absensi.goodgems.online.\n\nBuka Setelan browser > Izin situs > Lokasi > absensi.goodgems.online > Izinkan (atau ketuk ikon gembok di sebelah alamat), lalu muat ulang halaman.' + tip;
+  if (lastLocErr === 3) return 'HP belum nemu sinyal GPS (kelamaan).\n\nPindah dekat jendela / keluar ruangan sebentar, nyalakan Wi-Fi (bantu posisi), lalu coba lagi.' + tip;
+  if (lastLocErr === 0) return 'Browser ini gak punya fitur lokasi. Buka di Chrome / Safari.';
+  return 'HP belum bisa kasih posisi walau izin situs udah ada.\n\nCek: 1) Lokasi/GPS di HP NYALA (geser panel atas), 2) di Setelan HP > Aplikasi > Chrome/Safari > Izin > Lokasi = Izinkan + "Lokasi akurat", 3) mode hemat baterai dimatikan, lalu coba lagi.' + tip;
+}
+
+// PR-CL143: coba ulang tanpa harus ngulang selfie / aksi. True = koordinat ada.
+async function pastikanLokasi(){
+  for (let i = 0; i < 3 && !coords; i++){
+    try{ await refreshLocStatus(); }catch(e){}
+    if (coords) break;
+    if (!confirm(pesanLokasi() + '\n\nCoba cari lokasi lagi?')) break;
+  }
+  return !!coords;
 }
 
 async function openSelfie(type){
@@ -1055,8 +1081,8 @@ $('btnSelfieShoot').onclick = async ()=>{
 
   closeSelfie();
 
-  if (!coords) try{ await refreshLocStatus(); }catch(e){}
-  if (!coords){ alert('Lokasi belum tersedia.'); return; }
+  // PR-CL143: foto udah kejepret — jangan dibuang cuma karena GPS telat. Coba ulang + pesan sebab.
+  if (!(await pastikanLokasi())){ alert('Absen belum tersimpan: lokasi belum dapat.\n\n' + pesanLokasi()); return; }
   const lok = lokasiAbsen();
   let selfieUrl = '';
 
@@ -1150,8 +1176,8 @@ function hideSavingOverlay(){
 }
 
 async function doNoSelfieAction(type, extra={}){
-  if (!coords) try{ await refreshLocStatus(); }catch(e){}
-  if (!coords){ alert('Lokasi belum tersedia.'); return; }
+  // PR-CL143: sama kayak jalur selfie — coba ulang + pesan sebab, bukan "Lokasi belum tersedia." doang.
+  if (!(await pastikanLokasi())){ alert('Belum tersimpan: lokasi belum dapat.\n\n' + pesanLokasi()); return; }
   const lok = lokasiAbsen();
 isSubmitting = true;
     try {
